@@ -26,10 +26,12 @@ barrier0 = 5
 
 points = 100 #number of points for varying conductance at either lead
 num_engs = 100 #number of points in dIdV energy sweep to get ZBP
+num_vz_var = 2 # number of points to sweep magnetic field
+
 
 barrier_arr = np.linspace(0, 40*barrier0, points) #Varying the right barrier U_R and lef barrier U_L
 
-Vz_var = np.linspace(0.5, 1.5, 1) #vary Vz by factors of the critical field V_c
+Vz_var = np.linspace(0.5, 1.5, num_vz_var) #vary Vz by factors of the critical field V_c
 energies = np.linspace(-0.5, 0.5, num_engs)
 dIdVs_left_arr = np.zeros(shape = (len(Vz_var), len(energies)))
 dIdVs_right_arr = np.zeros(shape = (len(Vz_var), len(energies)))
