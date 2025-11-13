@@ -25,6 +25,11 @@ def np_save_wrapped(data, filename, subdirectory):
     path = get_data_path(f"{filename}.npy", subdirectory)
     np.save(path, data)
     
+def np_load_wrapped(filename, subdirectory):
+    #wrapper for np.loadtxt to load from default data bath
+    path = get_data_path(f"{filename}.npy", subdirectory)
+    return np.load(path)
+    
     
 ######## Calculation Helpers
 
@@ -67,7 +72,7 @@ def calc_conductance(syst, energy = 0.0, return_smatrix = False):
 def calc_dIdV(syst, energies):
     num_engs = len(energies)
     
-    ldos = np.zeros(shape = (num_engs, 2192))
+    ldos = np.zeros(shape = (num_engs, 20192))
     dIdV_left = np.zeros_like(energies)
     dIdV_right = np.zeros_like(energies)
     
