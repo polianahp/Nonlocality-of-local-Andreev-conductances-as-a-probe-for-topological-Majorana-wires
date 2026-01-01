@@ -31,7 +31,7 @@ def np_load_wrapped(filename, subdirectory):
     return np.load(path)
     
     
-######## Calculation Helpers
+######## Calculation Helpers ########
 
 def calc_integrated_area_diff(conductance_left, conductance_right):
     
@@ -99,7 +99,7 @@ def calc_dIdV(syst, energies):
         
     return dIdV_left, dIdV_right, ldos 
 
-#The following function builds the system
+######### The following function builds the system ########
 
 def build_system(t, mu, mu_n, Delta, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l, barrier_r):
     syst = kwant.Builder()
@@ -154,3 +154,68 @@ def build_system(t, mu, mu_n, Delta, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l
     syst.attach_lead(left_lead)
     syst.attach_lead(right_lead)
     return syst.finalized()
+
+
+######## Disorder Calculation Helper Functions ########
+
+def fVd(x, Lambda_dis):
+     # Lambda_dis is the decay length (Å)
+    """Exponential decay function."""
+    return np.exp(-x / Lambda_dis)
+
+
+
+def generate_Vdis(Nx, Ny, Rimp, ax, ay, lambda_dis):
+    """Generate smooth random disorder potential."""
+    Nimp = len(Rimp)
+    vtp = np.zeros((Nx, Ny), dtype=float)
+
+    x_grid = np.arange(1, Nx + 1)[:, None]
+    y_grid = np.arange(1, Ny + 1)[None, :]
+
+    for kk in range(Nimp):
+        sign = (-1)**(kk + 1)
+        dd = np.sqrt((x_grid - Rimp[kk, 0])**2 * ax**2 +
+                     (y_grid - Rimp[kk, 1])**2 * ay**2)
+        
+        vtp += sign * fVd(dd, lambda_dis)
+
+    # subtract mean and normalize variance
+    vtp -= np.mean(vtp)
+    vtp /= np.sqrt(np.mean(vtp**2))
+    return vtp
+
+
+
+def generate_1d_Vdis(Nx, ax, num_impurities, amplitude, lambda_dis):
+    #generating a set of "2D" coordinate, where y coordinates are set to zero for this 1d case. 
+
+        Ny = 1
+        ay = ax
+        Rimp = np.column_stack((
+        np.random.uniform(0, Nx + 1, num_impurities),
+        np.random.uniform(0, Ny + 1, num_impurities)
+        ))
+        
+        Vdis = generate_Vdis(Nx, Ny, Rimp, ax, ay, lambda_dis)
+        
+        Y0 = np.ones(Ny)
+        Vxd = np.array([np.dot(Vdis[ii, :], Y0) for ii in range(Nx)])
+        #normalizing disorder and scaling by predefined amplitude
+        normed_Vxd = Vxd/np.max(np.abs(Vxd)) * amplitude
+        
+        return normed_Vxd
+        
+        
+
+
+    
+    
+
+
+
+
+
+
+
+
