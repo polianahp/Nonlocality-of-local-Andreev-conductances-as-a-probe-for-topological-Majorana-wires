@@ -117,7 +117,7 @@ plt.ylabel("y (nm)")
 plt.title("Disorder Potential $V_{dis}(x, y)$")
 plt.gca().set_aspect(0.75)
 plt.show()
-
+  
 # ======================================================================
 # 6. 1D projection: Vxd = sum_y Vdis(x, y) * Y0(y)
 # ======================================================================
