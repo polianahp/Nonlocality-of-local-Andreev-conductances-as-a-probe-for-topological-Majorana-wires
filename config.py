@@ -24,6 +24,9 @@ class DefaultPathConfiguration:
         self.ROOT = FILE.parents[0]
         self.DATA = self.ROOT / "Data"
         self.TESTS = self.ROOT / "Tests"
+        
+        #folder where disorder realizations are stored for runs. 
+        self.RUN_FILES = self.ROOT / "Run_Files"
 
     @classmethod
     def get_local_config(cls, local_dir):

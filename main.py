@@ -8,6 +8,8 @@ import multiprocessing as mp
 import os
 from tqdm import tqdm
 import helpers as hp
+from pathlib import Path
+from config import PathConfigs
 
 ####### System Parameters
 
@@ -26,7 +28,7 @@ barrier0 = 5
 
 points = 100 #number of points for varying conductance at either lead
 num_engs = 100 #number of points in dIdV energy sweep to get ZBP
-num_vz_var = 2 # number of points to sweep magnetic field
+num_vz_var = 100 # number of points to sweep magnetic field
 
 
 barrier_arr = np.linspace(0, 40*barrier0, points) #Varying the right barrier U_R and lef barrier U_L
@@ -46,14 +48,52 @@ barrier_right_conductance_right_arr = np.zeros_like(barrier_right_conductance_le
 barrier_left_conductance_left_arr   = np.zeros_like(barrier_right_conductance_left_arr)
 barrier_left_conductance_right_arr  = np.zeros_like(barrier_right_conductance_left_arr)
 
+gamma_sq_arr = np.zeros_like(Vz_var)
+mp_eng_arr = np.zeros_like(Vz_var)
+
+lenw = Ls + 2*(Lb + Ln)
+mp_arr = np.zeros(shape= (len(Vz_var), lenw))
+
+print(f"{os.path.exists(PathConfigs.RUN_FILES)}")
+
+fname = "Data.npz"
+path = Path(PathConfigs.RUN_FILES/fname)
+Vdisx = hp.initialize_vdis_from_data(path)
+Conductance_matrix = np.zeros(shape=(len(Vz_var),2, 2))
+
+
+
 
 for i in range(len(Vz_var)):
     vzvar = Vz_var[i] * V_c
     
     print(f"Running Vzvar {i}/{len(Vz_var)}  Value: ({ Vz_var[i]} * V_c) ------------------------------------------------------")
     #calculate dIdV with system with symmetric barrier (left and right should be the same for this case)
-    syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, V_z=vzvar, alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads, barrier_l=barrier0, barrier_r=barrier0)
+    syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, V_z=vzvar, 
+                           alpha=alpha, Ln=Ln, Lb=Lb, 
+                           Ls=Ls, mu_leads=mu_leads,
+                           barrier_l=barrier0, barrier_r=barrier0, Vdisx=Vdisx)
+    
+    syst_closed = hp.build_system_closed(t=t, mu=mu, mu_n=mu_n, Delta=Delta, V_z=vzvar, 
+                           alpha=alpha, Ln=Ln, Lb=Lb, 
+                           Ls=Ls, mu_leads=mu_leads,
+                           barrier_l=barrier0, barrier_r=barrier0, Vdisx=Vdisx)
+    
+    M_profile, energy_0 = hp.calculate_local_mp(syst_closed)
+    gamma_sq = hp.calculate_gamma_squared(syst_closed)
+    gamma_sq_arr[i] = gamma_sq
+    mp_eng_arr[i] = energy_0
+    mp_arr[i,:] = M_profile
+    
+    print(f"MPROF SHAPE: {M_profile.shape}")
+    
+    
+    
+    
     dIdVl, dIdVr, ldos = hp.calc_dIdV(syst, energies)
+    Gmat = hp.calc_conductance_matrix(syst, 0.0)
+    Conductance_matrix[i,:,:] = Gmat
+    
     
     dIdVs_left_arr[i, :] = dIdVl
     dIdVs_right_arr[i, :] = dIdVr
@@ -68,8 +108,15 @@ for i in range(len(Vz_var)):
 
     for k in tqdm(range(points), desc = f"Calculating Conductances for Vzvar {i}/{len(Vz_var)}"):
         #print(f"running point: {k}/{points}")
-        syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, V_z=vzvar, alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads, barrier_l=barrier0, barrier_r=barrier_arr[k])
-        syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, V_z=vzvar, alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_arr[k], barrier_r=barrier0)
+        syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, 
+                                  V_z=vzvar, alpha=alpha, Ln=Ln, Lb=Lb, 
+                                  Ls=Ls, mu_leads=mu_leads, barrier_l=barrier0,
+                                  barrier_r=barrier_arr[k], Vdisx=Vdisx)
+        
+        syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, 
+                                  V_z=vzvar, alpha=alpha, Ln=Ln, Lb=Lb, 
+                                  Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_arr[k], 
+                                  barrier_r=barrier0, Vdisx=Vdisx)
 
         #Calculating the conductance varying UR
         cL, cR = hp.calc_conductance(syst_UR, energy=0.0)
@@ -94,7 +141,7 @@ for i in range(len(Vz_var)):
     
     
         
-dirname = "testdir2"
+dirname = "disorder_test"
 hp.np_save_wrapped(energies, "energies", dirname)
 
 hp.np_save_wrapped(dIdVs_left_arr, "dIdVs_left_arr", dirname)
@@ -109,5 +156,12 @@ hp.np_save_wrapped(barrier_left_conductance_right_arr, "barrier_left_conductance
 
 hp.np_save_wrapped(Tinvs_left, "Tinvs_left", dirname)
 hp.np_save_wrapped(Tinvs_right, "Tinvs_right", dirname)
+
+hp.np_save_wrapped(Conductance_matrix, "Conductance_matrix", dirname)
+
+hp.np_save_wrapped(gamma_sq_arr, "gamma_sq_arr", dirname)
+hp.np_save_wrapped(mp_eng_arr, "mp_eng_arr", dirname)
+hp.np_save_wrapped(mp_arr, "mp_arr", dirname)
+
     
     

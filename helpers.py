@@ -4,6 +4,8 @@ import tinyarray
 import numpy as np
 import os
 from config import PathConfigs
+from pathlib import Path
+import scipy.sparse.linalg as sla
 
 
 
@@ -45,7 +47,7 @@ def calc_integrated_area_diff(conductance_left, conductance_right):
 
 
 def calc_conductance(syst, energy = 0.0, return_smatrix = False):
-    smatrix = kwant.smatrix(syst, 0.0)
+    smatrix = kwant.smatrix(syst, energy)
     
     R = 0
     A = 0
@@ -67,12 +69,123 @@ def calc_conductance(syst, energy = 0.0, return_smatrix = False):
     
     else:
         return cleft, cright
+    
+    
+def calc_conductance_matrix(syst, eng):
+    G_matrix = np.zeros(shape=(2, 2))
+    smatrix = kwant.smatrix(syst, eng)
+    Rl = 0
+    Al = 0
+    Rr = 0
+    Ar = 0
+    
+    # Non-Local Transmissions
+    T_RL = 0; TA_RL = 0 # Left -> Right
+    T_LR = 0; TA_LR = 0 # Right -> Left
+    
+    for i in range(2):
+        for j in range(2):
+            Rl = Rl + smatrix.transmission((0, j), (0, i))
+            Al = Al + smatrix.transmission((0, j+2), (0, i))
+
+            Rr = Rr + smatrix.transmission((1, j), (1, i))
+            Ar = Ar + smatrix.transmission((1, j+2), (1, i))
+            
+            T_RL  += smatrix.transmission((1, j),   (0, i)) # Normal
+            TA_RL += smatrix.transmission((1, j+2), (0, i)) # Crossed Andreev
+            T_LR  += smatrix.transmission((0, j),   (1, i)) # Normal
+            TA_LR += smatrix.transmission((0, j+2), (1, i)) # Crossed Andreev
+            
+            
+    G_matrix[0,0] = 2 - Rl + Al
+    G_matrix[1,1] = 2 - Rr + Ar
+    
+    G_matrix[1,0] = TA_RL - T_RL # Current at Right (1) due to Left (0)
+    G_matrix[0,1] = TA_LR - T_LR # Current at Left (0) due to Right (1)    
+    
+    return G_matrix
+
+
+def calculate_gamma_squared(syst_closed, k=0):
+    """
+    Calculates the Squared Majorana Operator 
+    Formula: gamma^2 = Sum_j (u_j * v_j)
+    
+    Parameters:
+    - syst_closed: finalized system (without leads attached).
+    - k: The index of the eigenstate
+    """
+    ham = syst_closed.hamiltonian_submatrix(sparse=True)
+    try:
+        evals, evecs = sla.eigsh(ham, k=k+4, sigma=0, which='LM')
+    except:
+        evals, evecs = np.linalg.eigh(ham.toarray())
+        
+    idx = np.argsort(np.abs(evals))
+    psi = evecs[:, idx[k]]  # Wavefunction of the k-th mode
+    
+    #basis order: (e_up, e_down, h_down, h_up) per site
+    
+    n_tot = len(psi)
+    u_vec = psi[:n_tot//2]  
+    v_vec = psi[n_tot//2:]  
+    
+    gamma_sq = np.sum(u_vec * v_vec)
+    
+    return gamma_sq
+
+def calculate_local_mp(syst_closed):
+    """
+    Calculates the Local Majorana Polarization (Mj) for each site j.
+    Formula: M_j = (2 * u * v) / (u^2 + v^2)
+    Adapted for spinful wire: Sums spin contributions per site.
+    
+    Returns:
+    - M_profile: Array of length L (number of sites), containing Mj for each site.
+    - energy_0: The energy of the analyzed mode.
+    """
+    ham = syst_closed.hamiltonian_submatrix(sparse=True)
+    try:
+        evals, evecs = sla.eigsh(ham, k=2, sigma=0, which='LM')
+    except:
+        evals, evecs = np.linalg.eigh(ham.toarray())
+        
+    idx = np.argsort(np.abs(evals))
+    psi = evecs[:, idx[0]]
+    energy_0 = evals[idx[0]]
+
+    
+    n_sites = len(psi) // 4
+    psi_sites = psi.reshape(n_sites, 4)
+    
+    
+    # Basis (u_up, u_down, v_down, -v_up)
+    u_up   = psi_sites[:, 0]
+    u_down = psi_sites[:, 1]
+    v_down = psi_sites[:, 2]
+    v_up   = -psi_sites[:, 3]
+    
+
+    overlap = u_up * np.conj(v_up) + u_down * np.conj(v_down)
+    numerator = 2 * np.real(overlap)
+    
+    denominator = (np.abs(u_up)**2 + np.abs(u_down)**2 + 
+                   np.abs(v_down)**2 + np.abs(v_up)**2)
+    
+    with np.errstate(divide='ignore', invalid='ignore'):
+        M_profile = numerator / denominator
+        
+    M_profile = np.nan_to_num(M_profile) # Replace NaNs with 0
+    
+    return M_profile, energy_0
+
+
 
 
 def calc_dIdV(syst, energies):
     num_engs = len(energies)
     
-    ldos = np.zeros(shape = (num_engs, 20192))
+    ldos = np.zeros(shape = (num_engs, 2192))
     dIdV_left = np.zeros_like(energies)
     dIdV_right = np.zeros_like(energies)
     
@@ -101,9 +214,8 @@ def calc_dIdV(syst, energies):
 
 ######### The following function builds the system ########
 
-def build_system(t, mu, mu_n, Delta, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l, barrier_r):
+def build_system(t, mu, mu_n, Delta, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l, barrier_r, Vdisx = None, a = 1):
     syst = kwant.Builder()
-    a = 1
     lat = kwant.lattice.square(a, norbs=4)
 
     #lead
@@ -125,13 +237,18 @@ def build_system(t, mu, mu_n, Delta, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l
     # Zeeman energy on the normal segments of the wire.
     
     mu_s = np.zeros(Ls)
+    
+    if Vdisx is None:
+        Vdisx  = np.zeros_like(mu_s)
+        
     for i in range(Ls):
-        mu_s[i] = mu #- (mu - mu_n) * (1 - np.tanh(i/80))    
+        mu_s[i] = mu + Vdisx[i] #- (mu - mu_n) * (1 - np.tanh(i/80))    
 
     for i in range(Lb):
         syst[lat(i, 0)] = (2 * t - mu_n + barrier_l) * np.kron(sigma_z, sigma_0)
         if i > 0:
             syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
+            
     for i in range(Lb, Lb+Ln):
         syst[lat(i, 0)] = (2 * t - mu_n) * np.kron(sigma_z, sigma_0)
         syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
@@ -156,7 +273,73 @@ def build_system(t, mu, mu_n, Delta, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l
     return syst.finalized()
 
 
+
+def build_system_closed(t, mu, mu_n, Delta, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l, barrier_r, Vdisx = None, a = 1):
+    #Same as above but without leads, for calculating majorana polarization
+    
+    
+    syst = kwant.Builder()
+    lat = kwant.lattice.square(a, norbs=4)
+
+    #lead
+    sym_left_lead = kwant.TranslationalSymmetry((-a, 0))
+    sym_right_lead = kwant.TranslationalSymmetry((a, 0))
+    
+    
+    left_lead = kwant.Builder(sym_left_lead, conservation_law=np.diag([-2, -1, 1, 2])) 
+    right_lead = kwant.Builder(sym_right_lead, conservation_law=np.diag([-2, -1, 1, 2])) 
+    
+    #print(f"left lead type: {type(left_lead)}")
+    #print(f"right lead type: {type(right_lead)}")
+    #print(f"syst type: {type(syst)}")
+    
+
+    #Here one can edit the chemical potential profile. The profile below is for the quasi-Majorana case, the pristine case would be 
+    # mu_s[i] = mu, and for disorder we use mu_s[i] = mu + (some random value)
+    # For the nontopological ABS (dotted magenta curve in Figs. 2 c and d), set alpha = 0 in the central region and add a 
+    # Zeeman energy on the normal segments of the wire.
+    
+    mu_s = np.zeros(Ls)
+    if Vdisx is None:
+        Vdisx  = np.zeros_like(mu_s)
+        
+    
+    for i in range(Ls):
+        mu_s[i] = mu + Vdisx[i] #- (mu - mu_n) * (1 - np.tanh(i/80))    
+
+    for i in range(Lb):
+        syst[lat(i, 0)] = (2 * t - mu_n + barrier_l) * np.kron(sigma_z, sigma_0)
+        if i > 0:
+            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
+            
+    for i in range(Lb, Lb+Ln):
+        syst[lat(i, 0)] = (2 * t - mu_n) * np.kron(sigma_z, sigma_0)
+        syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
+        
+    for i in range(Lb+Ln, Lb+Ln+Ls):
+        syst[lat(i, 0)] = (2 * t - mu_s[i-Lb-Ln]) * np.kron(sigma_z, sigma_0) + Delta * np.kron(sigma_x, sigma_0) + V_z * np.kron(sigma_0, sigma_x)
+        syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
+        
+    for i in range(Lb+Ln+Ls, Lb+Ln+Ls+Ln):
+        syst[lat(i, 0)] = (2 * t - mu_n) * np.kron(sigma_z, sigma_0)
+        syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
+        
+    for i in range(Lb+Ln+Ls+Ln, Lb+Ln+Ls+Ln+Lb):
+        syst[lat(i, 0)] = (2 * t - mu_n + barrier_r) * np.kron(sigma_z, sigma_0)
+        syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
+    
+
+    return syst.finalized()
+
+
+
 ######## Disorder Calculation Helper Functions ########
+
+def initialize_vdis_from_data(path):
+    Vdisx = np.load(path)['Vdisx']
+    return Vdisx
+
+
 
 def fVd(x, Lambda_dis):
      # Lambda_dis is the decay length (Å)
