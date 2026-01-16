@@ -1,6 +1,6 @@
 #!/bin/sh 
 
-#SBATCH -J  tst #Job Name
+#SBATCH -J  cln #Job Name
 #SBATCH -N 2 #Number of nodes 
 #SBATCH -c 1#Cores (40 for most queues,except gpu ones 24) [https://docs.hpc.wvu.edu/text/83.ThornyFlat.html]
 #SBATCH -n 2 #Tasks [https://docs.hpc.wvu.edu/text/34.WorkloadManager.html#submitting-batch-jobs] (can be 1 per node unless you do some stuff)

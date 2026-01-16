@@ -58,7 +58,7 @@ print(f"{os.path.exists(PathConfigs.RUN_FILES)}")
 
 fname = "Data.npz"
 path = Path(PathConfigs.RUN_FILES/fname)
-Vdisx = hp.initialize_vdis_from_data(path)
+Vdisx = hp.initialize_vdis_from_data(path) * 0  ## <---- CHANGE LATER FORCING 0
 Conductance_matrix = np.zeros(shape=(len(Vz_var),2, 2))
 
 
@@ -141,7 +141,7 @@ for i in range(len(Vz_var)):
     
     
         
-dirname = "disorder_test"
+dirname = "clean_test"
 hp.np_save_wrapped(energies, "energies", dirname)
 
 hp.np_save_wrapped(dIdVs_left_arr, "dIdVs_left_arr", dirname)
