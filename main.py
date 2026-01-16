@@ -48,7 +48,7 @@ barrier_right_conductance_right_arr = np.zeros_like(barrier_right_conductance_le
 barrier_left_conductance_left_arr   = np.zeros_like(barrier_right_conductance_left_arr)
 barrier_left_conductance_right_arr  = np.zeros_like(barrier_right_conductance_left_arr)
 
-gamma_sq_arr = np.zeros_like(Vz_var)
+gamma_sq_arr = np.zeros_like(Vz_var, dtype=complex)
 mp_eng_arr = np.zeros_like(Vz_var)
 
 lenw = Ls + 2*(Lb + Ln)
