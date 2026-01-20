@@ -10,6 +10,8 @@ from tqdm import tqdm
 import helpers as hp
 from pathlib import Path
 from config import PathConfigs
+import itertools as itr
+
 
 ####### System Parameters
 
@@ -27,9 +29,12 @@ V_z = 0.5* V_c # To generate Fig 2a V_z should be varied. For the cyan line in F
 barrier0 = 5
 
 points = 100 #number of points for varying conductance at either lead
-num_engs = 100 #number of points in dIdV energy sweep to get ZBP
+num_engs = 101 #number of points in dIdV energy sweep to get ZBP
 num_vz_var = 100 # number of points to sweep magnetic field
 
+#varing mu to calculate topological region patch
+mu_rng = 0.3
+mu_var = np.linspace(Delta - mu_rng, Delta + mu_rng, 50)
 
 barrier_arr = np.linspace(0, 40*barrier0, points) #Varying the right barrier U_R and lef barrier U_L
 
@@ -58,9 +63,10 @@ print(f"{os.path.exists(PathConfigs.RUN_FILES)}")
 
 fname = "Data.npz"
 path = Path(PathConfigs.RUN_FILES/fname)
-Vdisx = hp.initialize_vdis_from_data(path) * 0  ## <---- CHANGE LATER FORCING 0
+Vdisx = hp.initialize_vdis_from_data(path) * 0  # <---- CHANGE LATER FORCING 0
 Conductance_matrix = np.zeros(shape=(len(Vz_var),2, 2))
 
+pdi_arr = np.zeros_like(Vz_var)
 
 
 
@@ -140,8 +146,25 @@ for i in range(len(Vz_var)):
     print("\n")
     
     
-        
-dirname = "clean_test"
+    
+    
+
+print(f'Calculating Topological Invariant')
+
+params = [pms for pms in itr.product(mu_var, Vz_var)]
+pdi_arr = np.zeros(shape = (len(params)))
+for i, pm in enumerate(params):
+    mu_pm = pm[0]
+    vz_pm = pm[1] * V_c
+    pdi_arr[i] = hp.calculate_pdi(t, mu_pm, Delta, vz_pm, alpha, Ls, -Vdisx, q_N=10)
+    
+    
+pdi_data = [[pm[1]*V_c, pm[0], pdi_arr[i]] for i, pm in enumerate(params)]
+    
+dirname = "clean_test2"
+
+hp.np_save_wrapped(pdi_data, "pdi_data", dirname)
+
 hp.np_save_wrapped(energies, "energies", dirname)
 
 hp.np_save_wrapped(dIdVs_left_arr, "dIdVs_left_arr", dirname)

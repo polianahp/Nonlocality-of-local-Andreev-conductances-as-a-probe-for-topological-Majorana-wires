@@ -1,0 +1,303 @@
+import os
+
+# 1. THREAD CONTROL: Must be set BEFORE importing numpy/scipy/kwant
+# Prevents oversubscription where each process tries to use all cores.
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
+import numpy as np
+from scipy import linalg as LA
+import kwant
+import tinyarray
+import multiprocessing as mp
+from tqdm import tqdm
+import helpers as hp
+from pathlib import Path
+from config import PathConfigs
+import itertools as itr
+from functools import partial
+
+
+
+# =============================================================================
+# WORKER FUNCTIONS (Must be defined at module level for pickling)
+# =============================================================================
+
+def worker_simulation_step(iter_data, static_params):
+    """
+    Worker function for the main transport/spectral loop (Loop 1).
+    iter_data: tuple (index, vz_val)
+    static_params: dict containing all constant physics parameters
+    """
+    i, vz_val_raw = iter_data
+    
+    # Unpack static parameters
+    t = static_params['t']
+    mu = static_params['mu']
+    mu_n = static_params['mu_n']
+    Delta = static_params['Delta']
+    alpha = static_params['alpha']
+    Ln = static_params['Ln']
+    Lb = static_params['Lb']
+    Ls = static_params['Ls']
+    mu_leads = static_params['mu_leads']
+    V_c = static_params['V_c']
+    barrier0 = static_params['barrier0']
+    Vdisx = static_params['Vdisx']
+    energies = static_params['energies']
+    barrier_arr = static_params['barrier_arr']
+    
+    vzvar = vz_val_raw * V_c
+    
+    # --- 1. Build Symmetric System & Calculate Spectral Properties ---
+    syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, V_z=vzvar, 
+                           alpha=alpha, Ln=Ln, Lb=Lb, 
+                           Ls=Ls, mu_leads=mu_leads,
+                           barrier_l=barrier0, barrier_r=barrier0, Vdisx=Vdisx)
+    
+    syst_closed = hp.build_system_closed(t=t, mu=mu, mu_n=mu_n, Delta=Delta, V_z=vzvar, 
+                           alpha=alpha, Ln=Ln, Lb=Lb, 
+                           Ls=Ls, mu_leads=mu_leads,
+                           barrier_l=barrier0, barrier_r=barrier0, Vdisx=Vdisx)
+    
+    # Majorana metrics
+    M_profile, energy_0 = hp.calculate_local_mp(syst_closed)
+    gamma_sq = hp.calculate_gamma_squared(syst_closed)
+    
+    # dI/dV and Conductance Matrix
+    dIdVl, dIdVr, ldos = hp.calc_dIdV(syst, energies)
+    Gmat = hp.calc_conductance_matrix(syst, 0.0)
+    
+    # --- 2. Barrier Sweeps (Nested Loop logic) ---
+    points = len(barrier_arr)
+    
+    # Pre-allocate local arrays
+    b_right_cond_left = np.zeros(points)
+    b_right_cond_right = np.zeros(points)
+    b_left_cond_left = np.zeros(points)
+    b_left_cond_right = np.zeros(points)
+
+    # Note: We run this serially inside the worker because the overhead 
+    # of spawning sub-processes here would be too high.
+    for k in range(points):
+        # Varying Right Barrier (UR)
+        syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, 
+                                  V_z=vzvar, alpha=alpha, Ln=Ln, Lb=Lb, 
+                                  Ls=Ls, mu_leads=mu_leads, barrier_l=barrier0,
+                                  barrier_r=barrier_arr[k], Vdisx=Vdisx)
+        
+        cL, cR = hp.calc_conductance(syst_UR, energy=0.0)
+        b_right_cond_left[k] = cL
+        b_right_cond_right[k] = cR
+        
+        # Varying Left Barrier (UL)
+        syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, 
+                                  V_z=vzvar, alpha=alpha, Ln=Ln, Lb=Lb, 
+                                  Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_arr[k], 
+                                  barrier_r=barrier0, Vdisx=Vdisx)
+
+        cL, cR = hp.calc_conductance(syst_UL, energy=0.0)
+        b_left_cond_left[k] = cL
+        b_left_cond_right[k] = cR
+    
+    # Calculate Topological Invariants (Tinvs)
+    tinv_left = hp.calc_integrated_area_diff(b_left_cond_left, b_left_cond_right)
+    tinv_right = hp.calc_integrated_area_diff(b_right_cond_left, b_right_cond_right)
+    
+    # Pack all results into a dictionary to return to main process
+    results = {
+        'i': i,
+        'dIdVl': dIdVl,
+        'dIdVr': dIdVr,
+        'ldos': ldos,
+        'Gmat': Gmat,
+        'gamma_sq': gamma_sq,
+        'energy_0': energy_0,
+        'M_profile': M_profile,
+        'b_right_cond_left': b_right_cond_left,
+        'b_right_cond_right': b_right_cond_right,
+        'b_left_cond_left': b_left_cond_left,
+        'b_left_cond_right': b_left_cond_right,
+        'tinv_left': tinv_left,
+        'tinv_right': tinv_right
+    }
+    return results
+
+def worker_pdi_step(param_tuple, static_params):
+    """
+    Worker function for the PDI calculation loop (Loop 2).
+    """
+    mu_pm, vz_raw = param_tuple
+    
+    # Unpack necessary static params
+    t = static_params['t']
+    Delta = static_params['Delta']
+    alpha = static_params['alpha']
+    Ls = static_params['Ls']
+    Vdisx = static_params['Vdisx']
+    V_c = static_params['V_c']
+    
+    vz_pm = vz_raw * V_c
+    
+    # Calculate PDI
+    # Note: Vdisx is negated here based on physics convention if required, 
+    # mirroring the original script logic (passed as -Vdisx)
+    pdi_val = hp.calculate_pdi(t, mu_pm, Delta, vz_pm, alpha, Ls, -Vdisx, q_N=10)
+    
+    return [mu_pm * V_c, vz_raw, pdi_val]
+
+# =============================================================================
+# MAIN EXECUTION BLOCK
+# =============================================================================
+
+if __name__ == "__main__":
+    
+    ####### System Parameters
+    t = 102.0
+    mu = 1
+    mu_n = 0.2
+    mu_leads = 20.0
+    Delta = 0.5
+    alpha = 3.5
+    Ln = 20 # normal metal length
+    Lb = 4 #barrier length
+    Ls = 500 #super conductor length
+    V_c = np.sqrt(mu**2 + Delta**2)
+    barrier0 = 5
+
+    points = 100 
+    num_engs = 101 
+    num_vz_var = 100 
+
+    # Sweeping arrays
+    mu_rng = 0.3
+    mu_var = np.linspace(Delta - mu_rng, Delta + mu_rng, 50)
+    barrier_arr = np.linspace(0, 40*barrier0, points)
+    Vz_var = np.linspace(0.5, 1.5, num_vz_var) 
+    energies = np.linspace(-0.5, 0.5, num_engs)
+
+    # Initialize Disorder
+    print(f"Run Files Path Exists: {os.path.exists(PathConfigs.RUN_FILES)}")
+    fname = "Data.npz"
+    path = Path(PathConfigs.RUN_FILES/fname)
+    # Using try/except to handle case where file might not exist locally for testing
+    try:
+        Vdisx = hp.initialize_vdis_from_data(path) * 0 #* <---- FORCING 0 
+    except:
+        print("Warning: Could not load Vdisx from file. Initializing zeros.")
+        Vdisx = np.zeros(Ls)
+
+    # Dictionary of static parameters to pass to workers
+    static_params = {
+        't': t, 'mu': mu, 'mu_n': mu_n, 'Delta': Delta, 'alpha': alpha,
+        'Ln': Ln, 'Lb': Lb, 'Ls': Ls, 'mu_leads': mu_leads,
+        'V_c': V_c, 'barrier0': barrier0, 'Vdisx': Vdisx,
+        'energies': energies, 'barrier_arr': barrier_arr
+    }
+
+    # Pre-allocate main arrays
+    dIdVs_left_arr = np.zeros(shape = (len(Vz_var), len(energies)))
+    dIdVs_right_arr = np.zeros(shape = (len(Vz_var), len(energies)))
+    ldos_arr = np.zeros(shape = (len(Vz_var), len(energies), 2192)) 
+    Tinvs_left = np.zeros_like(Vz_var)
+    Tinvs_right = np.zeros_like(Vz_var)
+    barrier_right_conductance_left_arr  = np.zeros(shape=(len(Vz_var), points))
+    barrier_right_conductance_right_arr = np.zeros_like(barrier_right_conductance_left_arr)
+    barrier_left_conductance_left_arr   = np.zeros_like(barrier_right_conductance_left_arr)
+    barrier_left_conductance_right_arr  = np.zeros_like(barrier_right_conductance_left_arr)
+    gamma_sq_arr = np.zeros_like(Vz_var, dtype=complex)
+    mp_eng_arr = np.zeros_like(Vz_var)
+    lenw = Ls + 2*(Lb + Ln)
+    mp_arr = np.zeros(shape= (len(Vz_var), lenw))
+    Conductance_matrix = np.zeros(shape=(len(Vz_var),2, 2))
+
+    # -------------------------------------------------------------------------
+    # PARALLEL EXECUTION SETUP
+    # -------------------------------------------------------------------------
+    
+    # Determine CPUs (leave 1 or 2 free for system if possible, else use all)
+    num_workers = max(1, mp.cpu_count() - 1)
+    print(f"Starting Parallel Execution with {num_workers} workers.")
+    
+    # Create the Pool ONCE to be reused
+    with mp.Pool(processes=num_workers) as pool:
+        
+        # --- TASK 1: Main Simulation Loop (Iterating over Vz) ---
+        print("\n--- Starting Main Simulation (Vz Sweep) ---")
+        
+        # Prepare iterable: list of (index, val)
+        vz_iterable = list(enumerate(Vz_var))
+        
+        # Create partial function with static params frozen
+        func_sim = partial(worker_simulation_step, static_params=static_params)
+        
+        # Use imap to get an iterator we can wrap in tqdm
+        # chunksize=1 is usually fine for heavy tasks, allows better load balancing
+        results_iterator = pool.imap(func_sim, vz_iterable, chunksize=1)
+        
+        # Iterate and fill arrays
+        for res in tqdm(results_iterator, total=len(Vz_var), desc="Vz Sweep"):
+            idx = res['i']
+            
+            dIdVs_left_arr[idx, :] = res['dIdVl']
+            dIdVs_right_arr[idx, :] = res['dIdVr']
+            ldos_arr[idx, :, :] = res['ldos']
+            Conductance_matrix[idx, :, :] = res['Gmat']
+            gamma_sq_arr[idx] = res['gamma_sq']
+            mp_eng_arr[idx] = res['energy_0']
+            mp_arr[idx, :] = res['M_profile']
+            
+            barrier_right_conductance_left_arr[idx, :] = res['b_right_cond_left']
+            barrier_right_conductance_right_arr[idx, :] = res['b_right_cond_right']
+            barrier_left_conductance_left_arr[idx, :] = res['b_left_cond_left']
+            barrier_left_conductance_right_arr[idx, :] = res['b_left_cond_right']
+            
+            Tinvs_left[idx] = res['tinv_left']
+            Tinvs_right[idx] = res['tinv_right']
+
+        # --- TASK 2: PDI Calculation Loop ---
+        print("\n--- Starting PDI Calculation ---")
+        
+        # Prepare iterable: Product of mu and Vz
+        params_list = [pms for pms in itr.product(mu_var, Vz_var)]
+        
+        # Create partial function
+        func_pdi = partial(worker_pdi_step, static_params=static_params)
+        
+        # Run parallel map
+        pdi_results_iter = pool.imap(func_pdi, params_list, chunksize=1)
+        
+        # Collect results
+        # pdi_data structure: list of [mu*Vc, Vz_raw, pdi_val]
+        pdi_data = []
+        for res in tqdm(pdi_results_iter, total=len(params_list), desc="PDI Sweep"):
+            pdi_data.append(res)
+            
+        pdi_data = np.array(pdi_data)
+
+    # -------------------------------------------------------------------------
+    # SAVE RESULTS
+    # -------------------------------------------------------------------------
+    dirname = "clean_test3"
+    print(f"\nSaving data to: {dirname}")
+
+    hp.np_save_wrapped(pdi_data, "pdi_data", dirname)
+    hp.np_save_wrapped(energies, "energies", dirname)
+    hp.np_save_wrapped(dIdVs_left_arr, "dIdVs_left_arr", dirname)
+    hp.np_save_wrapped(dIdVs_right_arr, "dIdVs_right_arr", dirname)
+    hp.np_save_wrapped(ldos_arr, "LDOS", dirname)
+    hp.np_save_wrapped(barrier_right_conductance_left_arr, "barrier_right_conductance_left_arr", dirname)
+    hp.np_save_wrapped(barrier_right_conductance_right_arr, "barrier_right_conductance_right_arr", dirname)    
+    hp.np_save_wrapped(barrier_left_conductance_left_arr, "barrier_left_conductance_left_arr", dirname)    
+    hp.np_save_wrapped(barrier_left_conductance_right_arr, "barrier_left_conductance_right_arr", dirname)
+    hp.np_save_wrapped(Tinvs_left, "Tinvs_left", dirname)
+    hp.np_save_wrapped(Tinvs_right, "Tinvs_right", dirname)
+    hp.np_save_wrapped(Conductance_matrix, "Conductance_matrix", dirname)
+    hp.np_save_wrapped(gamma_sq_arr, "gamma_sq_arr", dirname)
+    hp.np_save_wrapped(mp_eng_arr, "mp_eng_arr", dirname)
+    hp.np_save_wrapped(mp_arr, "mp_arr", dirname)
+    
+    print("Done.")

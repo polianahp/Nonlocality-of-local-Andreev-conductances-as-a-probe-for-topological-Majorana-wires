@@ -134,6 +134,7 @@ def calculate_gamma_squared(syst_closed, k=0):
     
     return gamma_sq
 
+
 def calculate_local_mp(syst_closed):
     """
     Calculates the Local Majorana Polarization (Mj) for each site j.
@@ -178,8 +179,6 @@ def calculate_local_mp(syst_closed):
     M_profile = np.nan_to_num(M_profile) # Replace NaNs with 0
     
     return M_profile, energy_0
-
-
 
 
 def calc_dIdV(syst, energies):
@@ -388,6 +387,212 @@ def generate_1d_Vdis(Nx, ax, num_impurities, amplitude, lambda_dis):
         normed_Vxd = Vxd/np.max(np.abs(Vxd)) * amplitude
         
         return normed_Vxd
+    
+    
+    
+    
+    
+####################### Code for Calculating Periodic Disorder Invariant #########################
+
+# =============================================================================
+# Adapted from binayyakbhroy/periodic-disorder-invariant
+# =============================================================================
+
+# Pauli matrices for PDI calculation
+s0_pdi = np.eye(2)
+sx_pdi = np.array([[0, 1], [1, 0]])
+sy_pdi = np.array([[0, -1j], [1j, 0]])
+sz_pdi = np.array([[1, 0], [0, -1]])
+
+zeros_4 = np.zeros((4, 4))
+zeros_8 = np.zeros((8, 8))
+
+# Definitions for PDI Hamiltonian construction (Basis: Nambu x Spin)
+# Note: These kron products match the basis used from PDI library
+chirality_op = np.kron(sx_pdi, np.eye(2))
+szs0 = np.kron(sz_pdi, s0_pdi)
+szsx = np.kron(sz_pdi, sx_pdi)
+sysy = np.kron(sy_pdi, sy_pdi)
+szsy = np.kron(sz_pdi, sy_pdi)
+
+def inv_pdi(m):
+    """Robust matrix inversion for PDI."""
+    i = np.eye(m.shape[0])
+    try:
+        return np.linalg.solve(m, i)
+    except np.linalg.LinAlgError:
+        return np.linalg.pinv(m, rcond=1e-15)
+
+def fV(q, h_onsite, h_hopping, translation, translation_pr, sigma_right, disorder, N):
+    """
+    Recursive Green's Function calculation for the disordered supercell.
+    """
+    V_x = disorder
+    # Ensure disorder array matches length N
+    if len(V_x) > N:
+        V_x = V_x[:N]
+    
+    # Precompute constants
+    phase_pos = np.exp(1.0j * q * N)
+    phase_neg = np.exp(-1.0j * q * N)
+
+    g_block11 = lambda i: h_onsite + V_x[i] * szs0
+    g_block12 = h_hopping.T * phase_neg
+    g_block21 = h_hopping * phase_pos
+
+    # ---------- Compute Sigma_L recursively ----------
+    sigma_left = [zeros_8]
+    green_g0 = np.block([[g_block11(0), g_block12], [g_block21, g_block11(-1)]])
+    
+    # Helper for intermediate blocks
+    green_gi = lambda i: np.block([[g_block11(i), zeros_4], [zeros_4, g_block11(-i-1)]])
+    
+    green_inv = inv_pdi((-1.0 * (green_g0 + zeros_8)))
+    sigma_ith = translation_pr @ (green_inv @ translation)
+    sigma_left.append(sigma_ith)
+
+    for i in range(1, int(N/2) - 1):
+        green_inv = inv_pdi((-1.0 * (green_gi(i) + sigma_ith)))
+        sigma_ith = translation_pr @ (green_inv @ translation)
+        sigma_left.append(sigma_ith)
+
+    green_temp0_block11 = np.block([[-1.0*g_block11(0), -1.0*g_block12],
+                                    [-1.0*g_block21, -1.0*g_block11(-1)]])
+    green_temp0_block22 = np.block([[-1.0*g_block11(1), zeros_4],
+                                    [zeros_4, -1.0*g_block11(-2)]])
+
+    green_temp0 = np.block([
+        [green_temp0_block11 - sigma_left[0], -1.0*translation],
+        [-1.0*translation_pr, green_temp0_block22 - sigma_right[-2]]
+    ])
+
+    # ---------- Full Green's function matrix ----------
+    greens_func_matrix = inv_pdi(green_temp0)
+    
+    green_temp_block11 = lambda i: np.block([[-1.0*g_block11(i), zeros_4], [zeros_4, -1.0*g_block11(-i-1)]])
+    green_temp_block22 = lambda i: np.block([[-1.0*g_block11(i + 1), zeros_4], [zeros_4, -1.0*g_block11(-i)]])
+    green_temp = lambda i: np.block([
+        [green_temp_block11(i) - sigma_left[i], -1.0*translation],
+        [-1.0*translation_pr, green_temp_block22(i) - sigma_right[-i]]
+    ])
+
+    for i in range(1, int(N/2) - 2):
+        greens_func_matrix += inv_pdi(green_temp(i))
+
+    green_tempN_block11 = np.block([[-1.0*g_block11(int(N/2)-2), zeros_4], [zeros_4, -1.0*g_block11(int(N/2)+1)]])
+    green_tempN_block22 = np.block([[-1.0*g_block11(int(N/2)-1), -1.0*h_hopping], 
+                                    [-1.0*h_hopping.T, -1.0*g_block11(int(N/2))]])
+
+    green_tempN = np.block([
+        [green_tempN_block11 - sigma_left[-2], -1.0*translation],
+        [-1.0*translation_pr, green_tempN_block22 - sigma_right[0]]
+    ])
+
+    greens_func_matrix += inv_pdi(green_tempN)
+
+    greens_func_ex_right = inv_pdi(green_temp0_block11 - sigma_right[-1])
+    greens_func_ex_left = inv_pdi(green_tempN_block22 - sigma_left[-1])
+
+    # --------- Nearest-neighbor Green's functions ---------
+    G_12 = (
+        greens_func_matrix[0:4, 8:12]
+        + greens_func_matrix[12:16, 4:8]
+        + (greens_func_ex_right[4:8, 0:4] * phase_neg)
+        + greens_func_ex_left[0:4, 4:8]
+    ) / N
+
+    G_21 = (
+        greens_func_matrix[8:12, 0:4]
+        + greens_func_matrix[4:8, 12:16]
+        + (greens_func_ex_right[0:4, 4:8] * phase_pos)
+        + greens_func_ex_left[4:8, 0:4]
+    ) / N
+
+    return G_12, G_21
+
+
+def calculate_pdi(t, mu, Delta, V_z, alpha, Ls, Vdisx, q_N=1):
+    """
+    Calculates the Periodic Disorder Invariant (PDI).
+    
+    Parameters:
+    - t, mu, Delta, V_z, alpha: System parameters.
+    - Ls: Length of the superconducting region (number of sites).
+    - Vdisx: Disorder potential array of length Ls.
+    - q_N: Integration grid density (default 1).
+    
+    Returns:
+    - nu: The topological invariant (winding number ~0 or ~1).
+    """
+    N = Ls
+    
+    # Ensure Vdisx is the correct length
+    if len(Vdisx) != N:
+        # If passed disorder is larger (e.g. from a file), crop it
+        V_x = Vdisx[:N]
+    else:
+        V_x = Vdisx
+
+    # Parameters from arguments
+    # Note: PDI library uses a specific Hamiltonian basis
+    # h_onsite = (2t - mu) SzS0 + Vz SzSx - Delta SySy
+    # h_hopping = -t SzS0 - i(alpha/2) SzSy
+    
+    # Mapping inputs to PDI Hamiltonian terms
+    e_z = V_z 
+    delta_ind = Delta
+    alpha_val = alpha 
+
+    delta_k = (2 * np.pi) / (q_N * N)
+    q = np.arange(-np.pi/N, -0.1*np.pi/N, delta_k)
+
+    h_onsite = (
+        (2*t - mu) * szs0
+        + e_z * szsx
+        - delta_ind * sysy
+    )
+
+    h_hopping = (
+        -t * szs0
+        - 1.0j * (alpha_val / 2.0) * szsy
+    )
+
+    translation = np.block([[h_hopping, zeros_4], [zeros_4, h_hopping.T]])
+    translation_pr = np.block([[h_hopping.T, zeros_4], [zeros_4, h_hopping]])
+
+    sigma_right = [zeros_8]
+
+    gsr0_block11 = h_onsite + V_x[int(N/2)-1]*szs0
+    gsr0_block22 = h_onsite + V_x[int(N/2)]*szs0
+
+    green_gsr0 = np.block([[gsr0_block11, h_hopping], [h_hopping.T, gsr0_block22]])
+    green_g0 = inv_pdi(-1.0 * (green_gsr0 + zeros_8)) 
+    sigma_ri = translation @ (green_g0 @ translation_pr)
+    sigma_right.append(sigma_ri)
+
+    gsr_i_block11 = lambda i: h_onsite + V_x[i]*szs0
+    gsr_i_block22 = lambda i: h_onsite + V_x[-i-1]*szs0
+
+    green_gsr_i = lambda i: np.block([[gsr_i_block11(i), zeros_4], [zeros_4, gsr_i_block22(i)]])
+
+    for i in range(int(N/2) - 2, 0, -1):
+        green_inv = inv_pdi(-1.0 * (green_gsr_i(i) + sigma_ri))
+        sigma_ri = translation @ (green_inv @ translation_pr)
+        sigma_right.append(sigma_ri)
+    
+    ntp = 0
+    
+    for q0 in q:
+        G_12, G_21 = fV(q0, h_onsite, h_hopping, translation, translation_pr, sigma_right, V_x, N)
+        ntp += np.trace(chirality_op @ ((h_hopping.T @ G_12) - (h_hopping @ G_21)))
+        
+    q0 = (-0.1 * np.pi / N) + (0.5 * delta_k)
+    while q0 < -0.00001:
+        G_12, G_21 = fV(q0, h_onsite, h_hopping, translation, translation_pr, sigma_right, V_x, N)
+        ntp += 0.1 * np.trace(chirality_op @ ((h_hopping.T @ G_12) - (h_hopping @ G_21)))
+        q0 += 0.1 * delta_k
+
+    return np.real(-ntp / q_N)
         
         
 
