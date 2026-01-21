@@ -80,7 +80,7 @@ def worker_simulation_step(iter_data, static_params):
     b_left_cond_left = np.zeros(points)
     b_left_cond_right = np.zeros(points)
 
-    # Note: We run this serially inside the worker because the overhead 
+    # Note: this is run serially inside the worker because the overhead 
     # of spawning sub-processes here would be too high.
     for k in range(points):
         # Varying Right Barrier (UR)
@@ -145,9 +145,9 @@ def worker_pdi_step(param_tuple, static_params):
     # Calculate PDI
     # Note: Vdisx is negated here based on physics convention if required, 
     # mirroring the original script logic (passed as -Vdisx)
-    pdi_val = hp.calculate_pdi(t, mu_pm, Delta, vz_pm, alpha, Ls, -Vdisx, q_N=10)
+    pdi_val = hp.calculate_pdi(t, mu_pm, Delta, vz_pm, alpha, Ls, -Vdisx, q_N=100)
     
-    return [mu_pm * V_c, vz_raw, pdi_val]
+    return [mu_pm, vz_raw * V_c, pdi_val]
 
 # =============================================================================
 # MAIN EXECUTION BLOCK
@@ -167,14 +167,16 @@ if __name__ == "__main__":
     Ls = 500 #super conductor length
     V_c = np.sqrt(mu**2 + Delta**2)
     barrier0 = 5
+    
+    V0 = 10.5 * Delta
 
     points = 100 
     num_engs = 101 
     num_vz_var = 100 
 
     # Sweeping arrays
-    mu_rng = 0.3
-    mu_var = np.linspace(Delta - mu_rng, Delta + mu_rng, 50)
+    mu_rng = 0.5
+    mu_var = np.linspace(mu - mu_rng, mu + mu_rng, 100)
     barrier_arr = np.linspace(0, 40*barrier0, points)
     Vz_var = np.linspace(0.5, 1.5, num_vz_var) 
     energies = np.linspace(-0.5, 0.5, num_engs)
@@ -185,10 +187,17 @@ if __name__ == "__main__":
     path = Path(PathConfigs.RUN_FILES/fname)
     # Using try/except to handle case where file might not exist locally for testing
     try:
-        Vdisx = hp.initialize_vdis_from_data(path) * 0 #* <---- FORCING 0 
+        Vdisx = hp.initialize_vdis_from_data(path) #* 0 # <---- FORCING 0 
+        mxvdis = np.max(np.abs(Vdisx))
+        Vdisx = V0 * (Vdisx / mxvdis) #renormalizing Vdis 
     except:
         print("Warning: Could not load Vdisx from file. Initializing zeros.")
         Vdisx = np.zeros(Ls)
+        
+    
+    
+    
+    
 
     # Dictionary of static parameters to pass to workers
     static_params = {
@@ -281,7 +290,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # SAVE RESULTS
     # -------------------------------------------------------------------------
-    dirname = "clean_test3"
+    dirname = "strong_dis_test"
     print(f"\nSaving data to: {dirname}")
 
     hp.np_save_wrapped(pdi_data, "pdi_data", dirname)
