@@ -140,8 +140,7 @@ for i in range(len(Vz_var)):
     barrier_left_conductance_left_arr[i, :] = barrier_left_conductance_left
     barrier_left_conductance_right_arr[i, :] = barrier_left_conductance_right
     
-    Tinvs_left[i] = hp.calc_integrated_area_diff(barrier_left_conductance_left, barrier_left_conductance_right)
-    Tinvs_right[i] = hp.calc_integrated_area_diff(barrier_right_conductance_left, barrier_right_conductance_right)
+
     
     print("\n")
     
@@ -177,8 +176,6 @@ hp.np_save_wrapped(barrier_right_conductance_right_arr, "barrier_right_conductan
 hp.np_save_wrapped(barrier_left_conductance_left_arr, "barrier_left_conductance_left_arr", dirname)    
 hp.np_save_wrapped(barrier_left_conductance_right_arr, "barrier_left_conductance_right_arr", dirname)
 
-hp.np_save_wrapped(Tinvs_left, "Tinvs_left", dirname)
-hp.np_save_wrapped(Tinvs_right, "Tinvs_right", dirname)
 
 hp.np_save_wrapped(Conductance_matrix, "Conductance_matrix", dirname)
 

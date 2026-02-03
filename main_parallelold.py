@@ -32,8 +32,7 @@ def worker_simulation_step(iter_data, static_params):
     iter_data: tuple (index, vz_val)
     static_params: dict containing all constant physics parameters
     """
-    i, mu, vz_val = iter_data
-    
+    i, vz_val_raw = iter_data
     
     # Unpack static parameters
     t = static_params['t']
@@ -51,7 +50,7 @@ def worker_simulation_step(iter_data, static_params):
     energies = static_params['energies']
     barrier_arr = static_params['barrier_arr']
     
-    vzvar = vz_val * V_c
+    vzvar = vz_val_raw * V_c
     
     # --- 1. Build Symmetric System & Calculate Spectral Properties ---
     syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, V_z=vzvar, 
@@ -103,19 +102,14 @@ def worker_simulation_step(iter_data, static_params):
         cL, cR = hp.calc_conductance(syst_UL, energy=0.0)
         b_left_cond_left[k] = cL
         b_left_cond_right[k] = cR
-        
-    l_Gll, l_GRR = b_left_cond_left, b_left_cond_right #varying left barrier and getting local conductances
-    r_Gll, r_GRR = b_right_cond_left, b_right_cond_right #varying left barrier and getting local conductances
     
-    
-    
-    rG_corr = np.dot(r_Gll, r_GRR)/(np.linalg.norm(r_Gll) * np.linalg.norm(r_GRR))
-    lG_corr = np.dot(l_Gll, l_GRR)/(np.linalg.norm(l_Gll) * np.linalg.norm(l_GRR))
-
+    # Calculate Topological Invariants (Tinvs)
+    tinv_left = hp.calc_integrated_area_diff(b_left_cond_left, b_left_cond_right)
+    tinv_right = hp.calc_integrated_area_diff(b_right_cond_left, b_right_cond_right)
     
     # Pack all results into a dictionary to return to main process
     results = {
-        'i':i,
+        'i': i,
         'dIdVl': dIdVl,
         'dIdVr': dIdVr,
         'ldos': ldos,
@@ -127,8 +121,8 @@ def worker_simulation_step(iter_data, static_params):
         'b_right_cond_right': b_right_cond_right,
         'b_left_cond_left': b_left_cond_left,
         'b_left_cond_right': b_left_cond_right,
-        'rG_corr':rG_corr,
-        'lG_corr':lG_corr,
+        'tinv_left': tinv_left,
+        'tinv_right': tinv_right
     }
     return results
 
@@ -204,12 +198,11 @@ if __name__ == "__main__":
 
     # Dictionary of static parameters to pass to workers
     static_params = {
-        't': t, 'mu_n': mu_n, 'Delta': Delta, 'alpha': alpha,
+        't': t, 'mu': mu, 'mu_n': mu_n, 'Delta': Delta, 'alpha': alpha,
         'Ln': Ln, 'Lb': Lb, 'Ls': Ls, 'mu_leads': mu_leads,
         'V_c': V_c, 'barrier0': barrier0, 'Vdisx': Vdisx,
         'energies': energies, 'barrier_arr': barrier_arr
     }
-    
 
     # Pre-allocate main arrays
     dIdVs_left_arr = np.zeros(shape = (len(Vz_var), len(energies)))
@@ -228,7 +221,6 @@ if __name__ == "__main__":
     Conductance_matrix = np.zeros(shape=(len(Vz_var),2, 2))
     
     params_list = [pms for pms in itr.product(mu_var, Vz_var)]
-    params_list = [[i, pms[0], pms[1]] for i, pms in enumerate(params_list)]
 
     # -------------------------------------------------------------------------
     # PARALLEL EXECUTION SETUP
@@ -243,15 +235,14 @@ if __name__ == "__main__":
         
         
         # Prepare iterable: list of (index, val)
-        #vz_iterable = list(enumerate(Vz_var))
-                
+        vz_iterable = list(enumerate(Vz_var))
         
         # Create partial function with static params frozen
         func_sim = partial(worker_simulation_step, static_params=static_params)
         
         # Use imap to get an iterator we can wrap in tqdm
         # chunksize=1 is usually fine for heavy tasks, allows better load balancing
-        results_iterator = pool.imap(func_sim, params_list, chunksize=1)
+        results_iterator = pool.imap(func_sim, vz_iterable, chunksize=1)
         
         # Iterate and fill arrays
         for res in tqdm(results_iterator, total=len(Vz_var), desc="Vz Sweep"):
@@ -270,6 +261,8 @@ if __name__ == "__main__":
             barrier_left_conductance_left_arr[idx, :] = res['b_left_cond_left']
             barrier_left_conductance_right_arr[idx, :] = res['b_left_cond_right']
             
+            Tinvs_left[idx] = res['tinv_left']
+            Tinvs_right[idx] = res['tinv_right']
 
         print("\n--- Starting PDI Calculation ---")
         
