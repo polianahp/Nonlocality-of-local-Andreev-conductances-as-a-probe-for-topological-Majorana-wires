@@ -176,11 +176,11 @@ if __name__ == "__main__":
     #V0 = 0.0  * Delta 
     #dirname = 'corr_clean_dis_test'
     
-    V0 = 3.5  * Delta 
-    dirname = 'corr_med_dis_test'    #corr_med_dis_test
+    #V0 = 3.5  * Delta 
+    #dirname = 'corr_med_dis_test'    #corr_med_dis_test
     
-    #V0 = 10.5 * Delta 
-    #dirname = 'corr_stong_dis_test'  #corr_stong_dis_test
+    V0 = 10.5 * Delta 
+    dirname = 'corr_stong_dis_test'  #corr_stong_dis_test
 
     points = 75 
     num_engs = 101 
