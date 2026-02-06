@@ -14,7 +14,7 @@
 source /shared/software/conda/conda_init.sh
 
 conda activate kwant_fresh
-cd $SCRATCH/nonlocal_cond/Nonlocality-of-local-Andreev-conductances-as-a-probe-for-topological-Majorana-wires
+cd $SCRATCH/nonlocalcond
 python -u main.py
 
 conda deactivate
