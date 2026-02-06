@@ -136,7 +136,7 @@ def worker_pdi_step(param_tuple, static_params):
     """
     Worker function for the PDI calculation loop (Loop 2).
     """
-    mu_pm, vz_raw = param_tuple
+    i, mu_pm, vz_raw = param_tuple
     
     # Unpack necessary static params
     t = static_params['t']
@@ -149,8 +149,8 @@ def worker_pdi_step(param_tuple, static_params):
     vz_pm = vz_raw * V_c
     
     # Calculate PDI
-    # Note: Vdisx is negated here based on physics convention if required, 
-    # mirroring the original script logic (passed as -Vdisx)
+    # Note: Vdisx is negated here based on convention, 
+    # copying Biniyakks original script convention Vdisx --> -Vdisx
     pdi_val = hp.calculate_pdi(t, mu_pm, Delta, vz_pm, alpha, Ls, -Vdisx, q_N=100)
     
     return [mu_pm, vz_raw * V_c, pdi_val]
@@ -171,17 +171,28 @@ if __name__ == "__main__":
     V_c = np.sqrt(mu**2 + Delta**2)
     barrier0 = 5
     
-    V0 = 3.5 * Delta
+    V0 = 0.0  * Delta 
+    dirname = 'corr_clean_dis_test'
+    
+    #V0 = 3.5  * Delta 
+    #dirname = 'corr_med_dis_test'    #corr_med_dis_test
+    
+    #V0 = 10.5 * Delta 
+    #dirname = 'corr_stong_dis_test'  #corr_stong_dis_test
 
     points = 100 
     num_engs = 101 
-    num_vz_var = 100 
+    num_vz_var = 100
+    num_mu_var= 100
 
     # Sweeping arrays
     mu_rng = 0.5
-    mu_var = np.linspace(mu - mu_rng, mu + mu_rng, 100)
-    barrier_arr = np.linspace(0, 40*barrier0, points)
+    mu_var = np.linspace(mu - mu_rng, mu + mu_rng, num_mu_var)
     Vz_var = np.linspace(0.5, 1.5, num_vz_var) 
+    params_list = [pms for pms in itr.product(mu_var, Vz_var)]
+    params_list = [[i, pms[0], pms[1]] for i, pms in enumerate(params_list)]
+    
+    barrier_arr = np.linspace(0, 40*barrier0, points)
     energies = np.linspace(-0.5, 0.5, num_engs)
 
     # Initialize Disorder
@@ -212,23 +223,24 @@ if __name__ == "__main__":
     
 
     # Pre-allocate main arrays
-    dIdVs_left_arr = np.zeros(shape = (len(Vz_var), len(energies)))
-    dIdVs_right_arr = np.zeros(shape = (len(Vz_var), len(energies)))
-    ldos_arr = np.zeros(shape = (len(Vz_var), len(energies), 2192)) 
-    Tinvs_left = np.zeros_like(Vz_var)
-    Tinvs_right = np.zeros_like(Vz_var)
-    barrier_right_conductance_left_arr  = np.zeros(shape=(len(Vz_var), points))
+    dIdVs_left_arr = np.zeros(shape = (len(params_list), len(energies)))
+    dIdVs_right_arr = np.zeros(shape = (len(params_list), len(energies)))
+    ldos_arr = np.zeros(shape = (len(params_list), len(energies), 2192)) 
+
+    barrier_right_conductance_left_arr  = np.zeros(shape=(len(params_list), points))
     barrier_right_conductance_right_arr = np.zeros_like(barrier_right_conductance_left_arr)
     barrier_left_conductance_left_arr   = np.zeros_like(barrier_right_conductance_left_arr)
     barrier_left_conductance_right_arr  = np.zeros_like(barrier_right_conductance_left_arr)
-    gamma_sq_arr = np.zeros_like(Vz_var, dtype=complex)
-    mp_eng_arr = np.zeros_like(Vz_var)
-    lenw = Ls + 2*(Lb + Ln)
-    mp_arr = np.zeros(shape= (len(Vz_var), lenw))
-    Conductance_matrix = np.zeros(shape=(len(Vz_var),2, 2))
+    rG_corr_arr = np.zeros(shape = (len(params_list)))
+    lG_corr_arr = np.zeros(shape = (len(params_list)))
     
-    params_list = [pms for pms in itr.product(mu_var, Vz_var)]
-    params_list = [[i, pms[0], pms[1]] for i, pms in enumerate(params_list)]
+    
+    gamma_sq_arr = np.zeros_like(params_list, dtype=complex)
+    mp_eng_arr = np.zeros_like(params_list)
+    lenw = Ls + 2*(Lb + Ln)
+    mp_arr = np.zeros(shape= (len(params_list), lenw))
+    Conductance_matrix = np.zeros(shape=(len(params_list),2, 2))
+    
 
     # -------------------------------------------------------------------------
     # PARALLEL EXECUTION SETUP
@@ -254,7 +266,7 @@ if __name__ == "__main__":
         results_iterator = pool.imap(func_sim, params_list, chunksize=1)
         
         # Iterate and fill arrays
-        for res in tqdm(results_iterator, total=len(Vz_var), desc="Vz Sweep"):
+        for res in tqdm(results_iterator, total=len(params_list), desc="mu/Vz Sweep"):
             idx = res['i']
             
             dIdVs_left_arr[idx, :] = res['dIdVl']
@@ -269,6 +281,9 @@ if __name__ == "__main__":
             barrier_right_conductance_right_arr[idx, :] = res['b_right_cond_right']
             barrier_left_conductance_left_arr[idx, :] = res['b_left_cond_left']
             barrier_left_conductance_right_arr[idx, :] = res['b_left_cond_right']
+            
+            rG_corr_arr[idx]= res['rG_corr']
+            lG_corr_arr[idx]= res['lG_corr']
             
 
         print("\n--- Starting PDI Calculation ---")
@@ -288,7 +303,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # SAVE RESULTS
     # -------------------------------------------------------------------------
-    dirname = "mod_dis_test"
+    #dirname = "corr_test"
     print(f"\nSaving data to: {dirname}")
 
     hp.np_save_wrapped(pdi_data, "pdi_data", dirname)
@@ -300,11 +315,16 @@ if __name__ == "__main__":
     hp.np_save_wrapped(barrier_right_conductance_right_arr, "barrier_right_conductance_right_arr", dirname)    
     hp.np_save_wrapped(barrier_left_conductance_left_arr, "barrier_left_conductance_left_arr", dirname)    
     hp.np_save_wrapped(barrier_left_conductance_right_arr, "barrier_left_conductance_right_arr", dirname)
-    hp.np_save_wrapped(Tinvs_left, "Tinvs_left", dirname)
-    hp.np_save_wrapped(Tinvs_right, "Tinvs_right", dirname)
+
     hp.np_save_wrapped(Conductance_matrix, "Conductance_matrix", dirname)
     hp.np_save_wrapped(gamma_sq_arr, "gamma_sq_arr", dirname)
     hp.np_save_wrapped(mp_eng_arr, "mp_eng_arr", dirname)
     hp.np_save_wrapped(mp_arr, "mp_arr", dirname)
+    hp.np_save_wrapped(params_list, "params_list", dirname)
+    
+    hp.np_save_wrapped(rG_corr_arr,"rG_corr", dirname)
+    hp.np_save_wrapped(lG_corr_arr,"lG_corr", dirname)
+    
+
 
     print("Done.")
