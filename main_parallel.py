@@ -180,10 +180,10 @@ if __name__ == "__main__":
     #V0 = 10.5 * Delta 
     #dirname = 'corr_stong_dis_test'  #corr_stong_dis_test
 
-    points = 100 
+    points = 75 
     num_engs = 101 
-    num_vz_var = 100
-    num_mu_var= 100
+    num_vz_var = 51
+    num_mu_var= 51
 
     # Sweeping arrays
     mu_rng = 0.5
