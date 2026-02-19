@@ -109,8 +109,11 @@ def worker_simulation_step(iter_data, static_params):
     
     
     
-    rG_corr = np.dot(r_Gll, r_GRR)/(np.linalg.norm(r_Gll) * np.linalg.norm(r_GRR))
-    lG_corr = np.dot(l_Gll, l_GRR)/(np.linalg.norm(l_Gll) * np.linalg.norm(l_GRR))
+    #rG_corr = np.dot(r_Gll, r_GRR)/(np.linalg.norm(r_Gll) * np.linalg.norm(r_GRR))
+    #rG_corr = np.dot(r_Gll, r_GRR)/(np.linalg.norm(    r_Gll) * np.linalg.norm(r_GRR))
+    
+    rG_corr = hp.calc_invariant_metric(r_Gll, r_GRR)
+    lG_corr = hp.calc_invariant_metric(l_Gll, l_GRR)
 
     
     # Pack all results into a dictionary to return to main process
@@ -174,13 +177,13 @@ if __name__ == "__main__":
     
     ## setting up different tests
     #V0 = 0.0  * Delta 
-    #dirname = 'corr_clean_dis_test'
+    #dirname = 'new_corr_clean_dis_test'
     
     #V0 = 3.5  * Delta 
-    #dirname = 'corr_med_dis_test'    #corr_med_dis_test
+    #dirname = 'new_corr_med_dis_test'    #corr_med_dis_test
     
     V0 = 10.5 * Delta 
-    dirname = 'corr_stong_dis_test'  #corr_stong_dis_test
+    dirname = 'new_corr_stong_dis_test'  #corr_stong_dis_test
 
     points = 75 
     num_engs = 101 

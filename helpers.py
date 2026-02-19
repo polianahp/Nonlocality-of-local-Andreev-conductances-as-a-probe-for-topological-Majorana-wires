@@ -388,8 +388,24 @@ def generate_1d_Vdis(Nx, ax, num_impurities, amplitude, lambda_dis):
         
         return normed_Vxd
     
+
+def calc_invariant_metric(f1, f2):
+    smdiff = np.sum(f1-f2)
+    sgn = smdiff/np.abs(smdiff)
+    fmax = f2 if sgn < 0 else f1
+    fmin = f2 if sgn > 0 else f1
+    
+    invA = 1/np.sum(fmax)
+    
+    fn_max = fmax * invA
+    fn_min = fmin/np.sum(fmin)
+    
+    corr = (np.dot(fn_max, fn_min) - invA)/(np.dot(fn_min, fn_min) - invA) 
+    
+    return corr
     
     
+        
     
     
 ####################### Code for Calculating Periodic Disorder Invariant #########################
