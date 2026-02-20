@@ -183,7 +183,7 @@ if __name__ == "__main__":
     #dirname = 'new_corr_med_dis_test'    #corr_med_dis_test
     
     V0 = 10.5 * Delta 
-    dirname = 'new_corr_stong_dis_test'  #corr_stong_dis_test
+    dirname = 'newrange_corr_stong_dis_test'  #corr_stong_dis_test
 
     points = 75 
     num_engs = 101 
