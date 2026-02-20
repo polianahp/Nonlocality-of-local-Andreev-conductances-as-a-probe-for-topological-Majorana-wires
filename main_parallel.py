@@ -192,8 +192,8 @@ if __name__ == "__main__":
 
     # Sweeping arrays
     mu_rng = 0.5
-    mu_var = np.linspace(mu - mu_rng, mu + mu_rng, num_mu_var)
-    Vz_var = np.linspace(0.5, 1.5, num_vz_var) 
+    mu_var = np.linspace(0.8, 2, num_mu_var)
+    Vz_var = np.linspace(0.6, 1.4, num_vz_var) 
     params_list = [pms for pms in itr.product(mu_var, Vz_var)]
     params_list = [[i, pms[0], pms[1]] for i, pms in enumerate(params_list)]
     
@@ -266,7 +266,6 @@ if __name__ == "__main__":
         # Create partial function with static params frozen
         func_sim = partial(worker_simulation_step, static_params=static_params)
         
-        # Use imap to get an iterator we can wrap in tqdm
         # chunksize=1 is usually fine for heavy tasks, allows better load balancing
         results_iterator = pool.imap(func_sim, params_list, chunksize=1)
         
