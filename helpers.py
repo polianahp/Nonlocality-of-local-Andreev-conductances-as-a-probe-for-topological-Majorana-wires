@@ -389,7 +389,10 @@ def generate_1d_Vdis(Nx, ax, num_impurities, amplitude, lambda_dis):
         return normed_Vxd
     
 
-def calc_invariant_metric(f1, f2):
+def calc_invariant_metric(f1, f2):  
+    f1 = f1/f1[0]
+    f2 = f2/f2[0]
+    
     smdiff = np.sum(f1-f2)
     sgn = smdiff/np.abs(smdiff)
     fmax = f2 if sgn < 0 else f1
@@ -401,6 +404,14 @@ def calc_invariant_metric(f1, f2):
     fn_min = fmin/np.sum(fmin)
     
     corr = (np.dot(fn_max, fn_min) - invA)/(np.dot(fn_min, fn_min) - invA) 
+    
+    return corr
+
+def calc_correlation(f1,f2):
+    f1 = f1/f1[0]
+    f2 = f2/f2[0]
+
+    corr = np.dot(f1,f2)/(np.linalg.norm(f1)*np.linalg.norm(f2))
     
     return corr
     

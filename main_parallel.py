@@ -32,12 +32,11 @@ def worker_simulation_step(iter_data, static_params):
     iter_data: tuple (index, vz_val)
     static_params: dict containing all constant physics parameters
     """
-    i, mu, vz_val = iter_data
+    i, mu, vz = iter_data
     
     
     # Unpack static parameters
     t = static_params['t']
-    #mu = static_params['mu']
     mu_n = static_params['mu_n']
     Delta = static_params['Delta']
     alpha = static_params['alpha']
@@ -45,21 +44,20 @@ def worker_simulation_step(iter_data, static_params):
     Lb = static_params['Lb']
     Ls = static_params['Ls']
     mu_leads = static_params['mu_leads']
-    V_c = static_params['V_c']
     barrier0 = static_params['barrier0']
     Vdisx = static_params['Vdisx']
     energies = static_params['energies']
     barrier_arr = static_params['barrier_arr']
     
-    vzvar = vz_val * V_c
+    
     
     # --- 1. Build Symmetric System & Calculate Spectral Properties ---
-    syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, V_z=vzvar, 
+    syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, V_z=vz, 
                            alpha=alpha, Ln=Ln, Lb=Lb, 
                            Ls=Ls, mu_leads=mu_leads,
                            barrier_l=barrier0, barrier_r=barrier0, Vdisx=Vdisx)
     
-    syst_closed = hp.build_system_closed(t=t, mu=mu, mu_n=mu_n, Delta=Delta, V_z=vzvar, 
+    syst_closed = hp.build_system_closed(t=t, mu=mu, mu_n=mu_n, Delta=Delta, V_z=vz, 
                            alpha=alpha, Ln=Ln, Lb=Lb, 
                            Ls=Ls, mu_leads=mu_leads,
                            barrier_l=barrier0, barrier_r=barrier0, Vdisx=Vdisx)
@@ -86,7 +84,7 @@ def worker_simulation_step(iter_data, static_params):
     for k in range(points):
         # Varying Right Barrier (UR)
         syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, 
-                                  V_z=vzvar, alpha=alpha, Ln=Ln, Lb=Lb, 
+                                  V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
                                   Ls=Ls, mu_leads=mu_leads, barrier_l=barrier0,
                                   barrier_r=barrier_arr[k], Vdisx=Vdisx)
         
@@ -96,7 +94,7 @@ def worker_simulation_step(iter_data, static_params):
         
         # Varying Left Barrier (UL)
         syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, 
-                                  V_z=vzvar, alpha=alpha, Ln=Ln, Lb=Lb, 
+                                  V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
                                   Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_arr[k], 
                                   barrier_r=barrier0, Vdisx=Vdisx)
 
@@ -139,7 +137,7 @@ def worker_pdi_step(param_tuple, static_params):
     """
     Worker function for the PDI calculation loop (Loop 2).
     """
-    i, mu_pm, vz_raw = param_tuple
+    i, mu_pm, vz = param_tuple
     
     # Unpack necessary static params
     t = static_params['t']
@@ -147,23 +145,21 @@ def worker_pdi_step(param_tuple, static_params):
     alpha = static_params['alpha']
     Ls = static_params['Ls']
     Vdisx = static_params['Vdisx']
-    V_c = static_params['V_c']
     
-    vz_pm = vz_raw * V_c
+    
     
     # Calculate PDI
     # Note: Vdisx is negated here based on convention, 
     # copying Biniyakks original script convention Vdisx --> -Vdisx
-    pdi_val = hp.calculate_pdi(t, mu_pm, Delta, vz_pm, alpha, Ls, -Vdisx, q_N=100)
+    pdi_val = hp.calculate_pdi(t, mu_pm, Delta, vz, alpha, Ls, -Vdisx, q_N=100)
     
-    return [mu_pm, vz_raw * V_c, pdi_val]
+    return [mu_pm, vz, pdi_val]
 
 
 if __name__ == "__main__":
     
     ####### System Parameters
     t = 102.0
-    mu = 1
     mu_n = 0.2
     mu_leads = 20.0
     Delta = 0.5
@@ -171,7 +167,7 @@ if __name__ == "__main__":
     Ln = 20 # normal metal length
     Lb = 4 #barrier length
     Ls = 500 #super conductor length
-    V_c = np.sqrt(mu**2 + Delta**2)
+    #V_c = np.sqrt(mu**2 + Delta**2)
     barrier0 = 5
     
     
@@ -185,19 +181,19 @@ if __name__ == "__main__":
     V0 = 10.5 * Delta 
     dirname = 'newrange_corr_stong_dis_test'  #corr_stong_dis_test
 
-    points = 75 
+    Upoints = 50 
     num_engs = 101 
     num_vz_var = 51
     num_mu_var= 51
 
     # Sweeping arrays
     mu_rng = 0.5
-    mu_var = np.linspace(0.8, 2, num_mu_var)
-    Vz_var = np.linspace(0.6, 1.4, num_vz_var) 
+    mu_var = np.linspace(0.5, 1.5, num_mu_var)
+    Vz_var = np.linspace(0.6, 1.6, num_vz_var) 
     params_list = [pms for pms in itr.product(mu_var, Vz_var)]
     params_list = [[i, pms[0], pms[1]] for i, pms in enumerate(params_list)]
     
-    barrier_arr = np.linspace(0, 40*barrier0, points)
+    barrier_arr = np.linspace(0, 40*barrier0, Upoints)
     energies = np.linspace(-0.5, 0.5, num_engs)
 
     # Initialize Disorder
@@ -222,7 +218,7 @@ if __name__ == "__main__":
     static_params = {
         't': t, 'mu_n': mu_n, 'Delta': Delta, 'alpha': alpha,
         'Ln': Ln, 'Lb': Lb, 'Ls': Ls, 'mu_leads': mu_leads,
-        'V_c': V_c, 'barrier0': barrier0, 'Vdisx': Vdisx,
+        'barrier0': barrier0, 'Vdisx': Vdisx,
         'energies': energies, 'barrier_arr': barrier_arr
     }
     
@@ -232,7 +228,7 @@ if __name__ == "__main__":
     dIdVs_right_arr = np.zeros(shape = (len(params_list), len(energies)))
     ldos_arr = np.zeros(shape = (len(params_list), len(energies), 2192)) 
 
-    barrier_right_conductance_left_arr  = np.zeros(shape=(len(params_list), points))
+    barrier_right_conductance_left_arr  = np.zeros(shape=(len(params_list), Upoints))
     barrier_right_conductance_right_arr = np.zeros_like(barrier_right_conductance_left_arr)
     barrier_left_conductance_left_arr   = np.zeros_like(barrier_right_conductance_left_arr)
     barrier_left_conductance_right_arr  = np.zeros_like(barrier_right_conductance_left_arr)
