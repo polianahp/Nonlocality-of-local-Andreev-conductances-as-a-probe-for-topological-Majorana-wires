@@ -149,7 +149,6 @@ def worker_pdi_step(param_tuple, static_params):
     
     
     # Calculate PDI
-    # Note: Vdisx is negated here based on convention, 
     # copying Biniyakks original script convention Vdisx --> -Vdisx
     pdi_val = hp.calculate_pdi(t, mu_pm, Delta, vz, alpha, Ls, -Vdisx, q_N=100)
     
@@ -182,7 +181,7 @@ if __name__ == "__main__":
     dirname = 'reruncorr_stong_dis_test'  #corr_stong_dis_test
 
     Upoints = 50 
-    num_engs = 101 
+    num_engs = 101  
     num_vz_var = 51
     num_mu_var= 51
 
@@ -202,9 +201,8 @@ if __name__ == "__main__":
     path = Path(PathConfigs.RUN_FILES/fname)
     
     try:
-        Vdisx = hp.initialize_vdis_from_data(path) 
-        mxvdis = np.max(np.abs(Vdisx))
-        Vdisx = V0 * (Vdisx / mxvdis) #renormalizing Vdis 
+        Vdisx = hp.initialize_vdis_from_data(path) * V0
+
     except:
         print("Warning: Could not load Vdisx from file. Initializing zeros.")
         Vdisx = np.zeros(Ls)

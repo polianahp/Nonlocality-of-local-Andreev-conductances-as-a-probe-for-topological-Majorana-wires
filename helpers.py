@@ -334,9 +334,17 @@ def build_system_closed(t, mu, mu_n, Delta, V_z, alpha, Ln, Lb, Ls, mu_leads, ba
 
 ######## Disorder Calculation Helper Functions ########
 
-def initialize_vdis_from_data(path):
-    Vdisx = np.load(path)['Vdisx']
-    return Vdisx
+def calc_normalized(x):
+    return x/np.max(np.abs(x))
+    
+
+
+def initialize_vdis_from_data(path, normalize = True):
+    
+    x = np.load(path)['Vdisx']
+    if normalize:
+        x = calc_normalized(x)
+    return x
 
 
 
