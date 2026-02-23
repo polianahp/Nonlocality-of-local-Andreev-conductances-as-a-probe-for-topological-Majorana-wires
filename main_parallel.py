@@ -185,14 +185,15 @@ if __name__ == "__main__":
     num_vz_var = 51
     num_mu_var= 51
 
-    # Sweeping arrays
     mu_rng = 0.5
     mu_var = np.linspace(0.5, 1.5, num_mu_var)
     Vz_var = np.linspace(0.6, 1.6, num_vz_var) 
     params_list = [pms for pms in itr.product(mu_var, Vz_var)]
     params_list = [[i, pms[0], pms[1]] for i, pms in enumerate(params_list)]
     
-    barrier_arr = np.linspace(0, 40*barrier0, Upoints)
+    
+    ### should start at barrier value??
+    barrier_arr = np.linspace(barrier0, 40*barrier0, Upoints)
     energies = np.linspace(-0.5, 0.5, num_engs)
 
     # Initialize Disorder
@@ -240,24 +241,16 @@ if __name__ == "__main__":
     mp_arr = np.zeros(shape= (len(params_list), lenw))
     Conductance_matrix = np.zeros(shape=(len(params_list),2, 2))
     
-
-    # -------------------------------------------------------------------------
-    # PARALLEL EXECUTION SETUP
-    # -------------------------------------------------------------------------
     
-    # Determine CPUs (leave 1 or 2 free for system if possible, else use all)
     num_workers = max(1, mp.cpu_count() - 1)
     print(f"Starting Parallel Execution with {num_workers} workers.")
     
-    # Create the Pool ONCE to be reused
     with mp.Pool(processes=num_workers) as pool:
         
         
         # Prepare iterable: list of (index, val)
         #vz_iterable = list(enumerate(Vz_var))
-                
         
-        # Create partial function with static params frozen
         func_sim = partial(worker_simulation_step, static_params=static_params)
         
         # chunksize=1 is usually fine for heavy tasks, allows better load balancing
@@ -299,9 +292,8 @@ if __name__ == "__main__":
         pdi_data = np.array(pdi_data)
 
     # -------------------------------------------------------------------------
-    # SAVE RESULTS
+    # Saving Results
     # -------------------------------------------------------------------------
-    #dirname = "corr_test"
     print(f"\nSaving data to: {dirname}")
 
     hp.np_save_wrapped(pdi_data, "pdi_data", dirname)
@@ -313,6 +305,7 @@ if __name__ == "__main__":
     hp.np_save_wrapped(barrier_right_conductance_right_arr, "barrier_right_conductance_right_arr", dirname)    
     hp.np_save_wrapped(barrier_left_conductance_left_arr, "barrier_left_conductance_left_arr", dirname)    
     hp.np_save_wrapped(barrier_left_conductance_right_arr, "barrier_left_conductance_right_arr", dirname)
+    hp.np_save_wrapped(barrier_arr,"barrier_arr", dirname)
 
     hp.np_save_wrapped(Conductance_matrix, "Conductance_matrix", dirname)
     hp.np_save_wrapped(gamma_sq_arr, "gamma_sq_arr", dirname)
