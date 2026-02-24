@@ -182,12 +182,12 @@ if __name__ == "__main__":
 
     Upoints = 50 
     num_engs = 101  
-    num_vz_var = 51
-    num_mu_var= 51
+    num_vz_var = 61
+    num_mu_var= 61
 
     mu_rng = 0.5
-    mu_var = np.linspace(0.5, 1.5, num_mu_var)
-    Vz_var = np.linspace(0.6, 1.6, num_vz_var) 
+    mu_var = np.linspace(1-mu_rng, 1+mu_rng, num_mu_var)
+    Vz_var = np.linspace(0.6, 1.7, num_vz_var) 
     params_list = [pms for pms in itr.product(mu_var, Vz_var)]
     params_list = [[i, pms[0], pms[1]] for i, pms in enumerate(params_list)]
     
@@ -199,6 +199,7 @@ if __name__ == "__main__":
     # Initialize Disorder
     print(f"Run Files Path Exists: {os.path.exists(PathConfigs.RUN_FILES)}")
     fname = "Data.npz"
+    
     path = Path(PathConfigs.RUN_FILES/fname)
     
     try:

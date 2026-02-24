@@ -406,12 +406,12 @@ def calc_invariant_metric(f1, f2):
     fmax = f2 if sgn < 0 else f1
     fmin = f2 if sgn > 0 else f1
     
-    invA = 1/np.sum(fmax)
+    A = np.sum(fmax)
     
-    fn_max = fmax * invA
+    fn_max = fmax / A
     fn_min = fmin/np.sum(fmin)
     
-    corr = (np.dot(fn_max, fn_min) - invA)/(np.dot(fn_min, fn_min) - invA) 
+    corr = (np.dot(fn_max, fn_min) - A)/(np.dot(fn_min, fn_min) - A) 
     
     return corr
 
