@@ -172,7 +172,7 @@ if __name__ == "__main__":
     alpha = 3.5
     Ln = 20 # normal metal length
     Lb = 4 #barrier length
-    Lb_pdi = 0
+    Lb_pdi = Lb
     Ls = 500 #super conductor length
     #V_c = np.sqrt(mu**2 + Delta**2)
     barrier0 = 5
@@ -186,7 +186,7 @@ if __name__ == "__main__":
     #dirname = 'new_corr_med_dis_test'    #corr_med_dis_test
     
     V0 = 10.5 * Delta 
-    dirname = 'nobarriers_stong_dis_test'  #corr_stong_dis_test
+    dirname = 'barriers_stong_dis_test'  #corr_stong_dis_test
 
     Upoints = 50 
     num_engs = 101  
@@ -200,7 +200,6 @@ if __name__ == "__main__":
     params_list = [[i, pms[0], pms[1]] for i, pms in enumerate(params_list)]
     
     
-    ### should start at barrier value??
     barrier_arr = np.linspace(barrier0, 40*barrier0, Upoints)
     energies = np.linspace(-0.5, 0.5, num_engs)
 
