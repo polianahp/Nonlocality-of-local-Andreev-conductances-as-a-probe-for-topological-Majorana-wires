@@ -183,7 +183,7 @@ if __name__ == "__main__":
     #dirname = 'new_corr_med_dis_test'    #corr_med_dis_test
     
     V0 = 10.5 * Delta 
-    dirname = 'barriers_stong_dis_test'  #corr_stong_dis_test
+    dirname = 'nobarriers_stong_dis_test'  #corr_stong_dis_test
 
     Upoints = 50 
     num_engs = 101  
@@ -225,7 +225,7 @@ if __name__ == "__main__":
         'alpha': alpha,
 
         'Ln': Ln,
-        'Lb': Lb,
+        'Lb': 0,
         'Barrier_Height': barrier0,
         'Ls': Ls,
         'mu_leads': mu_leads,

@@ -211,19 +211,8 @@ def build_system(t, mu, mu_n, Delta, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l
     sym_left_lead = kwant.TranslationalSymmetry((-a, 0))
     sym_right_lead = kwant.TranslationalSymmetry((a, 0))
     
-    
     left_lead = kwant.Builder(sym_left_lead, conservation_law=np.diag([-2, -1, 1, 2])) 
     right_lead = kwant.Builder(sym_right_lead, conservation_law=np.diag([-2, -1, 1, 2])) 
-    
-    #print(f"left lead type: {type(left_lead)}")
-    #print(f"right lead type: {type(right_lead)}")
-    #print(f"syst type: {type(syst)}")
-    
-
-    #Here one can edit the chemical potential profile. The profile below is for the quasi-Majorana case, the pristine case would be 
-    # mu_s[i] = mu, and for disorder we use mu_s[i] = mu + (some random value)
-    # For the nontopological ABS (dotted magenta curve in Figs. 2 c and d), set alpha = 0 in the central region and add a 
-    # Zeeman energy on the normal segments of the wire.
     
     mu_s = np.zeros(Ls)
     
@@ -231,7 +220,7 @@ def build_system(t, mu, mu_n, Delta, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l
         Vdisx  = np.zeros_like(mu_s)
         
     for i in range(Ls):
-        mu_s[i] = mu + Vdisx[i] #- (mu - mu_n) * (1 - np.tanh(i/80))    
+        mu_s[i] = mu + Vdisx[i]  
 
     for i in range(Lb):
         syst[lat(i, 0)] = (2 * t - mu_n + barrier_l) * np.kron(sigma_z, sigma_0)
@@ -240,18 +229,24 @@ def build_system(t, mu, mu_n, Delta, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l
             
     for i in range(Lb, Lb+Ln):
         syst[lat(i, 0)] = (2 * t - mu_n) * np.kron(sigma_z, sigma_0)
-        syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
+        if i > 0: 
+            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
+            
     for i in range(Lb+Ln, Lb+Ln+Ls):
         syst[lat(i, 0)] = (2 * t - mu_s[i-Lb-Ln]) * np.kron(sigma_z, sigma_0) + Delta * np.kron(sigma_x, sigma_0) + V_z * np.kron(sigma_0, sigma_x)
-        syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
+        if i > 0: 
+            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
+            
     for i in range(Lb+Ln+Ls, Lb+Ln+Ls+Ln):
         syst[lat(i, 0)] = (2 * t - mu_n) * np.kron(sigma_z, sigma_0)
-        syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
+        if i > 0: 
+            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
+            
     for i in range(Lb+Ln+Ls+Ln, Lb+Ln+Ls+Ln+Lb):
         syst[lat(i, 0)] = (2 * t - mu_n + barrier_r) * np.kron(sigma_z, sigma_0)
-        syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
+        if i > 0: 
+            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
     
-
     left_lead[lat(0, 0)] = (2 * t - mu_leads) * np.kron(sigma_z, sigma_0) 
     left_lead[lat(1, 0), lat(0, 0)] = -t * np.kron(sigma_z, sigma_0)
     right_lead[lat(0, 0)] = (2 * t - mu_leads) * np.kron(sigma_z, sigma_0) 
@@ -262,39 +257,18 @@ def build_system(t, mu, mu_n, Delta, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l
     return syst.finalized()
 
 
-
 def build_system_closed(t, mu, mu_n, Delta, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l, barrier_r, Vdisx = None, a = 1):
     #Same as above but without leads, for calculating majorana polarization
     
-    
     syst = kwant.Builder()
     lat = kwant.lattice.square(a, norbs=4)
-
-    #lead
-    sym_left_lead = kwant.TranslationalSymmetry((-a, 0))
-    sym_right_lead = kwant.TranslationalSymmetry((a, 0))
-    
-    
-    left_lead = kwant.Builder(sym_left_lead, conservation_law=np.diag([-2, -1, 1, 2])) 
-    right_lead = kwant.Builder(sym_right_lead, conservation_law=np.diag([-2, -1, 1, 2])) 
-    
-    #print(f"left lead type: {type(left_lead)}")
-    #print(f"right lead type: {type(right_lead)}")
-    #print(f"syst type: {type(syst)}")
-    
-
-    #Here one can edit the chemical potential profile. The profile below is for the quasi-Majorana case, the pristine case would be 
-    # mu_s[i] = mu, and for disorder we use mu_s[i] = mu + (some random value)
-    # For the nontopological ABS (dotted magenta curve in Figs. 2 c and d), set alpha = 0 in the central region and add a 
-    # Zeeman energy on the normal segments of the wire.
     
     mu_s = np.zeros(Ls)
     if Vdisx is None:
         Vdisx  = np.zeros_like(mu_s)
         
-    
     for i in range(Ls):
-        mu_s[i] = mu + Vdisx[i] #- (mu - mu_n) * (1 - np.tanh(i/80))    
+        mu_s[i] = mu + Vdisx[i]    
 
     for i in range(Lb):
         syst[lat(i, 0)] = (2 * t - mu_n + barrier_l) * np.kron(sigma_z, sigma_0)
@@ -303,23 +277,25 @@ def build_system_closed(t, mu, mu_n, Delta, V_z, alpha, Ln, Lb, Ls, mu_leads, ba
             
     for i in range(Lb, Lb+Ln):
         syst[lat(i, 0)] = (2 * t - mu_n) * np.kron(sigma_z, sigma_0)
-        syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
+        if i > 0: 
+            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
         
     for i in range(Lb+Ln, Lb+Ln+Ls):
         syst[lat(i, 0)] = (2 * t - mu_s[i-Lb-Ln]) * np.kron(sigma_z, sigma_0) + Delta * np.kron(sigma_x, sigma_0) + V_z * np.kron(sigma_0, sigma_x)
-        syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
+        if i > 0: 
+            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
         
     for i in range(Lb+Ln+Ls, Lb+Ln+Ls+Ln):
         syst[lat(i, 0)] = (2 * t - mu_n) * np.kron(sigma_z, sigma_0)
-        syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
+        if i > 0: 
+            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
         
     for i in range(Lb+Ln+Ls+Ln, Lb+Ln+Ls+Ln+Lb):
         syst[lat(i, 0)] = (2 * t - mu_n + barrier_r) * np.kron(sigma_z, sigma_0)
-        syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
+        if i > 0: 
+            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
     
-
     return syst.finalized()
-
 
 
 ######## Disorder Calculation Helper Functions ########
