@@ -145,12 +145,17 @@ def worker_pdi_step(param_tuple, static_params):
     alpha = static_params['alpha']
     Ls = static_params['Ls']
     Vdisx = static_params['Vdisx']
+    lb = static_params['Lb']
+    ln = static_params['Ln']
+    barrier0 = static_params['barrier0']
+
     
     
     
     # Calculate PDI
     # copying Biniyakks original script convention Vdisx --> -Vdisx
-    pdi_val = hp.calculate_pdi(t, mu_pm, Delta, vz, alpha, Ls, -Vdisx, q_N=100)
+    pdi_val = hp.calculate_pdi_barriers(t, mu_pm, Delta, vz, alpha, Ls, -Vdisx, 
+                                        q_N=100, L_L=lb, U_L=barrier0, L_R=lb, U_R=barrier0)
     
     return [mu_pm, vz, pdi_val]
 
@@ -178,7 +183,7 @@ if __name__ == "__main__":
     #dirname = 'new_corr_med_dis_test'    #corr_med_dis_test
     
     V0 = 10.5 * Delta 
-    dirname = 'reruncorr_stong_dis_test'  #corr_stong_dis_test
+    dirname = 'nobarriers_stong_dis_test'  #corr_stong_dis_test
 
     Upoints = 50 
     num_engs = 101  
@@ -211,15 +216,25 @@ if __name__ == "__main__":
         
     
     
-    
-    
 
     # Dictionary of static parameters to pass to workers
     static_params = {
-        't': t, 'mu_n': mu_n, 'Delta': Delta, 'alpha': alpha,
-        'Ln': Ln, 'Lb': Lb, 'Ls': Ls, 'mu_leads': mu_leads,
-        'barrier0': barrier0, 'Vdisx': Vdisx,
-        'energies': energies, 'barrier_arr': barrier_arr
+        't': t,
+        'mu_n': mu_n,
+        'Delta': Delta,
+        'alpha': alpha,
+
+        'Ln': Ln,
+        'Lb': Lb,
+        'Barrier_Height': barrier0,
+        'Ls': Ls,
+        'mu_leads': mu_leads,
+
+        'barrier0': barrier0,
+        'Vdisx': Vdisx,
+
+        'energies': energies,
+        'barrier_arr': barrier_arr
     }
     
 

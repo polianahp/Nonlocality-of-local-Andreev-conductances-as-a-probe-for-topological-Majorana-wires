@@ -35,16 +35,6 @@ def np_load_wrapped(filename, subdirectory):
     
 ######## Calculation Helpers ########
 
-def calc_integrated_area_diff(conductance_left, conductance_right):
-    
-    normcond_L = conductance_left/conductance_left[0]
-    normcond_R = conductance_right/conductance_right[0]
-
-    Area_L = np.trapz(normcond_L)
-    Area_R = np.trapz(normcond_R)
-
-    return np.abs(Area_R - Area_L)/(Area_R + Area_L)
-
 
 def calc_conductance(syst, energy = 0.0, return_smatrix = False):
     smatrix = kwant.smatrix(syst, energy)
@@ -397,23 +387,38 @@ def generate_1d_Vdis(Nx, ax, num_impurities, amplitude, lambda_dis):
         return normed_Vxd
     
 
-def calc_invariant_metric(f1, f2):  
-    f1 = f1/f1[0]
-    f2 = f2/f2[0]
+def calc_invariant_metric_old(f1,f2):
+
+    norm_f1 = (f1/np.max(f1)) 
+    norm_f2 = (f2/np.max(f2))
+
+    normf1mean = norm_f1.mean()
+    normf2mean = norm_f2.mean()
+
+    fmax = norm_f1 if normf1mean > normf2mean else f2
+    fmin = norm_f1 if normf1mean < normf2mean else f2
+
+
+    return (np.sum(fmin - 1)*np.sum(fmax - 1))/(np.sum(fmin - 1)*np.sum(fmin - 1))
+
+
+def calc_invariant_metric(f1, f2):
+    f1 = f1/f1.max()
+    f2 = f2/f2.max()
     
-    smdiff = np.sum(f1-f2)
-    sgn = smdiff/np.abs(smdiff)
-    fmax = f2 if sgn < 0 else f1
-    fmin = f2 if sgn > 0 else f1
+    f1mean = f1.mean()
+    f2mean = f2.mean()
     
-    A = np.sum(fmax)
+    if f1mean > f2mean:
+        fmax = f1
+        fmin = f2
+    else:
+        fmax = f2
+        fmin = f1
+        
+    return (np.sum(fmin - 1)*np.sum(fmax - 1))/(np.sum(fmin - 1)*np.sum(fmin - 1))
+        
     
-    fn_max = fmax / A
-    fn_min = fmin/np.sum(fmin)
-    
-    corr = (np.dot(fn_max, fn_min) - A)/(np.dot(fn_min, fn_min) - A) 
-    
-    return corr
 
 def calc_correlation(f1,f2):
     f1 = f1/f1[0]
@@ -597,6 +602,7 @@ def calculate_pdi(t, mu, Delta, V_z, alpha, Ls, Vdisx, q_N=1):
 
     sigma_right = [zeros_8]
 
+    #starts in middle of the wire? 
     gsr0_block11 = h_onsite + V_x[int(N/2)-1]*szs0
     gsr0_block22 = h_onsite + V_x[int(N/2)]*szs0
 
@@ -631,13 +637,161 @@ def calculate_pdi(t, mu, Delta, V_z, alpha, Ls, Vdisx, q_N=1):
         
         
 
+def fV_barriers(q, h_onsite_wire, h_onsite_barrier, h_hopping, translation, translation_pr, sigma_right, V_site, is_sc, N):
+    """
+    Recursive Green's Function calculation for the disordered supercell.
+    Adapted to use conditional Hamiltonians for normal barriers.
+    """
+    # Precompute constants
+    phase_pos = np.exp(1.0j * q * N)
+    phase_neg = np.exp(-1.0j * q * N)
 
+    # MAGIC LAMBDA: Selects the correct onsite matrix and adds the local potential
+    # Because is_sc and V_site are arrays of length N, negative indices (like -1) 
+    # automatically wrap around to the right side of the wire cleanly!
+    g_block11 = lambda i: (h_onsite_wire + V_site[i] * szs0) if is_sc[i] else (h_onsite_barrier + V_site[i] * szs0)
     
+    g_block12 = h_hopping.T * phase_neg
+    g_block21 = h_hopping * phase_pos
+
+    # ---------- Compute Sigma_L recursively ----------
+    sigma_left = [zeros_8]
+    green_g0 = np.block([[g_block11(0), g_block12], [g_block21, g_block11(-1)]])
     
+    green_gi = lambda i: np.block([[g_block11(i), zeros_4], [zeros_4, g_block11(-i-1)]])
+    
+    green_inv = inv_pdi((-1.0 * (green_g0 + zeros_8)))
+    sigma_ith = translation_pr @ (green_inv @ translation)
+    sigma_left.append(sigma_ith)
+
+    for i in range(1, int(N/2) - 1):
+        green_inv = inv_pdi((-1.0 * (green_gi(i) + sigma_ith)))
+        sigma_ith = translation_pr @ (green_inv @ translation)
+        sigma_left.append(sigma_ith)
+
+    green_temp0_block11 = np.block([[-1.0*g_block11(0), -1.0*g_block12],
+                                    [-1.0*g_block21, -1.0*g_block11(-1)]])
+    green_temp0_block22 = np.block([[-1.0*g_block11(1), zeros_4],
+                                    [zeros_4, -1.0*g_block11(-2)]])
+
+    green_temp0 = np.block([
+        [green_temp0_block11 - sigma_left[0], -1.0*translation],
+        [-1.0*translation_pr, green_temp0_block22 - sigma_right[-2]]
+    ])
+
+    # ---------- Full Green's function matrix ----------
+    greens_func_matrix = inv_pdi(green_temp0)
+    
+    green_temp_block11 = lambda i: np.block([[-1.0*g_block11(i), zeros_4], [zeros_4, -1.0*g_block11(-i-1)]])
+    green_temp_block22 = lambda i: np.block([[-1.0*g_block11(i + 1), zeros_4], [zeros_4, -1.0*g_block11(-i)]])
+    green_temp = lambda i: np.block([
+        [green_temp_block11(i) - sigma_left[i], -1.0*translation],
+        [-1.0*translation_pr, green_temp_block22(i) - sigma_right[-i]]
+    ])
+
+    for i in range(1, int(N/2) - 2):
+        greens_func_matrix += inv_pdi(green_temp(i))
+
+    green_tempN_block11 = np.block([[-1.0*g_block11(int(N/2)-2), zeros_4], [zeros_4, -1.0*g_block11(int(N/2)+1)]])
+    green_tempN_block22 = np.block([[-1.0*g_block11(int(N/2)-1), -1.0*h_hopping], 
+                                    [-1.0*h_hopping.T, -1.0*g_block11(int(N/2))]])
+
+    green_tempN = np.block([
+        [green_tempN_block11 - sigma_left[-2], -1.0*translation],
+        [-1.0*translation_pr, green_tempN_block22 - sigma_right[0]]
+    ])
+
+    greens_func_matrix += inv_pdi(green_tempN)
+
+    greens_func_ex_right = inv_pdi(green_temp0_block11 - sigma_right[-1])
+    greens_func_ex_left = inv_pdi(green_tempN_block22 - sigma_left[-1])
+
+    # --------- Nearest-neighbor Green's functions ---------
+    G_12 = (
+        greens_func_matrix[0:4, 8:12]
+        + greens_func_matrix[12:16, 4:8]
+        + (greens_func_ex_right[4:8, 0:4] * phase_neg)
+        + greens_func_ex_left[0:4, 4:8]
+    ) / N
+
+    G_21 = (
+        greens_func_matrix[8:12, 0:4]
+        + greens_func_matrix[4:8, 12:16]
+        + (greens_func_ex_right[0:4, 4:8] * phase_pos)
+        + greens_func_ex_left[4:8, 0:4]
+    ) / N
+
+    return G_12, G_21
 
 
+def calculate_pdi_barriers(t, mu, Delta, V_z, alpha, Ls, Vdisx, q_N=1, L_L=0, U_L=0.0, L_R=0, U_R=0.0):
+    """
+    Calculates the Periodic Disorder Invariant (PDI) with independent flat barriers.
+    
+    Parameters:
+    - L_L, L_R: Length (in sites) of the left and right barriers.
+    - U_L, U_R: Potential heights of the left and right barriers.
+    """
+    
+    # 1. Expand the system length
+    N_tot = L_L + Ls + L_R
+    if N_tot % 2 != 0:
+        raise ValueError("Total number of sites (L_L + Ls + L_R) must be even for this RGF implementation.")
 
+    if len(Vdisx) != Ls:
+        V_x_core = Vdisx[:Ls]
+    else:
+        V_x_core = Vdisx
 
+    # 2. Build Potential (V_site) and Superconductivity Flag (is_sc) arrays
+    V_site = np.concatenate([np.full(L_L, U_L), V_x_core, np.full(L_R, U_R)])
+    is_sc = np.concatenate([np.full(L_L, False), np.full(Ls, True), np.full(L_R, False)])
+
+    delta_k = (2 * np.pi) / (q_N * N_tot)
+    q = np.arange(-np.pi/N_tot, -0.1*np.pi/N_tot, delta_k)
+
+    # 3. Define the two Base Hamiltonians
+    h_onsite_wire = (2*t - mu)*szs0 + V_z*szsx - Delta*sysy
+    h_onsite_barrier = (2*t - mu)*szs0 + V_z*szsx  # Delta = 0
+    
+    h_hopping = -t * szs0 - 1.0j * (alpha / 2.0) * szsy
+
+    translation = np.block([[h_hopping, zeros_4], [zeros_4, h_hopping.T]])
+    translation_pr = np.block([[h_hopping.T, zeros_4], [zeros_4, h_hopping]])
+
+    sigma_right = [zeros_8]
+
+    # Helper lambda for the initialization block below
+    get_h = lambda i: (h_onsite_wire + V_site[i]*szs0) if is_sc[i] else (h_onsite_barrier + V_site[i]*szs0)
+
+    gsr0_block11 = get_h(int(N_tot/2)-1)
+    gsr0_block22 = get_h(int(N_tot/2))
+
+    green_gsr0 = np.block([[gsr0_block11, h_hopping], [h_hopping.T, gsr0_block22]])
+    green_g0 = inv_pdi(-1.0 * (green_gsr0 + zeros_8)) 
+    sigma_ri = translation @ (green_g0 @ translation_pr)
+    sigma_right.append(sigma_ri)
+
+    green_gsr_i = lambda i: np.block([[get_h(i), zeros_4], [zeros_4, get_h(-i-1)]])
+
+    for i in range(int(N_tot/2) - 2, 0, -1):
+        green_inv = inv_pdi(-1.0 * (green_gsr_i(i) + sigma_ri))
+        sigma_ri = translation @ (green_inv @ translation_pr)
+        sigma_right.append(sigma_ri)
+    
+    ntp = 0
+    
+    for q0 in q:
+        G_12, G_21 = fV_barriers(q0, h_onsite_wire, h_onsite_barrier, h_hopping, translation, translation_pr, sigma_right, V_site, is_sc, N_tot)
+        ntp += np.trace(chirality_op @ ((h_hopping.T @ G_12) - (h_hopping @ G_21)))
+        
+    q0 = (-0.1 * np.pi / N_tot) + (0.5 * delta_k)
+    while q0 < -0.00001:
+        G_12, G_21 = fV_barriers(q0, h_onsite_wire, h_onsite_barrier, h_hopping, translation, translation_pr, sigma_right, V_site, is_sc, N_tot)
+        ntp += 0.1 * np.trace(chirality_op @ ((h_hopping.T @ G_12) - (h_hopping @ G_21)))
+        q0 += 0.1 * delta_k
+
+    return np.real(-ntp / q_N)
 
 
 
