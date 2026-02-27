@@ -174,7 +174,9 @@ def calculate_local_mp(syst_closed):
 def calc_dIdV(syst, energies):
     num_engs = len(energies)
     
-    ldos = np.zeros(shape = (num_engs, 2192))
+    num_orbitals = syst.graph.num_nodes * 4
+    
+    ldos = np.zeros(shape = (num_engs, num_orbitals))
     dIdV_left = np.zeros_like(energies)
     dIdV_right = np.zeros_like(energies)
     

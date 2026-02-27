@@ -148,6 +148,8 @@ def worker_pdi_step(param_tuple, static_params):
     lb = static_params['Lb']
     ln = static_params['Ln']
     barrier0 = static_params['barrier0']
+    
+    lb_pdi = static_params['Lb_pdi']
 
     
     
@@ -155,7 +157,7 @@ def worker_pdi_step(param_tuple, static_params):
     # Calculate PDI
     # copying Biniyakks original script convention Vdisx --> -Vdisx
     pdi_val = hp.calculate_pdi_barriers(t, mu_pm, Delta, vz, alpha, Ls, -Vdisx, 
-                                        q_N=100, L_L=lb, U_L=barrier0, L_R=lb, U_R=barrier0)
+                                        q_N=100, L_L=lb_pdi, U_L=barrier0, L_R=lb_pdi, U_R=barrier0)
     
     return [mu_pm, vz, pdi_val]
 
@@ -170,6 +172,7 @@ if __name__ == "__main__":
     alpha = 3.5
     Ln = 20 # normal metal length
     Lb = 4 #barrier length
+    Lb_pdi = 0
     Ls = 500 #super conductor length
     #V_c = np.sqrt(mu**2 + Delta**2)
     barrier0 = 5
@@ -225,7 +228,8 @@ if __name__ == "__main__":
         'alpha': alpha,
 
         'Ln': Ln,
-        'Lb': 0,
+        'Lb': Lb,
+        'Lb_pdi':Lb_pdi,
         'Barrier_Height': barrier0,
         'Ls': Ls,
         'mu_leads': mu_leads,
@@ -239,9 +243,13 @@ if __name__ == "__main__":
     
 
     # Pre-allocate main arrays
+    lenw = Ls + 2*(Lb + Ln)
+    num_orbitals = lenw * 4
+    print(f"LEN: {num_orbitals}")
+    ldos_arr = np.zeros(shape = (len(params_list), len(energies), num_orbitals)) 
+    
     dIdVs_left_arr = np.zeros(shape = (len(params_list), len(energies)))
     dIdVs_right_arr = np.zeros(shape = (len(params_list), len(energies)))
-    ldos_arr = np.zeros(shape = (len(params_list), len(energies), 2192)) 
 
     barrier_right_conductance_left_arr  = np.zeros(shape=(len(params_list), Upoints))
     barrier_right_conductance_right_arr = np.zeros_like(barrier_right_conductance_left_arr)
