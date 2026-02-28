@@ -19,6 +19,7 @@ from pathlib import Path
 from config import PathConfigs
 import itertools as itr
 from functools import partial
+import argparse
 
 
 
@@ -186,6 +187,30 @@ meVpK = 8.6173325e-2 # Kelvin into meV
 
 if __name__ == "__main__":
     
+    parser = argparse.ArgumentParser(description="Run parallel transport and PDI simulation.")
+    
+    # Add the arguments with their default values
+    parser.add_argument("--dirname", type=str, default="vdis1_b_strdis", help="Directory name for saving output data.")
+    parser.add_argument("--fname", type=str, default="Vdis1.npz",help="File name for the disorder potential.")
+    parser.add_argument("--Lb_pdi", type=int, default=3, help="Barrier length.")
+    
+    # Parse the arguments from the command line
+    args = parser.parse_args()
+
+    # 2. Assign the parsed arguments to your variables
+    dirname = args.dirname
+    fname = args.fname
+    Lb = 3
+    Lb_pdi = args.Lb_pdi  
+
+    # Print a quick confirmation so you can verify the SLURM job started correctly
+    print(f"--- Starting Simulation ---")
+    print(f"Output Directory: {dirname}")
+    print(f"Disorder File: {fname}")
+    print(f"Barrier Length (Lb): {Lb}")
+    print(f"PDI Barrier Length (Lb_pdi): {Lb_pdi}")
+    print(f"---------------------------\n")
+    
     ####### System Parameters
     '''
     t = 102.0
@@ -220,67 +245,13 @@ if __name__ == "__main__":
     barrier0 = 4.167
     
     V0 = 10.5 * Delta 
-    
-    ## setting up different tests
-    #V0 = 0.0  * Delta 
-    #dirname = 'reruncorr_clean_dis_test'
-    
-    #V0 = 3.5  * Delta 
-    #dirname = 'new_corr_med_dis_test'    #corr_med_dis_test
-    
-    dirname = 'vdis1_b_strdis'  
-    fname = "Vdis1.npz"
-    Lb = 3 # barrier length
-    Lb_pdi = Lb
-    
-    #dirname = 'vdis1_nb_strdis'  
-    #fname = "Vdis1.npz"
-    #Lb = 3 # barrier length
-    #Lb_pdi = 0
-    
-    #dirname = 'vdis2_b_strdis'  
-    #fname = "Vdis2.npz"
-    #Lb = 3 # barrier length
-    #Lb_pdi = Lb
-    
-    #dirname = 'vdis2_nb_strdis'  
-    #fname = "Vdis2.npz"
-    #Lb = 3 # barrier length
-    #Lb_pdi = 0
-    
-    #dirname = 'vdis3_b_strdis'  
-    #fname = "Vdis3.npz"
-    #Lb = 3 # barrier length
-    #Lb_pdi = Lb
-    
-    #dirname = 'vdis3_nb_strdis'  
-    #fname = "Vdis3.npz"
-    #Lb = 3 # barrier length
-    #Lb_pdi = 0
-    
-    
-    #dirname = 'vdis4_b_strdis'  
-    #fname = "Vdis4.npz"
-    #Lb = 3 # barrier length
-    #Lb_pdi = Lb
-    
-    #dirname = 'vdis4_nb_strdis'  
-    #fname = "Vdis4.npz"
-    #Lb = 3 # barrier length
-    #Lb_pdi = 0
-    
-    
-
-
-
-
 
     Upoints = 50 
     num_engs = 101  
 
     mu_n = 0.0
 
-    mu_max = 5
+    mu_max = 0.5
     mu_min = 0
     mu_rng = mu_max - mu_min
     mu_dist = 0.1 #spacing between points

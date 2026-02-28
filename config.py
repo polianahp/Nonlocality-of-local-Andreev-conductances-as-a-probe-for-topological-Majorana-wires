@@ -24,6 +24,7 @@ class DefaultPathConfiguration:
         self.ROOT = FILE.parents[0]
         self.DATA = self.ROOT / "Data"
         self.TESTS = self.ROOT / "Tests"
+        self.PARAMETERS = self.ROOT / "Parameters"
         
         #folder where disorder realizations are stored for runs. 
         self.RUN_FILES = self.ROOT / "Run_Files"
