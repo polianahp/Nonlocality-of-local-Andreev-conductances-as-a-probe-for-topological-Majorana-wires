@@ -360,7 +360,7 @@ def generate_1d_Vdis(Nx, ax, num_impurities, amplitude, lambda_dis):
         Y0 = np.ones(Ny)
         Vxd = np.array([np.dot(Vdis[ii, :], Y0) for ii in range(Nx)])
         #normalizing disorder and scaling by predefined amplitude
-        normed_Vxd = Vxd/np.max(np.abs(Vxd)) * amplitude
+        normed_Vxd = (Vxd/np.max(np.abs(Vxd)) )* amplitude
         
         return normed_Vxd
     
@@ -624,7 +624,6 @@ def fV_barriers(q, h_onsite_wire, h_onsite_barrier, h_hopping, translation, tran
     phase_pos = np.exp(1.0j * q * N)
     phase_neg = np.exp(-1.0j * q * N)
 
-    # MAGIC LAMBDA: Selects the correct onsite matrix and adds the local potential
     # Because is_sc and V_site are arrays of length N, negative indices (like -1) 
     # automatically wrap around to the right side of the wire cleanly!
     g_block11 = lambda i: (h_onsite_wire + V_site[i] * szs0) if is_sc[i] else (h_onsite_barrier + V_site[i] * szs0)

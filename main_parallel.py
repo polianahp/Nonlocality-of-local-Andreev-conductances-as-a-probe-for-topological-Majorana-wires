@@ -49,18 +49,20 @@ def worker_simulation_step(iter_data, static_params):
     energies = static_params['energies']
     barrier_arr = static_params['barrier_arr']
     
+    barrier_tot = barrier0 + mu
+    
     
     
     # --- 1. Build Symmetric System & Calculate Spectral Properties ---
     syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, V_z=vz, 
                            alpha=alpha, Ln=Ln, Lb=Lb, 
                            Ls=Ls, mu_leads=mu_leads,
-                           barrier_l=barrier0, barrier_r=barrier0, Vdisx=Vdisx)
+                           barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
     
     syst_closed = hp.build_system_closed(t=t, mu=mu, mu_n=mu_n, Delta=Delta, V_z=vz, 
                            alpha=alpha, Ln=Ln, Lb=Lb, 
                            Ls=Ls, mu_leads=mu_leads,
-                           barrier_l=barrier0, barrier_r=barrier0, Vdisx=Vdisx)
+                           barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
     
     # Majorana metrics
     M_profile, energy_0 = hp.calculate_local_mp(syst_closed)
@@ -82,11 +84,13 @@ def worker_simulation_step(iter_data, static_params):
     # Note: this is run serially inside the worker because the overhead 
     # of spawning sub-processes here would be too high.
     for k in range(points):
+        barrier_var_tot = barrier_arr[k] + mu
+        
         # Varying Right Barrier (UR)
         syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, 
                                   V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
-                                  Ls=Ls, mu_leads=mu_leads, barrier_l=barrier0,
-                                  barrier_r=barrier_arr[k], Vdisx=Vdisx)
+                                  Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
+                                  barrier_r=barrier_var_tot, Vdisx=Vdisx)
         
         cL, cR = hp.calc_conductance(syst_UR, energy=0.0)
         b_right_cond_left[k] = cL
@@ -95,8 +99,8 @@ def worker_simulation_step(iter_data, static_params):
         # Varying Left Barrier (UL)
         syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, 
                                   V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
-                                  Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_arr[k], 
-                                  barrier_r=barrier0, Vdisx=Vdisx)
+                                  Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot, 
+                                  barrier_r=barrier_tot, Vdisx=Vdisx)
 
         cL, cR = hp.calc_conductance(syst_UL, energy=0.0)
         b_left_cond_left[k] = cL
@@ -146,25 +150,44 @@ def worker_pdi_step(param_tuple, static_params):
     Ls = static_params['Ls']
     Vdisx = static_params['Vdisx']
     lb = static_params['Lb']
+    lb_pdi = static_params['Lb_pdi']
     ln = static_params['Ln']
     barrier0 = static_params['barrier0']
     
-    lb_pdi = static_params['Lb_pdi']
+    barrier_tot = barrier0 + mu_pm
 
     
-    
+    thresh = 0.05
     
     # Calculate PDI
     # copying Biniyakks original script convention Vdisx --> -Vdisx
     pdi_val = hp.calculate_pdi_barriers(t, mu_pm, Delta, vz, alpha, Ls, -Vdisx, 
-                                        q_N=100, L_L=lb_pdi, U_L=barrier0, L_R=lb_pdi, U_R=barrier0)
+                                        q_N=20, L_L=lb_pdi, U_L=barrier_tot, L_R=lb_pdi, U_R=barrier_tot)
+    
+    if pdi_val >= 0 + thresh and pdi_val <= 1 - thresh:
+            pdi_val = hp.calculate_pdi_barriers(t, mu_pm, Delta, vz, alpha, Ls, -Vdisx, 
+                                        q_N=100, L_L=lb_pdi, U_L=barrier_tot, L_R=lb_pdi, U_R=barrier_tot)
+        
+        
     
     return [mu_pm, vz, pdi_val]
+
+
+
+#### constants: 
+hbar = 6.58211899e-16  # eV·s
+m0   = 9.10938291e-31  # kg
+e0 = 1.602176487e-19   # C
+eta_m = (hbar ** 2 * e0) * (1e20)/m0 # hbar^2/m0 in eV A^2
+mu_B =  5.7883818066e-2  #in meV/T
+meVpK = 8.6173325e-2 # Kelvin into meV 
+
 
 
 if __name__ == "__main__":
     
     ####### System Parameters
+    '''
     t = 102.0
     mu_n = 0.2
     mu_leads = 20.0
@@ -176,6 +199,25 @@ if __name__ == "__main__":
     Ls = 500 #super conductor length
     #V_c = np.sqrt(mu**2 + Delta**2)
     barrier0 = 5
+    '''
+    
+    Ls = 300 # wire length
+
+    Ln = 0 #length of normal region. See Dourado 2023
+    a0 = 100 # unit cell in A
+    ms = 0.023 # effective mass
+    
+    t = 1000 * eta_m/(2 * a0**2 * ms) # hopping in meV
+    alpha = 140.0/a0 # Rashba SOC
+    
+    Delta_0= 0.3 # parent SC gap
+    gamma = 0.2 # SM-SC coupling strength in meV
+    Z = Delta_0/(Delta_0 + gamma)
+    Delta = Delta_0 * gamma /(Delta_0 + gamma)
+    
+    mu_leads = 1
+    
+    barrier0 = 4.167
     
     
     ## setting up different tests
@@ -186,16 +228,80 @@ if __name__ == "__main__":
     #dirname = 'new_corr_med_dis_test'    #corr_med_dis_test
     
     V0 = 10.5 * Delta 
-    dirname = 'barriers_stong_dis_test'  #corr_stong_dis_test
+    dirname = 'vdis1_b_strdis'  
+    fname = "Vdis1.npz"
+    Lb = 3 # barrier length
+    Lb_pdi = Lb
+    
+    #V0 = 10.5 * Delta 
+    #dirname = 'vdis1_nb_strdis'  
+    #fname = "Vdis1.npz"
+    #Lb = 3 # barrier length
+    #Lb_pdi = 0
+    
+    #V0 = 10.5 * Delta 
+    #dirname = 'vdis2_b_strdis'  
+    #fname = "Vdis2.npz"
+    #Lb = 3 # barrier length
+    #Lb_pdi = Lb
+    
+    #V0 = 10.5 * Delta 
+    #dirname = 'vdis2_nb_strdis'  
+    #fname = "Vdis2.npz"
+    #Lb = 0 # barrier length
+    #Lb_pdi = Lb
+    
+    #V0 = 10.5 * Delta 
+    #dirname = 'vdis3_b_strdis'  
+    #fname = "Vdis3.npz"
+    #Lb = 3 # barrier length
+    #Lb_pdi = Lb
+    
+    #V0 = 10.5 * Delta 
+    #dirname = 'vdis3_nb_strdis'  
+    #fname = "Vdis3.npz"
+    #Lb = 0 # barrier length
+    #Lb_pdi = Lb
+    
+    
+    #V0 = 10.5 * Delta 
+    #dirname = 'vdis4_b_strdis'  
+    #fname = "Vdis4.npz"
+    #Lb = 3 # barrier length
+    #Lb_pdi = Lb
+    
+    #V0 = 10.5 * Delta 
+    #dirname = 'vdis4_nb_strdis'  
+    #fname = "Vdis4.npz"
+    #Lb = 0 # barrier length
+    #Lb_pdi = Lb
+    
+    
+
+
+
+
 
     Upoints = 50 
     num_engs = 101  
-    num_vz_var = 61
-    num_mu_var= 61
 
-    mu_rng = 0.5
-    mu_var = np.linspace(1-mu_rng, 1+mu_rng, num_mu_var)
-    Vz_var = np.linspace(0.6, 1.7, num_vz_var) 
+    mu_n = 0.0
+
+    mu_max = 5
+    mu_min = 0
+    mu_rng = mu_max - mu_min
+    mu_dist = 0.1 #spacing between points
+    Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
+    mu_var = np.linspace(mu_min, mu_max, Nmu)
+    
+    Vz_max = 1.2
+    Vz_min = 0.0
+    Vz_rng = Vz_max - Vz_min
+    Vz_dist = 0.02 #spacing between points
+    Nvz = int(Vz_rng/Vz_dist)
+    Vz_var = np.linspace(Vz_min, Vz_max, Nvz) 
+    
+    
     params_list = [pms for pms in itr.product(mu_var, Vz_var)]
     params_list = [[i, pms[0], pms[1]] for i, pms in enumerate(params_list)]
     
@@ -205,7 +311,7 @@ if __name__ == "__main__":
 
     # Initialize Disorder
     print(f"Run Files Path Exists: {os.path.exists(PathConfigs.RUN_FILES)}")
-    fname = "Data.npz"
+    
     
     path = Path(PathConfigs.RUN_FILES/fname)
     
