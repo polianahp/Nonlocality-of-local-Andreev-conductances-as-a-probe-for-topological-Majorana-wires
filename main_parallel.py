@@ -251,7 +251,7 @@ if __name__ == "__main__":
 
     mu_n = 0.0
 
-    mu_max = 0.5
+    mu_max = 5
     mu_min = 0
     mu_rng = mu_max - mu_min
     mu_dist = 0.1 #spacing between points
@@ -393,7 +393,7 @@ if __name__ == "__main__":
     hp.np_save_wrapped(energies, "energies", dirname)
     hp.np_save_wrapped(dIdVs_left_arr, "dIdVs_left_arr", dirname)
     hp.np_save_wrapped(dIdVs_right_arr, "dIdVs_right_arr", dirname)
-    hp.np_save_wrapped(ldos_arr, "LDOS", dirname)
+    #hp.np_save_wrapped(ldos_arr, "LDOS", dirname)
     hp.np_save_wrapped(barrier_right_conductance_left_arr, "barrier_right_conductance_left_arr", dirname)
     hp.np_save_wrapped(barrier_right_conductance_right_arr, "barrier_right_conductance_right_arr", dirname)    
     hp.np_save_wrapped(barrier_left_conductance_left_arr, "barrier_left_conductance_left_arr", dirname)    
