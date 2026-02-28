@@ -70,7 +70,8 @@ def worker_simulation_step(iter_data, static_params):
     gamma_sq = hp.calculate_gamma_squared(syst_closed)
     
     # dI/dV and Conductance Matrix
-    dIdVl, dIdVr, ldos = hp.calc_dIdV(syst, energies)
+    dIdVl, dIdVr, ldos = 0,0,0
+    #dIdVl, dIdVr, ldos = hp.calc_dIdV(syst, energies)
     Gmat = hp.calc_conductance_matrix(syst, 0.0)
     
     # --- 2. Barrier Sweeps (Nested Loop logic) ---
@@ -98,14 +99,14 @@ def worker_simulation_step(iter_data, static_params):
         b_right_cond_right[k] = cR
         
         # Varying Left Barrier (UL)
-        syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, 
-                                  V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
-                                  Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot, 
-                                  barrier_r=barrier_tot, Vdisx=Vdisx)
-
-        cL, cR = hp.calc_conductance(syst_UL, energy=0.0)
-        b_left_cond_left[k] = cL
-        b_left_cond_right[k] = cR
+        #syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, 
+        #                          V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
+        #                          Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot, 
+        #                          barrier_r=barrier_tot, Vdisx=Vdisx)
+#
+        #cL, cR = hp.calc_conductance(syst_UL, energy=0.0)
+        #b_left_cond_left[k] = cL
+        #b_left_cond_right[k] = cR
         
     l_Gll, l_GRR = b_left_cond_left, b_left_cond_right #varying left barrier and getting local conductances
     r_Gll, r_GRR = b_right_cond_left, b_right_cond_right #varying left barrier and getting local conductances
@@ -115,8 +116,8 @@ def worker_simulation_step(iter_data, static_params):
     #rG_corr = np.dot(r_Gll, r_GRR)/(np.linalg.norm(r_Gll) * np.linalg.norm(r_GRR))
     #rG_corr = np.dot(r_Gll, r_GRR)/(np.linalg.norm(    r_Gll) * np.linalg.norm(r_GRR))
     
-    rG_corr = hp.calc_invariant_metric(r_Gll, r_GRR)
-    lG_corr = hp.calc_invariant_metric(l_Gll, l_GRR)
+    rG_corr = hp.calc_correlation(r_Gll, r_GRR)
+    lG_corr = 0#hp.calc_correlation(l_Gll, l_GRR)
 
     
     # Pack all results into a dictionary to return to main process
@@ -242,19 +243,19 @@ if __name__ == "__main__":
     
     mu_leads = 1
     
-    barrier0 = 4.167
+    barrier0 = 5
     
-    V0 = 10.5 * Delta 
+    V0 = 4.617#10.5 * Delta 
 
-    Upoints = 50 
+    Upoints = 20 
     num_engs = 101  
 
     mu_n = 0.0
 
-    mu_max = 5
+    mu_max = 4.5
     mu_min = 0
     mu_rng = mu_max - mu_min
-    mu_dist = 0.1 #spacing between points
+    mu_dist = 0.03 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
     mu_var = np.linspace(mu_min, mu_max, Nmu)
     
