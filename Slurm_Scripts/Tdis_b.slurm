@@ -15,6 +15,6 @@ source /shared/software/conda/conda_init.sh
 
 conda activate kwant_fresh
 cd $SCRATCH/nonlocalcond
-python -u main_parallel.py --dirname "Tdis_b" --fname Vdis4.npz --Lb_pdi 3
+python -u main_parallel.py --dirname "Tdis_b" --fname Tdis.npz --Lb_pdi 3
 
 conda deactivate
