@@ -219,6 +219,7 @@ if __name__ == "__main__":
     
     barrier0 = 4.167
     
+    V0 = 10.5 * Delta 
     
     ## setting up different tests
     #V0 = 0.0  * Delta 
@@ -227,54 +228,46 @@ if __name__ == "__main__":
     #V0 = 3.5  * Delta 
     #dirname = 'new_corr_med_dis_test'    #corr_med_dis_test
     
-    V0 = 10.5 * Delta 
     dirname = 'vdis1_b_strdis'  
     fname = "Vdis1.npz"
     Lb = 3 # barrier length
     Lb_pdi = Lb
     
-    #V0 = 10.5 * Delta 
     #dirname = 'vdis1_nb_strdis'  
     #fname = "Vdis1.npz"
     #Lb = 3 # barrier length
     #Lb_pdi = 0
     
-    #V0 = 10.5 * Delta 
     #dirname = 'vdis2_b_strdis'  
     #fname = "Vdis2.npz"
     #Lb = 3 # barrier length
     #Lb_pdi = Lb
     
-    #V0 = 10.5 * Delta 
     #dirname = 'vdis2_nb_strdis'  
     #fname = "Vdis2.npz"
-    #Lb = 0 # barrier length
-    #Lb_pdi = Lb
+    #Lb = 3 # barrier length
+    #Lb_pdi = 0
     
-    #V0 = 10.5 * Delta 
     #dirname = 'vdis3_b_strdis'  
     #fname = "Vdis3.npz"
     #Lb = 3 # barrier length
     #Lb_pdi = Lb
     
-    #V0 = 10.5 * Delta 
     #dirname = 'vdis3_nb_strdis'  
     #fname = "Vdis3.npz"
-    #Lb = 0 # barrier length
-    #Lb_pdi = Lb
+    #Lb = 3 # barrier length
+    #Lb_pdi = 0
     
     
-    #V0 = 10.5 * Delta 
     #dirname = 'vdis4_b_strdis'  
     #fname = "Vdis4.npz"
     #Lb = 3 # barrier length
     #Lb_pdi = Lb
     
-    #V0 = 10.5 * Delta 
     #dirname = 'vdis4_nb_strdis'  
     #fname = "Vdis4.npz"
-    #Lb = 0 # barrier length
-    #Lb_pdi = Lb
+    #Lb = 3 # barrier length
+    #Lb_pdi = 0
     
     
 
