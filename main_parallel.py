@@ -164,11 +164,11 @@ def worker_pdi_step(param_tuple, static_params):
     # Calculate PDI
     # copying Biniyakks original script convention Vdisx --> -Vdisx
     pdi_val = hp.calculate_pdi_barriers(t, mu_pm, Delta, vz, alpha, Ls, -Vdisx, 
-                                        q_N=20, L_L=lb_pdi, U_L=barrier_tot, L_R=lb_pdi, U_R=barrier_tot)
-    
-    if pdi_val >= 0 + thresh and pdi_val <= 1 - thresh:
-            pdi_val = hp.calculate_pdi_barriers(t, mu_pm, Delta, vz, alpha, Ls, -Vdisx, 
                                         q_N=100, L_L=lb_pdi, U_L=barrier_tot, L_R=lb_pdi, U_R=barrier_tot)
+    
+    #if pdi_val >= 0 + thresh and pdi_val <= 1 - thresh:
+    #        pdi_val = hp.calculate_pdi_barriers(t, mu_pm, Delta, vz, alpha, Ls, -Vdisx, 
+    #                                    q_N=100, L_L=lb_pdi, U_L=barrier_tot, L_R=lb_pdi, U_R=barrier_tot)
         
         
     
@@ -238,12 +238,12 @@ if __name__ == "__main__":
     
     Delta_0= 0.3 # parent SC gap
     gamma = 0.2 # SM-SC coupling strength in meV
-    Z = Delta_0/(Delta_0 + gamma)
-    Delta = Delta_0 * gamma /(Delta_0 + gamma)
+    Z = Delta_0/(Delta_0 + gamma) #renormalization
+    Delta = Delta_0 * gamma /(Delta_0 + gamma) #induced gap
     
-    mu_leads = 1
+    mu_leads = 1 # lead chemical potential (meV)
     
-    barrier0 = 2
+    barrier0 = 2 #barrier energy (meV)
     
     V0 = 4.617#10.5 * Delta 
 
@@ -406,10 +406,40 @@ if __name__ == "__main__":
     hp.np_save_wrapped(gamma_sq_arr, "gamma_sq_arr", dirname)
     hp.np_save_wrapped(mp_eng_arr, "mp_eng_arr", dirname)
     hp.np_save_wrapped(mp_arr, "mp_arr", dirname)
-    hp.np_save_wrapped(params_list, "params_list", dirname)
+    hp.np_save_wrapped(params_list, "params_list", dirname) 
+    
     
     hp.np_save_wrapped(rG_corr_arr,"rG_corr", dirname)
     hp.np_save_wrapped(lG_corr_arr,"lG_corr", dirname)
+    
+    all_params = {
+        **static_params,  # unpacks 't', 'mu_n', 'Delta', 'alpha', etc.
+        
+        'a0': a0,
+        'ms': ms,
+        'Delta_0': Delta_0,
+        'gamma': gamma,
+        'Z': Z,
+        'V0': V0,
+        'Upoints': Upoints,
+        'num_engs': num_engs,
+        
+        'mu_max': mu_max,
+        'mu_min': mu_min,
+        'mu_rng': mu_rng,
+        'mu_dist': mu_dist,
+        'Nmu': Nmu,
+        'mu_var': mu_var,
+        
+        'Vz_max': Vz_max,
+        'Vz_min': Vz_min,
+        'Vz_rng': Vz_rng,
+        'Vz_dist': Vz_dist,
+        'Nvz': Nvz,
+        'Vz_var': Vz_var,
+        
+    }
+    hp.np_savez_wrapped("all_params", dirname, **all_params)
     
 
 

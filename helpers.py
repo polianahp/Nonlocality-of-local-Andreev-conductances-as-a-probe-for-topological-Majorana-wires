@@ -27,6 +27,11 @@ def np_save_wrapped(data, filename, subdirectory):
     path = get_data_path(f"{filename}.npy", subdirectory)
     np.save(path, data)
     
+def np_savez_wrapped(filename, subdirectory, **kwargs):
+    #wrapper for np.savetxt to save to default data bath
+    path = get_data_path(f"{filename}.npy", subdirectory)
+    np.savez(path, **kwargs)
+    
 def np_load_wrapped(filename, subdirectory):
     #wrapper for np.loadtxt to load from default data bath
     path = get_data_path(f"{filename}.npy", subdirectory)
