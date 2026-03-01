@@ -191,7 +191,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run parallel transport and PDI simulation.")
     
     # Add the arguments with their default values
-    parser.add_argument("--dirname", type=str, default="vdis1_b_strdis", help="Directory name for saving output data.")
+    parser.add_argument("--dirname", type=str, default="test", help="Directory name for saving output data.")
     parser.add_argument("--fname", type=str, default="Vdis1.npz",help="File name for the disorder potential.")
     parser.add_argument("--Lb_pdi", type=int, default=3, help="Barrier length.")
     
@@ -199,7 +199,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # 2. Assign the parsed arguments to your variables
-    dirname = args.dirname
+    dirname = f"nomushift/{args.dirname}"
     fname = args.fname
     Lb = 3
     Lb_pdi = args.Lb_pdi  

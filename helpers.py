@@ -19,18 +19,20 @@ sigma_z = tinyarray.array([[1, 0], [0, -1]])
 def get_data_path(file_name, subdirectory):
     #constructs output data paths based on path configuration in config.py
     # path constructed should be DATA/subdirectory/filename
-    os.makedirs(PathConfigs.DATA / subdirectory, exist_ok=True)
+    
+    pth = Path(PathConfigs.DATA / subdirectory/ file_name)
+    os.makedirs(pth, exist_ok=True)
     return PathConfigs.DATA / subdirectory / file_name
 
-def np_save_wrapped(data, filename, subdirectory):
-    #wrapper for np.savetxt to save to default data bath
-    path = get_data_path(f"{filename}.npy", subdirectory)
-    np.save(path, data)
-    
-def np_savez_wrapped(filename, subdirectory, **kwargs):
-    #wrapper for np.savetxt to save to default data bath
-    path = get_data_path(f"{filename}.npy", subdirectory)
-    np.savez(path, **kwargs)
+def np_save_wrapped(arr, name, dirname):
+    dir = f"{PathConfigs.DATA}/{dirname}"
+    Path(f'{dir}').mkdir(parents=True, exist_ok=True)
+    np.save(f"{dir}/{name}.npy", arr)
+
+def np_savez_wrapped(name, dirname, **kwargs):
+    dir = f"{PathConfigs.DATA}/{dirname}"
+    Path(f'{dir}').mkdir(parents=True, exist_ok=True)
+    np.savez(f"{dir}/{name}.npz", **kwargs)
     
 def np_load_wrapped(filename, subdirectory):
     #wrapper for np.loadtxt to load from default data bath
