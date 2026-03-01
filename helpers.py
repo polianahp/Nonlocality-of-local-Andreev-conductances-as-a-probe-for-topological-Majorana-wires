@@ -20,8 +20,7 @@ def get_data_path(file_name, subdirectory):
     #constructs output data paths based on path configuration in config.py
     # path constructed should be DATA/subdirectory/filename
     
-    pth = Path(PathConfigs.DATA / subdirectory/ file_name)
-    os.makedirs(pth, exist_ok=True)
+    pth = Path(subdirectory/ file_name)
     return PathConfigs.DATA / subdirectory / file_name
 
 def np_save_wrapped(arr, name, dirname):
