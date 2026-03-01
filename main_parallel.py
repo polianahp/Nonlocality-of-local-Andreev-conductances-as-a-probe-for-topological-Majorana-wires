@@ -50,7 +50,7 @@ def worker_simulation_step(iter_data, static_params):
     energies = static_params['energies']
     barrier_arr = static_params['barrier_arr']
     
-    barrier_tot = barrier0 + mu
+    barrier_tot = barrier0 #+ mu
     
     
     
@@ -86,7 +86,7 @@ def worker_simulation_step(iter_data, static_params):
     # Note: this is run serially inside the worker because the overhead 
     # of spawning sub-processes here would be too high.
     for k in range(points):
-        barrier_var_tot = barrier_arr[k] + mu
+        barrier_var_tot = barrier_arr[k] #+ mu
         
         # Varying Right Barrier (UR)
         syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, 
@@ -156,7 +156,7 @@ def worker_pdi_step(param_tuple, static_params):
     ln = static_params['Ln']
     barrier0 = static_params['barrier0']
     
-    barrier_tot = barrier0 + mu_pm
+    barrier_tot = barrier0 #+ mu_pm
 
     
     thresh = 0.05
