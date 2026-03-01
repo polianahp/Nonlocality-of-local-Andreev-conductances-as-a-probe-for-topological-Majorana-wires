@@ -243,7 +243,7 @@ if __name__ == "__main__":
     
     mu_leads = 1
     
-    barrier0 = 5
+    barrier0 = 2
     
     V0 = 4.617#10.5 * Delta 
 
@@ -390,6 +390,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     print(f"\nSaving data to: {dirname}")
 
+    hp.np_save_wrapped(Vdisx, "Vdisx", dirname)
     hp.np_save_wrapped(pdi_data, "pdi_data", dirname)
     hp.np_save_wrapped(energies, "energies", dirname)
     hp.np_save_wrapped(dIdVs_left_arr, "dIdVs_left_arr", dirname)
