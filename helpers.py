@@ -313,11 +313,9 @@ def calc_normalized(x):
     
 
 
-def initialize_vdis_from_data(path, normalize = True):
+def initialize_vdis_from_data(path):
     
     x = np.load(path)['Vdisx']
-    if normalize:
-        x = calc_normalized(x)
     return x
 
 

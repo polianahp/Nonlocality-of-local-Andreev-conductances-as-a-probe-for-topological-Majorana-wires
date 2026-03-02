@@ -50,7 +50,7 @@ def worker_simulation_step(iter_data, static_params):
     energies = static_params['energies']
     barrier_arr = static_params['barrier_arr']
     
-    barrier_tot = barrier0 #+ mu
+    barrier_tot = barrier0 + mu
     
     
     
@@ -86,7 +86,7 @@ def worker_simulation_step(iter_data, static_params):
     # Note: this is run serially inside the worker because the overhead 
     # of spawning sub-processes here would be too high.
     for k in range(points):
-        barrier_var_tot = barrier_arr[k] #+ mu
+        barrier_var_tot = barrier_arr[k] + mu
         
         # Varying Right Barrier (UR)
         syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, 
@@ -156,7 +156,7 @@ def worker_pdi_step(param_tuple, static_params):
     ln = static_params['Ln']
     barrier0 = static_params['barrier0']
     
-    barrier_tot = barrier0 #+ mu_pm
+    barrier_tot = barrier0 + mu_pm
 
     
     thresh = 0.05
@@ -164,11 +164,11 @@ def worker_pdi_step(param_tuple, static_params):
     # Calculate PDI
     # copying Biniyakks original script convention Vdisx --> -Vdisx
     pdi_val = hp.calculate_pdi_barriers(t, mu_pm, Delta, vz, alpha, Ls, -Vdisx, 
-                                        q_N=100, L_L=lb_pdi, U_L=barrier_tot, L_R=lb_pdi, U_R=barrier_tot)
+                                        q_N=20, L_L=lb_pdi, U_L=barrier_tot, L_R=lb_pdi, U_R=barrier_tot)
     
-    #if pdi_val >= 0 + thresh and pdi_val <= 1 - thresh:
-    #        pdi_val = hp.calculate_pdi_barriers(t, mu_pm, Delta, vz, alpha, Ls, -Vdisx, 
-    #                                    q_N=100, L_L=lb_pdi, U_L=barrier_tot, L_R=lb_pdi, U_R=barrier_tot)
+    if pdi_val >= 0 + thresh and pdi_val <= 1 - thresh:
+            pdi_val = hp.calculate_pdi_barriers(t, mu_pm, Delta, vz, alpha, Ls, -Vdisx, 
+                                        q_N=100, L_L=lb_pdi, U_L=barrier_tot, L_R=lb_pdi, U_R=barrier_tot)
         
         
     
@@ -199,8 +199,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # 2. Assign the parsed arguments to your variables
-    dirname = f"nomushift_AGAIN/{args.dirname}"
-    fname = args.fname
+    dirname = f"V0_12/Old_Disorders/{args.dirname}"
+    fname = f"Old_Disorders/{args.fname}"
     Lb = 3
     Lb_pdi = args.Lb_pdi  
 
@@ -245,7 +245,7 @@ if __name__ == "__main__":
     
     barrier0 = 2 #barrier energy (meV)
     
-    V0 = 4.617#10.5 * Delta 
+    V0 = 1.2#10.5 * Delta 
 
     Upoints = 20 
     num_engs = 101  
@@ -257,14 +257,14 @@ if __name__ == "__main__":
     mu_rng = mu_max - mu_min
     mu_dist = 0.03 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
-    mu_var = np.linspace(mu_min, mu_max, Nmu)
+    mu_var = np.linspace(mu_min, mu_max, 2)
     
     Vz_max = 1.2
     Vz_min = 0.0
     Vz_rng = Vz_max - Vz_min
     Vz_dist = 0.02 #spacing between points
     Nvz = int(Vz_rng/Vz_dist)
-    Vz_var = np.linspace(Vz_min, Vz_max, Nvz) 
+    Vz_var = np.linspace(Vz_min, Vz_max, 2) 
     
     
     params_list = [pms for pms in itr.product(mu_var, Vz_var)]
