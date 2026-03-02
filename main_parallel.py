@@ -257,14 +257,14 @@ if __name__ == "__main__":
     mu_rng = mu_max - mu_min
     mu_dist = 0.03 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
-    mu_var = np.linspace(mu_min, mu_max, 2)
+    mu_var = np.linspace(mu_min, mu_max, Nmu)
     
     Vz_max = 1.2
     Vz_min = 0.0
     Vz_rng = Vz_max - Vz_min
     Vz_dist = 0.02 #spacing between points
     Nvz = int(Vz_rng/Vz_dist)
-    Vz_var = np.linspace(Vz_min, Vz_max, 2) 
+    Vz_var = np.linspace(Vz_min, Vz_max, Nvz) 
     
     
     params_list = [pms for pms in itr.product(mu_var, Vz_var)]
