@@ -199,8 +199,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # 2. Assign the parsed arguments to your variables
-    dirname = f"V0_12/Old_Disorders/{args.dirname}"
-    fname = f"Old_Disorders/{args.fname}"
+    dirname = f"V0_12/New_Disorders/{args.dirname}"
+    fname = f"New_Disorders/{args.fname}"
     Lb = 3
     Lb_pdi = args.Lb_pdi  
 
