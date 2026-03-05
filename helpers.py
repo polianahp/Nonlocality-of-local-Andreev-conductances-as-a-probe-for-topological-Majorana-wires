@@ -211,6 +211,7 @@ def calc_dIdV(syst, energies):
 
 ######### The following function builds the system ########
 
+
 def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l, barrier_r, Vdisx = None, a = 1):
     syst = kwant.Builder()
     lat = kwant.lattice.square(a, norbs=4)
@@ -222,8 +223,8 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
     left_lead = kwant.Builder(sym_left_lead, conservation_law=np.diag([-2, -1, 1, 2])) 
     right_lead = kwant.Builder(sym_right_lead, conservation_law=np.diag([-2, -1, 1, 2])) 
     
-    
-    Z = Delta0/(Delta0 + gamma) #renormalization for the low energy effective hamiltonian.
+    Z = Delta0/(Delta0 + gamma) # renormalization for the low energy effective hamiltonian.
+    Delta_ind = Z * gamma # explicitly define induced gap
     
     mu_s = np.zeros(Ls)
     
@@ -233,30 +234,43 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
     for i in range(Ls):
         mu_s[i] = mu + Vdisx[i]  
 
+    # 1. Left Barrier
     for i in range(Lb):
         syst[lat(i, 0)] = (2 * t - mu_n + barrier_l) * np.kron(sigma_z, sigma_0)
         if i > 0:
             syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
             
+    # 2. Left Normal
     for i in range(Lb, Lb+Ln):
         syst[lat(i, 0)] = (2 * t - mu_n) * np.kron(sigma_z, sigma_0)
         if i > 0: 
             syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
             
+    # 3. Superconductor (Renormalized)
     for i in range(Lb+Ln, Lb+Ln+Ls):
-        syst[lat(i, 0)] = ((2 * t - mu_s[i-Lb-Ln]) * np.kron(sigma_z, sigma_0) + gamma * np.kron(sigma_x, sigma_0) + V_z * np.kron(sigma_0, sigma_x))*Z   #<---- renormalizing here, only in superconductor
+        syst[lat(i, 0)] = Z * (2 * t - mu_s[i-Lb-Ln]) * np.kron(sigma_z, sigma_0) \
+                          + Z * V_z * np.kron(sigma_0, sigma_x) \
+                          + Delta_ind * np.kron(sigma_x, sigma_0) 
         if i > 0: 
-            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
+            # Boundary hopping is sqrt(Z), bulk SC hopping is Z
+            z_hop = np.sqrt(Z) if i == Lb+Ln else Z
+            syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y))
             
+    # 4. Right Normal
     for i in range(Lb+Ln+Ls, Lb+Ln+Ls+Ln):
         syst[lat(i, 0)] = (2 * t - mu_n) * np.kron(sigma_z, sigma_0)
         if i > 0: 
-            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
+            # Boundary hopping exiting SC is sqrt(Z), bulk normal is 1.0
+            z_hop = np.sqrt(Z) if i == Lb+Ln+Ls else 1.0
+            syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)) 
             
+    # 5. Right Barrier
     for i in range(Lb+Ln+Ls+Ln, Lb+Ln+Ls+Ln+Lb):
         syst[lat(i, 0)] = (2 * t - mu_n + barrier_r) * np.kron(sigma_z, sigma_0)
         if i > 0: 
-            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
+            # Boundary hopping exiting SC is sqrt(Z) (Applies here if Ln == 0)
+            z_hop = np.sqrt(Z) if i == Lb+Ln+Ls else 1.0
+            syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y))
     
     left_lead[lat(0, 0)] = (2 * t - mu_leads) * np.kron(sigma_z, sigma_0) 
     left_lead[lat(1, 0), lat(0, 0)] = -t * np.kron(sigma_z, sigma_0)
@@ -274,7 +288,8 @@ def build_system_closed(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_l
     syst = kwant.Builder()
     lat = kwant.lattice.square(a, norbs=4)
     
-    Z = Delta0/(Delta0 + gamma) #renormalization for the low energy effective hamiltonian.
+    Z = Delta0/(Delta0 + gamma)
+    Delta_ind = Z * gamma
     
     mu_s = np.zeros(Ls)
     if Vdisx is None:
@@ -283,30 +298,40 @@ def build_system_closed(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_l
     for i in range(Ls):
         mu_s[i] = mu + Vdisx[i]    
 
+    # 1. Left Barrier
     for i in range(Lb):
         syst[lat(i, 0)] = (2 * t - mu_n + barrier_l) * np.kron(sigma_z, sigma_0)
         if i > 0:
             syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
             
+    # 2. Left Normal
     for i in range(Lb, Lb+Ln):
         syst[lat(i, 0)] = (2 * t - mu_n) * np.kron(sigma_z, sigma_0)
         if i > 0: 
             syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
         
+    # 3. Superconductor (Renormalized)
     for i in range(Lb+Ln, Lb+Ln+Ls):
-        syst[lat(i, 0)] = ((2 * t - mu_s[i-Lb-Ln]) * np.kron(sigma_z, sigma_0) + gamma * np.kron(sigma_x, sigma_0) + V_z * np.kron(sigma_0, sigma_x))*Z #<---- renormalizing here, only in superconductor
+        syst[lat(i, 0)] = Z * (2 * t - mu_s[i-Lb-Ln]) * np.kron(sigma_z, sigma_0) \
+                          + Z * V_z * np.kron(sigma_0, sigma_x) \
+                          + Delta_ind * np.kron(sigma_x, sigma_0) 
         if i > 0: 
-            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
+            z_hop = np.sqrt(Z) if i == Lb+Ln else Z
+            syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y))
         
+    # 4. Right Normal
     for i in range(Lb+Ln+Ls, Lb+Ln+Ls+Ln):
         syst[lat(i, 0)] = (2 * t - mu_n) * np.kron(sigma_z, sigma_0)
         if i > 0: 
-            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
+            z_hop = np.sqrt(Z) if i == Lb+Ln+Ls else 1.0
+            syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)) 
         
+    # 5. Right Barrier
     for i in range(Lb+Ln+Ls+Ln, Lb+Ln+Ls+Ln+Lb):
         syst[lat(i, 0)] = (2 * t - mu_n + barrier_r) * np.kron(sigma_z, sigma_0)
         if i > 0: 
-            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
+            z_hop = np.sqrt(Z) if i == Lb+Ln+Ls else 1.0
+            syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y))
     
     return syst.finalized()
 

@@ -18,3 +18,6 @@ cd $SCRATCH/nonlocalcond
 python -u main_parallel.py --dirname "Tdis_b" --fname Tdis.npz --Lb_pdi 3
 
 conda deactivate
+ 
+
+ 
