@@ -39,7 +39,8 @@ def worker_simulation_step(iter_data, static_params):
     # Unpack static parameters
     t = static_params['t']
     mu_n = static_params['mu_n']
-    Delta = static_params['Delta']
+    Delta0 = static_params['Delta0']
+    gamma = static_params['gamma']
     alpha = static_params['alpha']
     Ln = static_params['Ln']
     Lb = static_params['Lb']
@@ -55,12 +56,12 @@ def worker_simulation_step(iter_data, static_params):
     
     
     # --- 1. Build Symmetric System & Calculate Spectral Properties ---
-    syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, V_z=vz, 
+    syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma, V_z=vz, 
                            alpha=alpha, Ln=Ln, Lb=Lb, 
                            Ls=Ls, mu_leads=mu_leads,
                            barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
     
-    syst_closed = hp.build_system_closed(t=t, mu=mu, mu_n=mu_n, Delta=Delta, V_z=vz, 
+    syst_closed = hp.build_system_closed(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma, V_z=vz, 
                            alpha=alpha, Ln=Ln, Lb=Lb, 
                            Ls=Ls, mu_leads=mu_leads,
                            barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
@@ -89,7 +90,7 @@ def worker_simulation_step(iter_data, static_params):
         barrier_var_tot = barrier_arr[k] #+ mu
         
         # Varying Right Barrier (UR)
-        syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, 
+        syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma,
                                   V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
                                   Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
                                   barrier_r=barrier_var_tot, Vdisx=Vdisx)
@@ -99,7 +100,7 @@ def worker_simulation_step(iter_data, static_params):
         b_right_cond_right[k] = cR
         
         # Varying Left Barrier (UL)
-        #syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta=Delta, 
+        #syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma,
         #                          V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
         #                          Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot, 
         #                          barrier_r=barrier_tot, Vdisx=Vdisx)
@@ -146,33 +147,31 @@ def worker_pdi_step(param_tuple, static_params):
     i, mu_pm, vz = param_tuple
     
     # Unpack necessary static params
-    t = static_params['t']
-    Delta = static_params['Delta']
-    alpha = static_params['alpha']
+    ts = static_params['t']
+    alphas = static_params['alpha']
+    gamma = static_params['gamma']
     Ls = static_params['Ls']
     Vdisx = static_params['Vdisx']
-    lb = static_params['Lb']
-    lb_pdi = static_params['Lb_pdi']
-    ln = static_params['Ln']
-    barrier0 = static_params['barrier0']
+    V0 = static_params['V0']
+    qn = static_params['qn']
     
-    barrier_tot = barrier0 #+ mu_pm
-
+    NL_val = qn
     
-    thresh = 0.05
+    Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, NL_val)
     
-    # Calculate PDI
-    # copying Biniyakks original script convention Vdisx --> -Vdisx
-    pdi_val = hp.calculate_pdi_barriers(t, mu_pm, Delta, vz, alpha, Ls, -Vdisx, 
-                                        q_N=20, L_L=lb_pdi, U_L=barrier_tot, L_R=lb_pdi, U_R=barrier_tot)
-    
-    if pdi_val >= 0 + thresh and pdi_val <= 1 - thresh:
-            pdi_val = hp.calculate_pdi_barriers(t, mu_pm, Delta, vz, alpha, Ls, -Vdisx, 
-                                        q_N=100, L_L=lb_pdi, U_L=barrier_tot, L_R=lb_pdi, U_R=barrier_tot)
+    if 0.05 < abs(Q_nu - int(Q_nu)) < 0.95:
+        Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 2 * NL_val)
         
-        
+        if 0.1 < abs(Q_nu - int(Q_nu)) < 0.9:
+            Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 5 * NL_val)
+            
+            if 0.1 < abs(Q_nu - int(Q_nu)) < 0.9:
+                Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 10 * NL_val) 
+                
+    # round the converged invariant to the nearest integer
+    pdi_value = int(np.round(Q_nu))
     
-    return [mu_pm, vz, pdi_val]
+    return [mu_pm, vz, pdi_value]
 
 
 
@@ -190,21 +189,17 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Run parallel transport and PDI simulation.")
     
-    # Add the arguments with their default values
     parser.add_argument("--dirname", type=str, default="test", help="Directory name for saving output data.")
     parser.add_argument("--fname", type=str, default="Vdis1.npz",help="File name for the disorder potential.")
     parser.add_argument("--Lb_pdi", type=int, default=3, help="Barrier length.")
     
-    # Parse the arguments from the command line
     args = parser.parse_args()
 
-    # 2. Assign the parsed arguments to your variables
-    dirname = f"V0_12/nomushift/{args.dirname}"
+    dirname = f"renormalized/{args.dirname}"
     fname = f"New_Disorders/{args.fname}"
     Lb = 3
     Lb_pdi = args.Lb_pdi  
 
-    # Print a quick confirmation so you can verify the SLURM job started correctly
     print(f"--- Starting Simulation ---")
     print(f"Output Directory: {dirname}")
     print(f"Disorder File: {fname}")
@@ -255,7 +250,7 @@ if __name__ == "__main__":
     mu_max = 4.5
     mu_min = 0
     mu_rng = mu_max - mu_min
-    mu_dist = 0.03 #spacing between points
+    mu_dist = 0.02 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
     mu_var = np.linspace(mu_min, mu_max, Nmu)
     
@@ -281,7 +276,7 @@ if __name__ == "__main__":
     path = Path(PathConfigs.RUN_FILES/fname)
     
     try:
-        Vdisx = hp.initialize_vdis_from_data(path) * V0
+        Vdisx = hp.initialize_vdis_from_data(path) 
 
     except:
         print("Warning: Could not load Vdisx from file. Initializing zeros.")
@@ -294,8 +289,11 @@ if __name__ == "__main__":
     static_params = {
         't': t,
         'mu_n': mu_n,
-        'Delta': Delta,
+        'Delta0': Delta_0,
         'alpha': alpha,
+        'gamma': gamma,
+        'V0': V0,
+        'qn': 20,
 
         'Ln': Ln,
         'Lb': Lb,
@@ -402,7 +400,7 @@ if __name__ == "__main__":
     hp.np_save_wrapped(barrier_left_conductance_right_arr, "barrier_left_conductance_right_arr", dirname)
     hp.np_save_wrapped(barrier_arr,"barrier_arr", dirname)
 
-    hp.np_save_wrapped(Conductance_matrix, "Conductance_matrix", dirname)
+    hp.np_save_wrapped(Conductance_matrix, "Conductance_matrix_zero_energy", dirname)
     hp.np_save_wrapped(gamma_sq_arr, "gamma_sq_arr", dirname)
     hp.np_save_wrapped(mp_eng_arr, "mp_eng_arr", dirname)
     hp.np_save_wrapped(mp_arr, "mp_arr", dirname)
