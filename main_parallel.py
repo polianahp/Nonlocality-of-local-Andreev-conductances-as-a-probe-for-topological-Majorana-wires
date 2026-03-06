@@ -195,7 +195,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    dirname = f"renormalized/{args.dirname}"
+    dirname = f"not_renormalized/{args.dirname}"
     fname = f"New_Disorders/{args.fname}"
     Lb = 3
     Lb_pdi = args.Lb_pdi  
@@ -233,7 +233,6 @@ if __name__ == "__main__":
     
     Delta_0= 0.3 # parent SC gap
     gamma = 0.2 # SM-SC coupling strength in meV
-    Z = Delta_0/(Delta_0 + gamma) #renormalization
     Delta = Delta_0 * gamma /(Delta_0 + gamma) #induced gap
     
     mu_leads = 1 # lead chemical potential (meV)
@@ -297,7 +296,7 @@ if __name__ == "__main__":
 
         'Ln': Ln,
         'Lb': Lb,
-        'Lb_pdi':Lb_pdi,
+        #'Lb_pdi':Lb_pdi,
         'Barrier_Height': barrier0,
         'Ls': Ls,
         'mu_leads': mu_leads,
@@ -417,7 +416,6 @@ if __name__ == "__main__":
         'ms': ms,
         'Delta_0': Delta_0,
         'gamma': gamma,
-        'Z': Z,
         'V0': V0,
         'Upoints': Upoints,
         'num_engs': num_engs,

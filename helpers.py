@@ -223,8 +223,7 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
     left_lead = kwant.Builder(sym_left_lead, conservation_law=np.diag([-2, -1, 1, 2])) 
     right_lead = kwant.Builder(sym_right_lead, conservation_law=np.diag([-2, -1, 1, 2])) 
     
-    Z = Delta0/(Delta0 + gamma) # renormalization for the low energy effective hamiltonian.
-    Delta_ind = Z * gamma # explicitly define induced gap
+    Z = 1.0#Delta0/(Delta0 + gamma) # renormalization for the low energy effective hamiltonian.
     
     mu_s = np.zeros(Ls)
     
@@ -250,7 +249,7 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
     for i in range(Lb+Ln, Lb+Ln+Ls):
         syst[lat(i, 0)] = Z * (2 * t - mu_s[i-Lb-Ln]) * np.kron(sigma_z, sigma_0) \
                           + Z * V_z * np.kron(sigma_0, sigma_x) \
-                          + Delta_ind * np.kron(sigma_x, sigma_0) 
+                          + Z * gamma * np.kron(sigma_x, sigma_0) 
         if i > 0: 
             # Boundary hopping is sqrt(Z), bulk SC hopping is Z
             z_hop = np.sqrt(Z) if i == Lb+Ln else Z
@@ -288,8 +287,7 @@ def build_system_closed(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_l
     syst = kwant.Builder()
     lat = kwant.lattice.square(a, norbs=4)
     
-    Z = Delta0/(Delta0 + gamma)
-    Delta_ind = Z * gamma
+    Z = 1.0 #Delta0/(Delta0 + gamma)
     
     mu_s = np.zeros(Ls)
     if Vdisx is None:
@@ -314,7 +312,7 @@ def build_system_closed(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_l
     for i in range(Lb+Ln, Lb+Ln+Ls):
         syst[lat(i, 0)] = Z * (2 * t - mu_s[i-Lb-Ln]) * np.kron(sigma_z, sigma_0) \
                           + Z * V_z * np.kron(sigma_0, sigma_x) \
-                          + Delta_ind * np.kron(sigma_x, sigma_0) 
+                          + Z * gamma * np.kron(sigma_x, sigma_0) 
         if i > 0: 
             z_hop = np.sqrt(Z) if i == Lb+Ln else Z
             syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y))
