@@ -212,18 +212,20 @@ def calc_dIdV(syst, energies):
 ######### The following function builds the system ########
 
 
+######### The following function builds the system ########
+
 def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l, barrier_r, Vdisx = None, a = 1):
     syst = kwant.Builder()
     lat = kwant.lattice.square(a, norbs=4)
 
-    #lead
+    # Leads
     sym_left_lead = kwant.TranslationalSymmetry((-a, 0))
     sym_right_lead = kwant.TranslationalSymmetry((a, 0))
     
     left_lead = kwant.Builder(sym_left_lead, conservation_law=np.diag([-2, -1, 1, 2])) 
     right_lead = kwant.Builder(sym_right_lead, conservation_law=np.diag([-2, -1, 1, 2])) 
     
-    Z = 1.0#Delta0/(Delta0 + gamma) # renormalization for the low energy effective hamiltonian.
+    Z = Delta0/(Delta0 + gamma) # renormalization for the low energy effective hamiltonian.
     
     mu_s = np.zeros(Ls)
     
@@ -233,15 +235,15 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
     for i in range(Ls):
         mu_s[i] = mu + Vdisx[i]  
 
-    # 1. Left Barrier
+    # 1. Left Barrier (Tracks mu)
     for i in range(Lb):
-        syst[lat(i, 0)] = (2 * t - mu_n + barrier_l) * np.kron(sigma_z, sigma_0)
+        syst[lat(i, 0)] = (2 * t - (mu + mu_n) + barrier_l) * np.kron(sigma_z, sigma_0)
         if i > 0:
             syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
             
-    # 2. Left Normal
+    # 2. Left Normal (Tracks mu)
     for i in range(Lb, Lb+Ln):
-        syst[lat(i, 0)] = (2 * t - mu_n) * np.kron(sigma_z, sigma_0)
+        syst[lat(i, 0)] = (2 * t - (mu + mu_n)) * np.kron(sigma_z, sigma_0)
         if i > 0: 
             syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
             
@@ -255,25 +257,27 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
             z_hop = np.sqrt(Z) if i == Lb+Ln else Z
             syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y))
             
-    # 4. Right Normal
+    # 4. Right Normal (Tracks mu)
     for i in range(Lb+Ln+Ls, Lb+Ln+Ls+Ln):
-        syst[lat(i, 0)] = (2 * t - mu_n) * np.kron(sigma_z, sigma_0)
+        syst[lat(i, 0)] = (2 * t - (mu + mu_n)) * np.kron(sigma_z, sigma_0)
         if i > 0: 
             # Boundary hopping exiting SC is sqrt(Z), bulk normal is 1.0
             z_hop = np.sqrt(Z) if i == Lb+Ln+Ls else 1.0
             syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)) 
             
-    # 5. Right Barrier
+    # 5. Right Barrier (Tracks mu)
     for i in range(Lb+Ln+Ls+Ln, Lb+Ln+Ls+Ln+Lb):
-        syst[lat(i, 0)] = (2 * t - mu_n + barrier_r) * np.kron(sigma_z, sigma_0)
+        syst[lat(i, 0)] = (2 * t - (mu + mu_n) + barrier_r) * np.kron(sigma_z, sigma_0)
         if i > 0: 
             # Boundary hopping exiting SC is sqrt(Z) (Applies here if Ln == 0)
             z_hop = np.sqrt(Z) if i == Lb+Ln+Ls else 1.0
             syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y))
     
-    left_lead[lat(0, 0)] = (2 * t - mu_leads) * np.kron(sigma_z, sigma_0) 
+    # 6. Leads (Fermi energy dynamically tracks the semiconductor band bottom)
+    left_lead[lat(0, 0)] = (2 * t - (mu + mu_leads)) * np.kron(sigma_z, sigma_0) 
     left_lead[lat(1, 0), lat(0, 0)] = -t * np.kron(sigma_z, sigma_0)
-    right_lead[lat(0, 0)] = (2 * t - mu_leads) * np.kron(sigma_z, sigma_0) 
+    
+    right_lead[lat(0, 0)] = (2 * t - (mu + mu_leads)) * np.kron(sigma_z, sigma_0) 
     right_lead[lat(1, 0), lat(0, 0)] = -t * np.kron(sigma_z, sigma_0)
 
     syst.attach_lead(left_lead)
@@ -282,12 +286,12 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
 
 
 def build_system_closed(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l, barrier_r, Vdisx = None, a = 1):
-    #Same as above but without leads, for calculating majorana polarization
+    # Same as above but without leads, for calculating majorana polarization
     
     syst = kwant.Builder()
     lat = kwant.lattice.square(a, norbs=4)
     
-    Z = 1.0 #Delta0/(Delta0 + gamma)
+    Z = Delta0/(Delta0 + gamma)
     
     mu_s = np.zeros(Ls)
     if Vdisx is None:
@@ -298,13 +302,13 @@ def build_system_closed(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_l
 
     # 1. Left Barrier
     for i in range(Lb):
-        syst[lat(i, 0)] = (2 * t - mu_n + barrier_l) * np.kron(sigma_z, sigma_0)
+        syst[lat(i, 0)] = (2 * t - (mu + mu_n) + barrier_l) * np.kron(sigma_z, sigma_0)
         if i > 0:
             syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
             
     # 2. Left Normal
     for i in range(Lb, Lb+Ln):
-        syst[lat(i, 0)] = (2 * t - mu_n) * np.kron(sigma_z, sigma_0)
+        syst[lat(i, 0)] = (2 * t - (mu + mu_n)) * np.kron(sigma_z, sigma_0)
         if i > 0: 
             syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
         
@@ -319,14 +323,14 @@ def build_system_closed(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_l
         
     # 4. Right Normal
     for i in range(Lb+Ln+Ls, Lb+Ln+Ls+Ln):
-        syst[lat(i, 0)] = (2 * t - mu_n) * np.kron(sigma_z, sigma_0)
+        syst[lat(i, 0)] = (2 * t - (mu + mu_n)) * np.kron(sigma_z, sigma_0)
         if i > 0: 
             z_hop = np.sqrt(Z) if i == Lb+Ln+Ls else 1.0
             syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)) 
         
     # 5. Right Barrier
     for i in range(Lb+Ln+Ls+Ln, Lb+Ln+Ls+Ln+Lb):
-        syst[lat(i, 0)] = (2 * t - mu_n + barrier_r) * np.kron(sigma_z, sigma_0)
+        syst[lat(i, 0)] = (2 * t - (mu + mu_n) + barrier_r) * np.kron(sigma_z, sigma_0)
         if i > 0: 
             z_hop = np.sqrt(Z) if i == Lb+Ln+Ls else 1.0
             syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y))
@@ -438,6 +442,27 @@ def calc_correlation(f1,f2):
     
     return corr
     
+    
+def calc_spectrum(syst_closed, k=22):
+    """
+    Calculates the k eigenvalues closest to zero for the closed system.
+    Returns them sorted from lowest (most negative) to highest (most positive).
+    """
+    # Extract the tight-binding matrix from the Kwant system
+    ham = syst_closed.hamiltonian_submatrix(sparse=True)
+    
+    try:
+        evals, evecs = sla.eigsh(ham, k=k, sigma=0, which='LM')
+    except:
+        evals = np.linalg.eigvalsh(ham.toarray())
+        
+    # Sort by absolute value to isolate the k states closest to zero
+    idx_abs = np.argsort(np.abs(evals))
+    closest_evals = evals[idx_abs[:k]]
+    
+    sorted_evals = np.sort(closest_evals)
+    
+    return sorted_evals
     
         
     

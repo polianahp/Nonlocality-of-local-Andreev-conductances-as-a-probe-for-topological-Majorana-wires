@@ -50,6 +50,9 @@ def worker_simulation_step(iter_data, static_params):
     Vdisx = static_params['Vdisx']
     energies = static_params['energies']
     barrier_arr = static_params['barrier_arr']
+    num_eigenvalues = static_params['num_eigenvalues']
+    
+    
     
     barrier_tot = barrier0 #+ mu
     
@@ -65,6 +68,8 @@ def worker_simulation_step(iter_data, static_params):
                            alpha=alpha, Ln=Ln, Lb=Lb, 
                            Ls=Ls, mu_leads=mu_leads,
                            barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
+    
+    spectrum = hp.calc_spectrum(syst_closed, k=num_eigenvalues)
     
     # Majorana metrics
     M_profile, energy_0 = hp.calculate_local_mp(syst_closed)
@@ -137,6 +142,7 @@ def worker_simulation_step(iter_data, static_params):
         'b_left_cond_right': b_left_cond_right,
         'rG_corr':rG_corr,
         'lG_corr':lG_corr,
+        'spectrum':spectrum
     }
     return results
 
@@ -235,7 +241,7 @@ if __name__ == "__main__":
     gamma = 0.2 # SM-SC coupling strength in meV
     Delta = Delta_0 * gamma /(Delta_0 + gamma) #induced gap
     
-    mu_leads = 1 # lead chemical potential (meV)
+    mu_leads = t # lead chemical potential (meV)
     
     barrier0 = 2 #barrier energy (meV)
     
@@ -246,15 +252,15 @@ if __name__ == "__main__":
 
     mu_n = 0.0
 
-    mu_max = 4.5
-    mu_min = 0.0
+    mu_max = 2.5
+    mu_min = 2.0
     mu_rng = mu_max - mu_min
     mu_dist = 0.02 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
     mu_var = np.linspace(mu_min, mu_max, Nmu)
     
-    Vz_max = 1.2
-    Vz_min = 0.0
+    Vz_max = 1.0
+    Vz_min = 0.4
     Vz_rng = Vz_max - Vz_min
     Vz_dist = 0.02 #spacing between points
     Nvz = int(Vz_rng/Vz_dist)
@@ -267,6 +273,9 @@ if __name__ == "__main__":
     
     barrier_arr = np.linspace(barrier0, 40*barrier0, Upoints)
     energies = np.linspace(-0.5, 0.5, num_engs)
+    
+    
+    num_eigenvalues = 22 #number of eigenvalues to calculate in the low energy spectra, so 10 above and below the MZMs in this case
 
     # Initialize Disorder
     print(f"Run Files Path Exists: {os.path.exists(PathConfigs.RUN_FILES)}")
@@ -305,7 +314,9 @@ if __name__ == "__main__":
         'Vdisx': Vdisx,
 
         'energies': energies,
-        'barrier_arr': barrier_arr
+        'barrier_arr': barrier_arr,
+        
+        'num_eigenvalues':num_eigenvalues
     }
     
 
@@ -324,6 +335,7 @@ if __name__ == "__main__":
     barrier_left_conductance_right_arr  = np.zeros_like(barrier_right_conductance_left_arr)
     rG_corr_arr = np.zeros(shape = (len(params_list)))
     lG_corr_arr = np.zeros(shape = (len(params_list)))
+    spectrum_arr = np.zeros(shape=(len(params_list), 22))
     
     
     gamma_sq_arr = np.zeros_like(params_list, dtype=complex)
@@ -363,6 +375,7 @@ if __name__ == "__main__":
             barrier_right_conductance_right_arr[idx, :] = res['b_right_cond_right']
             barrier_left_conductance_left_arr[idx, :] = res['b_left_cond_left']
             barrier_left_conductance_right_arr[idx, :] = res['b_left_cond_right']
+            spectrum_arr[idx, :] = res['spectrum']
             
             rG_corr_arr[idx]= res['rG_corr']
             lG_corr_arr[idx]= res['lG_corr']
@@ -405,6 +418,7 @@ if __name__ == "__main__":
     hp.np_save_wrapped(mp_arr, "mp_arr", dirname)
     hp.np_save_wrapped(params_list, "params_list", dirname) 
     
+    hp.np_save_wrapped(spectrum_arr,"spectrum_arr", dirname)
     
     hp.np_save_wrapped(rG_corr_arr,"rG_corr", dirname)
     hp.np_save_wrapped(lG_corr_arr,"lG_corr", dirname)
