@@ -201,7 +201,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    dirname = f"mu_fix/{args.dirname}"
+    dirname = f"mu_fix_test/{args.dirname}"
     fname = f"New_Disorders/{args.fname}"
     Lb = 3
     Lb_pdi = args.Lb_pdi  
@@ -243,7 +243,7 @@ if __name__ == "__main__":
     
     mu_leads = t # lead chemical potential (meV)
     
-    barrier0 = 2 #barrier energy (meV)
+    barrier0 = 75 #barrier energy (meV)
     
     V0 = 1.2#10.5 * Delta 
 
@@ -252,15 +252,15 @@ if __name__ == "__main__":
 
     mu_n = 0.0
 
-    mu_max = 4.5
-    mu_min = 0.0
+    mu_max = 4.0
+    mu_min = 3.5 
     mu_rng = mu_max - mu_min
     mu_dist = 0.02 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
     mu_var = np.linspace(mu_min, mu_max, Nmu)
     
     Vz_max = 1.3
-    Vz_min = 0.0
+    Vz_min = 0.75
     Vz_rng = Vz_max - Vz_min
     Vz_dist = 0.02 #spacing between points
     Nvz = int(Vz_rng/Vz_dist)
