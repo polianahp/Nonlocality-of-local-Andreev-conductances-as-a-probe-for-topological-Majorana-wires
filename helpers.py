@@ -233,7 +233,7 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
         Vdisx  = np.zeros_like(mu_s)
         
     for i in range(Ls):
-        mu_s[i] = mu + Vdisx[i]  
+        mu_s[i] = mu - Vdisx[i]  
 
     # 1. Left Barrier (Tracks mu)
     for i in range(Lb):
@@ -298,7 +298,7 @@ def build_system_closed(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_l
         Vdisx  = np.zeros_like(mu_s)
         
     for i in range(Ls):
-        mu_s[i] = mu + Vdisx[i]    
+        mu_s[i] = mu - Vdisx[i]    
 
     # 1. Left Barrier
     for i in range(Lb):
