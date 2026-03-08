@@ -241,7 +241,7 @@ if __name__ == "__main__":
     gamma = 0.2 # SM-SC coupling strength in meV
     Delta = Delta_0 * gamma /(Delta_0 + gamma) #induced gap
     
-    mu_leads = t # lead chemical potential (meV)
+    mu_leads = 0#t # lead chemical potential (meV)
     
     barrier0 = 75 #barrier energy (meV)
     
