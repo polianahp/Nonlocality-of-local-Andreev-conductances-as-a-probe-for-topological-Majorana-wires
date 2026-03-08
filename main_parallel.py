@@ -201,7 +201,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    dirname = f"b75_mu_t/{args.dirname}"
+    dirname = f"b5_mu_0/{args.dirname}"
     fname = f"New_Disorders/{args.fname}"
     Lb = 3
     Lb_pdi = args.Lb_pdi  
@@ -241,9 +241,9 @@ if __name__ == "__main__":
     gamma = 0.2 # SM-SC coupling strength in meV
     Delta = Delta_0 * gamma /(Delta_0 + gamma) #induced gap
     
-    mu_leads = t # lead chemical potential (meV)
+    mu_leads = 0 # lead chemical potential (meV)
     
-    barrier0 = 75 #barrier energy (meV)
+    barrier0 = 5 #barrier energy (meV)
     
     V0 = 1.2#10.5 * Delta 
 
