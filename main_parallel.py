@@ -201,7 +201,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    dirname = f"mu_fix_test/{args.dirname}"
+    dirname = f"b75_mu_t/{args.dirname}"
     fname = f"New_Disorders/{args.fname}"
     Lb = 3
     Lb_pdi = args.Lb_pdi  
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     gamma = 0.2 # SM-SC coupling strength in meV
     Delta = Delta_0 * gamma /(Delta_0 + gamma) #induced gap
     
-    mu_leads = 0#t # lead chemical potential (meV)
+    mu_leads = t # lead chemical potential (meV)
     
     barrier0 = 75 #barrier energy (meV)
     
@@ -253,9 +253,9 @@ if __name__ == "__main__":
     mu_n = 0.0
 
     mu_max = 4.0
-    mu_min = 3.5 
+    mu_min = 1
     mu_rng = mu_max - mu_min
-    mu_dist = 0.02 #spacing between points
+    mu_dist = 0.04 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
     mu_var = np.linspace(mu_min, mu_max, Nmu)
     
