@@ -202,7 +202,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    dirname = f"momoentoftruth/{args.dirname}"
+    dirname = f"b2_momoentoftruth/{args.dirname}"
     fname = f"New_Disorders/{args.fname}"
     Lb = 3
     Lb_pdi = args.Lb_pdi  
@@ -244,7 +244,7 @@ if __name__ == "__main__":
     
     mu_leads = t # lead chemical potential (meV)
     
-    barrier0 = 10 #barrier energy (meV)
+    barrier0 = 2 #barrier energy (meV)
     
     V0 = 1.2#10.5 * Delta 
 
