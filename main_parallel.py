@@ -202,7 +202,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    dirname = f"clean_standard/{args.dirname}"
+    dirname = f"clean_short/{args.dirname}"
     fname = f"New_Disorders/{args.fname}"
     Lb = 3
     Lb_pdi = args.Lb_pdi  
@@ -261,9 +261,9 @@ if __name__ == "__main__":
     mu_var = np.linspace(mu_min, mu_max, Nmu)
     
     Vz_max = 0.8
-    Vz_min = 0.0
+    Vz_min = 0.3
     Vz_rng = Vz_max - Vz_min
-    Vz_dist = 0.02 #spacing between points
+    Vz_dist = 0.04 #spacing between points
     Nvz = int(Vz_rng/Vz_dist)
     Vz_var = np.linspace(Vz_min, Vz_max, Nvz) 
     

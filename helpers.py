@@ -209,8 +209,6 @@ def calc_dIdV(syst, energies):
         
     return dIdV_left, dIdV_right, ldos 
 
-######### The following function builds the system ########
-
 
 ######### The following function builds the system ########
 
@@ -235,14 +233,13 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
     for i in range(Ls):
         mu_s[i] = mu - Vdisx[i]  
 
-    # 1. Left Barrier (Tracks mu)
+    # 1. Left Barrier 
     for i in range(Lb):
         syst[lat(i, 0)] = (2 * t - (mu + mu_n) + barrier_l) * np.kron(sigma_z, sigma_0)
         if i > 0:
             syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
             
-    # 2. Left Normal (Tracks mu)
-    for i in range(Lb, Lb+Ln):
+    # 2. Left Normal     for i in range(Lb, Lb+Ln):
         syst[lat(i, 0)] = (2 * t - (mu + mu_n)) * np.kron(sigma_z, sigma_0)
         if i > 0: 
             syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
@@ -257,7 +254,7 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
             z_hop = np.sqrt(Z) if i == Lb+Ln else Z
             syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y))
             
-    # 4. Right Normal (Tracks mu)
+    # 4. Right Normal 
     for i in range(Lb+Ln+Ls, Lb+Ln+Ls+Ln):
         syst[lat(i, 0)] = (2 * t - (mu + mu_n)) * np.kron(sigma_z, sigma_0)
         if i > 0: 
