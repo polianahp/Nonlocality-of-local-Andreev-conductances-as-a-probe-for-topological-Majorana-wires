@@ -235,14 +235,9 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
 
     # 1. Left Barrier 
     for i in range(Lb):
-        syst[lat(i, 0)] = (2 * t - (mu + mu_n) + barrier_l) * np.kron(sigma_z, sigma_0)
+        syst[lat(i, 0)] = (2 * t + barrier_l) * np.kron(sigma_z, sigma_0)
         if i > 0:
             syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
-            
-    # 2. Left Normal     for i in range(Lb, Lb+Ln):
-        syst[lat(i, 0)] = (2 * t - (mu + mu_n)) * np.kron(sigma_z, sigma_0)
-        if i > 0: 
-            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
             
     # 3. Superconductor (Renormalized)
     for i in range(Lb+Ln, Lb+Ln+Ls):
@@ -254,27 +249,20 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
             z_hop = np.sqrt(Z) if i == Lb+Ln else Z
             syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y))
             
-    # 4. Right Normal 
-    for i in range(Lb+Ln+Ls, Lb+Ln+Ls+Ln):
-        syst[lat(i, 0)] = (2 * t - (mu + mu_n)) * np.kron(sigma_z, sigma_0)
-        if i > 0: 
-            # Boundary hopping exiting SC is sqrt(Z), bulk normal is 1.0
-            z_hop = np.sqrt(Z) if i == Lb+Ln+Ls else 1.0
-            syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)) 
-            
+
     # 5. Right Barrier (Tracks mu)
     for i in range(Lb+Ln+Ls+Ln, Lb+Ln+Ls+Ln+Lb):
-        syst[lat(i, 0)] = (2 * t - (mu + mu_n) + barrier_r) * np.kron(sigma_z, sigma_0)
+        syst[lat(i, 0)] = (2 * t + barrier_r) * np.kron(sigma_z, sigma_0)
         if i > 0: 
             # Boundary hopping exiting SC is sqrt(Z) (Applies here if Ln == 0)
             z_hop = np.sqrt(Z) if i == Lb+Ln+Ls else 1.0
             syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y))
     
-    # 6. Leads (Fermi energy dynamically tracks the semiconductor band bottom)
-    left_lead[lat(0, 0)] = (2 * t - (mu + mu_leads)) * np.kron(sigma_z, sigma_0) 
+    
+    left_lead[lat(0, 0)] = (2 * t - (mu_leads)) * np.kron(sigma_z, sigma_0) 
     left_lead[lat(1, 0), lat(0, 0)] = -t * np.kron(sigma_z, sigma_0)
     
-    right_lead[lat(0, 0)] = (2 * t - (mu + mu_leads)) * np.kron(sigma_z, sigma_0) 
+    right_lead[lat(0, 0)] = (2 * t - (mu_leads)) * np.kron(sigma_z, sigma_0) 
     right_lead[lat(1, 0), lat(0, 0)] = -t * np.kron(sigma_z, sigma_0)
 
     syst.attach_lead(left_lead)

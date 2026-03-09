@@ -197,12 +197,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run parallel transport and PDI simulation.")
     
     parser.add_argument("--dirname", type=str, default="test", help="Directory name for saving output data.")
-    parser.add_argument("--fname", type=str, default="Vdis1.npz",help="File name for the disorder potential.")
+    parser.add_argument("--fname", type=str, default="Tdis.npz",help="File name for the disorder potential.")
     parser.add_argument("--Lb_pdi", type=int, default=3, help="Barrier length.")
     
     args = parser.parse_args()
 
-    dirname = f"clean_short/{args.dirname}"
+    dirname = f"momoentoftruth/{args.dirname}"
     fname = f"New_Disorders/{args.fname}"
     Lb = 3
     Lb_pdi = args.Lb_pdi  
@@ -246,24 +246,24 @@ if __name__ == "__main__":
     
     barrier0 = 10 #barrier energy (meV)
     
-    V0 = 0.0#1.2#10.5 * Delta 
+    V0 = 1.2#10.5 * Delta 
 
     Upoints = 20 
     num_engs = 101  
 
     mu_n = 0.0
 
-    mu_max = 0.5
-    mu_min = -0.5
+    mu_max = 4.5
+    mu_min = 0.0
     mu_rng = mu_max - mu_min
-    mu_dist = 0.04 #spacing between points
+    mu_dist = 0.02 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
     mu_var = np.linspace(mu_min, mu_max, Nmu)
     
-    Vz_max = 0.8
-    Vz_min = 0.3
+    Vz_max = 1.3
+    Vz_min = 0.0
     Vz_rng = Vz_max - Vz_min
-    Vz_dist = 0.04 #spacing between points
+    Vz_dist = 0.02 #spacing between points
     Nvz = int(Vz_rng/Vz_dist)
     Vz_var = np.linspace(Vz_min, Vz_max, Nvz) 
     
@@ -284,14 +284,10 @@ if __name__ == "__main__":
     
     path = Path(PathConfigs.RUN_FILES/fname)
     
-    try:
-        Vdisx = hp.initialize_vdis_from_data(path)  
+    Vdisx = hp.initialize_vdis_from_data(path)  
 
-    except:
-        print("Warning: Could not load Vdisx from file. Initializing zeros.")
-        Vdisx = np.zeros(Ls)
         
-    
+    #print(Vdisx)
     
 
     # Dictionary of static parameters to pass to workers
