@@ -48,11 +48,12 @@ def worker_simulation_step(iter_data, static_params):
     mu_leads = static_params['mu_leads']
     barrier0 = static_params['barrier0']
     Vdisx = static_params['Vdisx']
+    V0 = static_params['V0']
     energies = static_params['energies']
     barrier_arr = static_params['barrier_arr']
     num_eigenvalues = static_params['num_eigenvalues']
     
-    
+    Vdisx = Vdisx * V0
     
     barrier_tot = barrier0 #+ mu
     
@@ -201,7 +202,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    dirname = f"b10_standard_run/{args.dirname}"
+    dirname = f"clean_standard/{args.dirname}"
     fname = f"New_Disorders/{args.fname}"
     Lb = 3
     Lb_pdi = args.Lb_pdi  
@@ -245,21 +246,21 @@ if __name__ == "__main__":
     
     barrier0 = 10 #barrier energy (meV)
     
-    V0 = 1.2#10.5 * Delta 
+    V0 = 0.0#1.2#10.5 * Delta 
 
     Upoints = 20 
     num_engs = 101  
 
     mu_n = 0.0
 
-    mu_max = 4.5
-    mu_min = 0.0
+    mu_max = 0.5
+    mu_min = -0.5
     mu_rng = mu_max - mu_min
     mu_dist = 0.04 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
     mu_var = np.linspace(mu_min, mu_max, Nmu)
     
-    Vz_max = 1.3
+    Vz_max = 0.8
     Vz_min = 0.0
     Vz_rng = Vz_max - Vz_min
     Vz_dist = 0.02 #spacing between points
@@ -284,7 +285,7 @@ if __name__ == "__main__":
     path = Path(PathConfigs.RUN_FILES/fname)
     
     try:
-        Vdisx = hp.initialize_vdis_from_data(path) 
+        Vdisx = hp.initialize_vdis_from_data(path)  
 
     except:
         print("Warning: Could not load Vdisx from file. Initializing zeros.")
