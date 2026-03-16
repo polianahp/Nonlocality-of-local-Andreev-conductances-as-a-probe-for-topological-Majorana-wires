@@ -65,10 +65,7 @@ def worker_simulation_step(iter_data, static_params):
                            Ls=Ls, mu_leads=mu_leads,
                            barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
     
-    syst_closed = hp.build_system_closed(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma, V_z=vz, 
-                           alpha=alpha, Ln=Ln, Lb=Lb, 
-                           Ls=Ls, mu_leads=mu_leads,
-                           barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
+    syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
     
     spectrum = hp.calc_spectrum(syst_closed, k=num_eigenvalues)
     
@@ -183,9 +180,9 @@ def worker_pdi_step(param_tuple, static_params):
 
 
 #### constants: 
-hbar = 6.58211899e-16  # eV·s
-m0   = 9.10938291e-31  # kg
-e0 = 1.602176487e-19   # C
+hbar = 6.582119569e-16  # eV·s
+m0   = 9.10938356e-31  # kg
+e0   = 1.602176634e-19   # C
 eta_m = (hbar ** 2 * e0) * (1e20)/m0 # hbar^2/m0 in eV A^2
 mu_B =  5.7883818066e-2  #in meV/T
 meVpK = 8.6173325e-2 # Kelvin into meV 
@@ -202,7 +199,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    dirname = f"b2_momoentoftruth/{args.dirname}"
+    dirname = f"spectra_fix/{args.dirname}"
     fname = f"New_Disorders/{args.fname}"
     Lb = 3
     Lb_pdi = args.Lb_pdi  

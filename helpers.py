@@ -225,6 +225,7 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
     
     Z = Delta0/(Delta0 + gamma) # renormalization for the low energy effective hamiltonian.
     
+    
     mu_s = np.zeros(Ls)
     
     if Vdisx is None:
@@ -232,12 +233,14 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
         
     for i in range(Ls):
         mu_s[i] = mu - Vdisx[i]  
+        
+    
 
     # 1. Left Barrier 
     for i in range(Lb):
         syst[lat(i, 0)] = (2 * t + barrier_l) * np.kron(sigma_z, sigma_0)
         if i > 0:
-            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
+            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 0.5*1j*alpha * np.kron(sigma_z, sigma_y) 
             
     # 3. Superconductor (Renormalized)
     for i in range(Lb+Ln, Lb+Ln+Ls):
@@ -247,16 +250,16 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
         if i > 0: 
             # Boundary hopping is sqrt(Z), bulk SC hopping is Z
             z_hop = np.sqrt(Z) if i == Lb+Ln else Z
-            syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y))
+            syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 0.5*1j*alpha * np.kron(sigma_z, sigma_y))
             
 
-    # 5. Right Barrier (Tracks mu)
+    # 5. Right Barrier 
     for i in range(Lb+Ln+Ls+Ln, Lb+Ln+Ls+Ln+Lb):
         syst[lat(i, 0)] = (2 * t + barrier_r) * np.kron(sigma_z, sigma_0)
         if i > 0: 
             # Boundary hopping exiting SC is sqrt(Z) (Applies here if Ln == 0)
             z_hop = np.sqrt(Z) if i == Lb+Ln+Ls else 1.0
-            syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y))
+            syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 0.5*1j*alpha * np.kron(sigma_z, sigma_y))
     
     
     left_lead[lat(0, 0)] = (2 * t - (mu_leads)) * np.kron(sigma_z, sigma_0) 
@@ -270,55 +273,32 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
     return syst.finalized()
 
 
-def build_system_closed(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l, barrier_r, Vdisx = None, a = 1):
-    # Same as above but without leads, for calculating majorana polarization
+def build_system_closed(t, mu, gamma, Delta0, V_z, alpha, Ls, Vdisx, a=1):
+    # Strictly the SM-SC region (no barriers or leads)
     
     syst = kwant.Builder()
     lat = kwant.lattice.square(a, norbs=4)
     
-    Z = Delta0/(Delta0 + gamma)
+    Z = Delta0 / (Delta0 + gamma)
+    
+    # Calculate the finite-size corrected band bottom
+    epsilon0 = 2 * t * np.cos(np.pi / (Ls + 1.0))
     
     mu_s = np.zeros(Ls)
-    if Vdisx is None:
-        Vdisx  = np.zeros_like(mu_s)
         
     for i in range(Ls):
-        mu_s[i] = mu - Vdisx[i]    
+        mu_s[i] = mu - Vdisx[i]
 
-    # 1. Left Barrier
-    for i in range(Lb):
-        syst[lat(i, 0)] = (2 * t - (mu + mu_n) + barrier_l) * np.kron(sigma_z, sigma_0)
-        if i > 0:
-            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y) 
-            
-    # 2. Left Normal
-    for i in range(Lb, Lb+Ln):
-        syst[lat(i, 0)] = (2 * t - (mu + mu_n)) * np.kron(sigma_z, sigma_0)
-        if i > 0: 
-            syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)
-        
-    # 3. Superconductor (Renormalized)
-    for i in range(Lb+Ln, Lb+Ln+Ls):
-        syst[lat(i, 0)] = Z * (2 * t - mu_s[i-Lb-Ln]) * np.kron(sigma_z, sigma_0) \
+    # 1. Superconductor (Renormalized) - Only region left
+    for i in range(Ls):
+        # Replaced 2 * t with epsilon0
+        syst[lat(i, 0)] = Z * (epsilon0 - mu_s[i]) * np.kron(sigma_z, sigma_0) \
                           + Z * V_z * np.kron(sigma_0, sigma_x) \
                           + Z * gamma * np.kron(sigma_x, sigma_0) 
-        if i > 0: 
-            z_hop = np.sqrt(Z) if i == Lb+Ln else Z
-            syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y))
         
-    # 4. Right Normal
-    for i in range(Lb+Ln+Ls, Lb+Ln+Ls+Ln):
-        syst[lat(i, 0)] = (2 * t - (mu + mu_n)) * np.kron(sigma_z, sigma_0)
         if i > 0: 
-            z_hop = np.sqrt(Z) if i == Lb+Ln+Ls else 1.0
-            syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y)) 
-        
-    # 5. Right Barrier
-    for i in range(Lb+Ln+Ls+Ln, Lb+Ln+Ls+Ln+Lb):
-        syst[lat(i, 0)] = (2 * t - (mu + mu_n) + barrier_r) * np.kron(sigma_z, sigma_0)
-        if i > 0: 
-            z_hop = np.sqrt(Z) if i == Lb+Ln+Ls else 1.0
-            syst[lat(i, 0), lat(i-1, 0)] = z_hop * (-t * np.kron(sigma_z, sigma_0) + 1j*alpha * np.kron(sigma_z, sigma_y))
+            # Uniform hopping throughout the pure SM-SC wire
+            syst[lat(i, 0), lat(i-1, 0)] = Z * (-t * np.kron(sigma_z, sigma_0) + 0.5*1j*alpha * np.kron(sigma_z, sigma_y))
     
     return syst.finalized()
 
