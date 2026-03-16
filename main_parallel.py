@@ -334,7 +334,7 @@ if __name__ == "__main__":
     
     gamma_sq_arr = np.zeros_like(params_list, dtype=complex)
     mp_eng_arr = np.zeros_like(params_list)
-    lenw = Ls + 2*(Lb + Ln)
+    lenw = Ls #+ 2*(Lb + Ln)
     mp_arr = np.zeros(shape= (len(params_list), lenw))
     Conductance_matrix = np.zeros(shape=(len(params_list),2, 2))
     
