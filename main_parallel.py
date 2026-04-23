@@ -289,7 +289,7 @@ if __name__ == "__main__":
     
     path = Path(PathConfigs.RUN_FILES/fname)
     
-    Vdisx = 0* hp.initialize_vdis_from_data(path)  
+    Vdisx = hp.initialize_vdis_from_data(path)  
 
         
     #print(Vdisx)
