@@ -1,3 +1,4 @@
+# Test comment for write access verification
 import os
 
 # 1. THREAD CONTROL: Must be set BEFORE importing numpy/scipy/kwant
@@ -78,17 +79,35 @@ def worker_simulation_step(iter_data, static_params):
     #dIdVl, dIdVr, ldos = hp.calc_dIdV(syst, energies)
     Gmat = hp.calc_conductance_matrix(syst, 0.0)
     
-    # --- 2. Barrier Sweeps (Nested Loop logic) ---
+    # --- 2. Peak Detection (ueV Window) ---
+    # energies_peak: -1.5 ueV to +1.5 ueV (converted to meV)
+    engrng = 21
+    energies_peak = np.linspace(-0.11, 0.11, engrng)
+    cond_peak_l = np.zeros(engrng)
+    cond_peak_r = np.zeros(engrng)
+    
+    for k_eng, eng in enumerate(energies_peak):
+        cL_p, cR_p = hp.calc_conductance(syst, energy=eng)
+        cond_peak_l[k_eng] = cL_p
+        cond_peak_r[k_eng] = cR_p
+        
+    prominence = static_params.get('peak_prominence', 0.01)
+    has_peak_l, split_l = hp.detect_peaks(cond_peak_l, energies_peak, prominence=prominence)
+    has_peak_r, split_r = hp.detect_peaks(cond_peak_r, energies_peak, prominence=prominence)
+
+    # --- 3. Right Barrier Sweeps (UR) across Finite Biases ---
+    bias_energies = np.array([-0.015, -0.010, -0.005, 0.0, 0.005, 0.010, 0.015])
+    num_bias = len(bias_energies)
     points = len(barrier_arr)
     
-    # Pre-allocate local arrays
-    b_right_cond_left = np.zeros(points)
-    b_right_cond_right = np.zeros(points)
-    b_left_cond_left = np.zeros(points)
-    b_left_cond_right = np.zeros(points)
+    # Pre-allocate local arrays: (num_bias, points)
+    b_right_cond_left = np.zeros((num_bias, points))
+    b_right_cond_right = np.zeros((num_bias, points))
+    
+    # Scattering Coeffs Storage: (num_bias, points, 16)
+    b_right_coeffs = np.zeros((num_bias, points, 16))
 
-    # Note: this is run serially inside the worker because the overhead 
-    # of spawning sub-processes here would be too high.
+    # Rebuilding the system once per barrier point, then looping over biases for efficiency
     for k in range(points):
         barrier_var_tot = barrier_arr[k] #+ mu
         
@@ -98,30 +117,15 @@ def worker_simulation_step(iter_data, static_params):
                                   Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
                                   barrier_r=barrier_var_tot, Vdisx=Vdisx)
         
-        cL, cR = hp.calc_conductance(syst_UR, energy=0.0)
-        b_right_cond_left[k] = cL
-        b_right_cond_right[k] = cR
+        for b_idx, bias in enumerate(bias_energies):
+            cL_r, cR_r, coeffs_r = hp.calc_conductance(syst_UR, energy=bias, return_coeffs=True)
+            b_right_cond_left[b_idx, k] = cL_r
+            b_right_cond_right[b_idx, k] = cR_r
+            b_right_coeffs[b_idx, k, :] = coeffs_r
         
-        # Varying Left Barrier (UL)
-        #syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma,
-        #                          V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
-        #                          Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot, 
-        #                          barrier_r=barrier_tot, Vdisx=Vdisx)
-#
-        #cL, cR = hp.calc_conductance(syst_UL, energy=0.0)
-        #b_left_cond_left[k] = cL
-        #b_left_cond_right[k] = cR
-        
-    l_Gll, l_GRR = b_left_cond_left, b_left_cond_right #varying left barrier and getting local conductances
-    r_Gll, r_GRR = b_right_cond_left, b_right_cond_right #varying left barrier and getting local conductances
-    
-    
-    
-    #rG_corr = np.dot(r_Gll, r_GRR)/(np.linalg.norm(r_Gll) * np.linalg.norm(r_GRR))
-    #rG_corr = np.dot(r_Gll, r_GRR)/(np.linalg.norm(    r_Gll) * np.linalg.norm(r_GRR))
-    
-    rG_corr = hp.calc_correlation(r_Gll, r_GRR)
-    lG_corr = 0#hp.calc_correlation(l_Gll, l_GRR)
+    rG_corr_bias = np.zeros(num_bias)
+    for b_idx in range(num_bias):
+        rG_corr_bias[b_idx] = hp.calc_correlation(b_right_cond_left[b_idx, :], b_right_cond_right[b_idx, :])
 
     
     # Pack all results into a dictionary to return to main process
@@ -136,11 +140,13 @@ def worker_simulation_step(iter_data, static_params):
         'M_profile': M_profile,
         'b_right_cond_left': b_right_cond_left,
         'b_right_cond_right': b_right_cond_right,
-        'b_left_cond_left': b_left_cond_left,
-        'b_left_cond_right': b_left_cond_right,
-        'rG_corr':rG_corr,
-        'lG_corr':lG_corr,
-        'spectrum':spectrum
+        'b_right_coeffs': b_right_coeffs,
+        'rG_corr': rG_corr_bias,
+        'spectrum':spectrum,
+        'peak_l': has_peak_l,
+        'split_l': split_l,
+        'peak_r': has_peak_r,
+        'split_r': split_r
     }
     return results
 
@@ -193,7 +199,7 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Run parallel transport and PDI simulation.")
     
-    parser.add_argument("--dirname", type=str, default="test", help="Directory name for saving output data.")
+    parser.add_argument("--dirname", type=str, default="test_changes", help="Directory name for saving output data.")
     parser.add_argument("--fname", type=str, default="Tdis.npz",help="File name for the disorder potential.")
     parser.add_argument("--Lb_pdi", type=int, default=3, help="Barrier length.")
     
@@ -245,7 +251,7 @@ if __name__ == "__main__":
     
     V0 = 1.2#10.5 * Delta 
 
-    Upoints = 20 
+    Upoints = 10 
     num_engs = 101  
 
     mu_n = 0.0
@@ -253,6 +259,7 @@ if __name__ == "__main__":
     mu_max = 4.5
     mu_min = 0.0
     mu_rng = mu_max - mu_min
+    #mu_dist = 1. #spacing between points
     mu_dist = 0.02 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
     mu_var = np.linspace(mu_min, mu_max, Nmu)
@@ -260,6 +267,7 @@ if __name__ == "__main__":
     Vz_max = 1.3
     Vz_min = 0.0
     Vz_rng = Vz_max - Vz_min
+    #Vz_dist = 0.5 #spacing between points
     Vz_dist = 0.02 #spacing between points
     Nvz = int(Vz_rng/Vz_dist)
     Vz_var = np.linspace(Vz_min, Vz_max, Nvz) 
@@ -281,7 +289,7 @@ if __name__ == "__main__":
     
     path = Path(PathConfigs.RUN_FILES/fname)
     
-    Vdisx = hp.initialize_vdis_from_data(path)  
+    Vdisx = 0* hp.initialize_vdis_from_data(path)  
 
         
     #print(Vdisx)
@@ -310,7 +318,8 @@ if __name__ == "__main__":
         'energies': energies,
         'barrier_arr': barrier_arr,
         
-        'num_eigenvalues':num_eigenvalues
+        'num_eigenvalues':num_eigenvalues,
+        'peak_prominence': 0.01
     }
     
 
@@ -323,12 +332,14 @@ if __name__ == "__main__":
     dIdVs_left_arr = np.zeros(shape = (len(params_list), len(energies)))
     dIdVs_right_arr = np.zeros(shape = (len(params_list), len(energies)))
 
-    barrier_right_conductance_left_arr  = np.zeros(shape=(len(params_list), Upoints))
+    num_bias = 7
+    barrier_right_conductance_left_arr  = np.zeros(shape=(len(params_list), num_bias, Upoints))
     barrier_right_conductance_right_arr = np.zeros_like(barrier_right_conductance_left_arr)
-    barrier_left_conductance_left_arr   = np.zeros_like(barrier_right_conductance_left_arr)
-    barrier_left_conductance_right_arr  = np.zeros_like(barrier_right_conductance_left_arr)
-    rG_corr_arr = np.zeros(shape = (len(params_list)))
-    lG_corr_arr = np.zeros(shape = (len(params_list)))
+    
+    # Scattering Coefficients Storage: (params, num_bias, points, 16)
+    b_right_coeffs_arr = np.zeros(shape=(len(params_list), num_bias, Upoints, 16))
+
+    rG_corr_arr = np.zeros(shape = (len(params_list), num_bias))
     spectrum_arr = np.zeros(shape=(len(params_list), 22))
     
     
@@ -338,6 +349,11 @@ if __name__ == "__main__":
     mp_arr = np.zeros(shape= (len(params_list), lenw))
     Conductance_matrix = np.zeros(shape=(len(params_list),2, 2))
     
+    # Peak Detection Storage
+    peak_l_arr = np.zeros(len(params_list))
+    split_l_arr = np.zeros(len(params_list))
+    peak_r_arr = np.zeros(len(params_list))
+    split_r_arr = np.zeros(len(params_list))
     
     num_workers = max(1, mp.cpu_count() - 1)
     print(f"Starting Parallel Execution with {num_workers} workers.")
@@ -365,14 +381,17 @@ if __name__ == "__main__":
             mp_eng_arr[idx] = res['energy_0']
             mp_arr[idx, :] = res['M_profile']
             
-            barrier_right_conductance_left_arr[idx, :] = res['b_right_cond_left']
-            barrier_right_conductance_right_arr[idx, :] = res['b_right_cond_right']
-            barrier_left_conductance_left_arr[idx, :] = res['b_left_cond_left']
-            barrier_left_conductance_right_arr[idx, :] = res['b_left_cond_right']
+            barrier_right_conductance_left_arr[idx, :, :] = res['b_right_cond_left']
+            barrier_right_conductance_right_arr[idx, :, :] = res['b_right_cond_right']
+            b_right_coeffs_arr[idx, :, :, :] = res['b_right_coeffs']
             spectrum_arr[idx, :] = res['spectrum']
             
-            rG_corr_arr[idx]= res['rG_corr']
-            lG_corr_arr[idx]= res['lG_corr']
+            rG_corr_arr[idx, :]= res['rG_corr']
+            
+            peak_l_arr[idx] = res['peak_l']
+            split_l_arr[idx] = res['split_l']
+            peak_r_arr[idx] = res['peak_r']
+            split_r_arr[idx] = res['split_r']
             
 
         print("\n--- Starting PDI Calculation ---")
@@ -402,8 +421,7 @@ if __name__ == "__main__":
     #hp.np_save_wrapped(ldos_arr, "LDOS", dirname)
     hp.np_save_wrapped(barrier_right_conductance_left_arr, "barrier_right_conductance_left_arr", dirname)
     hp.np_save_wrapped(barrier_right_conductance_right_arr, "barrier_right_conductance_right_arr", dirname)    
-    hp.np_save_wrapped(barrier_left_conductance_left_arr, "barrier_left_conductance_left_arr", dirname)    
-    hp.np_save_wrapped(barrier_left_conductance_right_arr, "barrier_left_conductance_right_arr", dirname)
+    hp.np_save_wrapped(b_right_coeffs_arr, "b_right_scattering_coeffs", dirname)
     hp.np_save_wrapped(barrier_arr,"barrier_arr", dirname)
 
     hp.np_save_wrapped(Conductance_matrix, "Conductance_matrix_zero_energy", dirname)
@@ -415,7 +433,11 @@ if __name__ == "__main__":
     hp.np_save_wrapped(spectrum_arr,"spectrum_arr", dirname)
     
     hp.np_save_wrapped(rG_corr_arr,"rG_corr", dirname)
-    hp.np_save_wrapped(lG_corr_arr,"lG_corr", dirname)
+
+    hp.np_save_wrapped(peak_l_arr, "peak_l_arr", dirname)
+    hp.np_save_wrapped(split_l_arr, "split_l_arr", dirname)
+    hp.np_save_wrapped(peak_r_arr, "peak_r_arr", dirname)
+    hp.np_save_wrapped(split_r_arr, "split_r_arr", dirname)
     
     all_params = {
         **static_params,  # unpacks 't', 'mu_n', 'Delta', 'alpha', etc.
@@ -441,7 +463,7 @@ if __name__ == "__main__":
         'Vz_dist': Vz_dist,
         'Nvz': Nvz,
         'Vz_var': Vz_var,
-        
+        'bias_energies': np.array([-0.015, -0.010, -0.005, 0.0, 0.005, 0.010, 0.015])
     }
     hp.np_savez_wrapped("all_params", dirname, **all_params)
     

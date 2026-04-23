@@ -6,8 +6,7 @@ import os
 from config import PathConfigs
 from pathlib import Path
 import scipy.sparse.linalg as sla
-
-
+from scipy.signal import find_peaks
 
 #pauli matrices
 sigma_0 = tinyarray.array([[1, 0], [0, 1]])
@@ -42,24 +41,47 @@ def np_load_wrapped(filename, subdirectory):
 ######## Calculation Helpers ########
 
 
-def calc_conductance(syst, energy = 0.0, return_smatrix = False):
+def calc_conductance(syst, energy = 0.0, return_smatrix = False, return_coeffs = False):
     smatrix = kwant.smatrix(syst, energy)
     
-    R = 0
-    A = 0
-    for i in range(2):
-        for j in range(2):
-            R = R + smatrix.transmission((0, j), (0, i))
-            A = A + smatrix.transmission((0, j+2), (0, i))
-    cleft = 2 - R + A
-    R = 0
-    A = 0
-    for i in range(2):
-        for j in range(2):
-            R = R + smatrix.transmission((1, j), (1, i))
-            A = A + smatrix.transmission((1, j+2), (1, i))
-    cright = 2 - R + A
+    # 0: e_up, 1: e_down, 2: h_down, 3: h_up
     
+    # Left Lead (0)
+    R0 = 0
+    A0 = 0
+    for i in range(2): # incoming electrons
+        for j in range(2): # outgoing electrons/holes
+            R0 += smatrix.transmission((0, j), (0, i))
+            A0 += smatrix.transmission((0, j+2), (0, i))
+    cleft = 2 - R0 + A0
+    
+    # Right Lead (1)
+    R1 = 0
+    A1 = 0
+    for i in range(2):
+        for j in range(2):
+            R1 += smatrix.transmission((1, j), (1, i))
+            A1 += smatrix.transmission((1, j+2), (1, i))
+    cright = 2 - R1 + A1
+    
+    if return_coeffs:
+        # Normal Reflection R_out_in (i=in, j=out)
+        # R_uu, R_du, R_ud, R_dd
+        l_coeffs_r = [smatrix.transmission((0,0),(0,0)), smatrix.transmission((0,1),(0,0)), 
+                      smatrix.transmission((0,0),(0,1)), smatrix.transmission((0,1),(0,1))]
+        r_coeffs_r = [smatrix.transmission((1,0),(1,0)), smatrix.transmission((1,1),(1,0)), 
+                      smatrix.transmission((1,0),(1,1)), smatrix.transmission((1,1),(1,1))]
+        
+        # Andreev Reflection A_out_in (0=e_up, 1=e_down, 2=h_down, 3=h_up)
+        # A_uu (e_up->h_up), A_du (e_up->h_down), A_ud (e_down->h_up), A_dd (e_down->h_down)
+        l_coeffs_a = [smatrix.transmission((0,3),(0,0)), smatrix.transmission((0,2),(0,0)), 
+                      smatrix.transmission((0,3),(0,1)), smatrix.transmission((0,2),(0,1))]
+        r_coeffs_a = [smatrix.transmission((1,3),(1,0)), smatrix.transmission((1,2),(1,0)), 
+                      smatrix.transmission((1,3),(1,1)), smatrix.transmission((1,2),(1,1))]
+        
+        coeffs = np.array(l_coeffs_r + l_coeffs_a + r_coeffs_r + r_coeffs_a) # 16 coeffs total
+        return cleft, cright, coeffs
+
     if return_smatrix:
         return cleft, cright, smatrix
     
@@ -408,6 +430,62 @@ def calc_correlation(f1,f2):
     return corr
     
     
+def detect_peaks(conductance_arr, energy_mesh, prominence=0.01):
+    """
+    Detects peaks in the differential conductance array with priority for Majorana physics.
+    
+    Logic:
+    - If a peak is found at zero (within tolerance), return (1, 0).
+    - If split, return the distance between the two peaks closest to zero (hybridization splitting).
+    
+    Parameters:
+    - conductance_arr: 1D array of conductance values.
+    - energy_mesh: 1D array of energy values.
+    - prominence: The required prominence of peaks.
+    
+    Returns:
+    - has_peak: 1 if Majorana-like peaks are found, else 0.
+    - splitting: Energy splitting between the two modes closest to zero.
+    """
+    # 1. Find all peaks based on prominence
+    peaks, _ = find_peaks(conductance_arr, prominence=prominence)
+    
+    # 2. Boundary Filter: Exclude peaks at the very edges
+    filtered_peaks = peaks[(peaks > 0) & (peaks < len(conductance_arr) - 1)]
+    
+    if len(filtered_peaks) == 0:
+        return 0, 0.0
+    
+    has_peak = 1
+    
+    # 3. Check for a Zero-Bias Peak (ZBP)
+    # Using tolerance based on mesh spacing (similar to notebook eta-scaling)
+    dE = np.abs(energy_mesh[1] - energy_mesh[0])
+    atol = 1.5 * dE
+    
+    # Check if any filtered peak is "at zero"
+    peak_energies = energy_mesh[filtered_peaks]
+    is_zero_peak = np.any(np.isclose(peak_energies, 0, atol=atol))
+    
+    if is_zero_peak:
+        return 1, 0.0
+    
+    # 4. Hybridization Splitting: Find the two peaks flanking zero
+    pos_peaks = filtered_peaks[energy_mesh[filtered_peaks] > 0]
+    neg_peaks = filtered_peaks[energy_mesh[filtered_peaks] < 0]
+    
+    if len(pos_peaks) > 0 and len(neg_peaks) > 0:
+        # Closest positive peak to zero
+        e_pos = energy_mesh[pos_peaks[np.argmin(energy_mesh[pos_peaks])]]
+        # Closest negative peak to zero
+        e_neg = energy_mesh[neg_peaks[np.argmax(energy_mesh[neg_peaks])]]
+        splitting = e_pos - e_neg
+    else:
+        splitting = 0.0
+        
+    return has_peak, splitting
+
+
 def calc_spectrum(syst_closed, k=22):
     """
     Calculates the k eigenvalues closest to zero for the closed system.
