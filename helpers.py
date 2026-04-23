@@ -268,7 +268,7 @@ def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, b
     right_lead[lat(0, 0)] = (2 * t - (mu_leads)) * np.kron(sigma_z, sigma_0) 
     right_lead[lat(1, 0), lat(0, 0)] = -t * np.kron(sigma_z, sigma_0)
 
-    syst.attach_lead(left_lead)
+    syst.attach_lead(left_lead) 
     syst.attach_lead(right_lead)
     return syst.finalized()
 
