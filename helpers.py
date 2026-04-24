@@ -210,6 +210,62 @@ def calc_dIdV(syst, energies):
     return dIdV_left, dIdV_right, ldos 
 
 
+def detect_peaks(conductance_arr, energy_mesh, prominence=0.01):
+    """
+    Detects peaks in the differential conductance array with priority for Majorana physics.
+    
+    Logic:
+    - If a peak is found at zero (within tolerance), return (1, 0).
+    - If split, return the distance between the two peaks closest to zero (hybridization splitting).
+    
+    Parameters:
+    - conductance_arr: 1D array of conductance values.
+    - energy_mesh: 1D array of energy values.
+    - prominence: The required prominence of peaks.
+    
+    Returns:
+    - has_peak: 1 if Majorana-like peaks are found, else 0.
+    - splitting: Energy splitting between the two modes closest to zero.
+    """
+    # 1. Find all peaks based on prominence
+    peaks, _ = find_peaks(conductance_arr, prominence=prominence)
+    
+    # 2. Boundary Filter: Exclude peaks at the very edges
+    filtered_peaks = peaks[(peaks > 0) & (peaks < len(conductance_arr) - 1)]
+    
+    if len(filtered_peaks) == 0:
+        return 0, 0.0
+    
+    has_peak = 1
+    
+    # 3. Check for a Zero-Bias Peak (ZBP)
+    # Using tolerance based on mesh spacing (similar to notebook eta-scaling)
+    dE = np.abs(energy_mesh[1] - energy_mesh[0])
+    atol = 1.5 * dE
+    
+    # Check if any filtered peak is "at zero"
+    peak_energies = energy_mesh[filtered_peaks]
+    is_zero_peak = np.any(np.isclose(peak_energies, 0, atol=atol))
+    
+    if is_zero_peak:
+        return 1, 0.0
+    
+    # 4. Hybridization Splitting: Find the two peaks flanking zero
+    pos_peaks = filtered_peaks[energy_mesh[filtered_peaks] > 0]
+    neg_peaks = filtered_peaks[energy_mesh[filtered_peaks] < 0]
+    
+    if len(pos_peaks) > 0 and len(neg_peaks) > 0:
+        # Closest positive peak to zero
+        e_pos = energy_mesh[pos_peaks[np.argmin(energy_mesh[pos_peaks])]]
+        # Closest negative peak to zero
+        e_neg = energy_mesh[neg_peaks[np.argmax(energy_mesh[neg_peaks])]]
+        splitting = e_pos - e_neg
+    else:
+        splitting = 0.0
+        
+    return has_peak, splitting
+
+
 ######### The following function builds the system ########
 
 def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l, barrier_r, Vdisx = None, a = 1):
