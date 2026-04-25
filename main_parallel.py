@@ -251,7 +251,7 @@ if __name__ == "__main__":
     
     V0 = 1.2#10.5 * Delta 
 
-    Upoints = 10 
+    Upoints = 50 
     num_engs = 101  
 
     mu_n = 0.0
@@ -277,7 +277,7 @@ if __name__ == "__main__":
     params_list = [[i, pms[0], pms[1]] for i, pms in enumerate(params_list)]
     
     
-    barrier_arr = np.linspace(barrier0, 40*barrier0, Upoints)
+    barrier_arr = np.linspace(barrier0, 30*barrier0, Upoints)
     energies = np.linspace(-0.5, 0.5, num_engs)
     
     
