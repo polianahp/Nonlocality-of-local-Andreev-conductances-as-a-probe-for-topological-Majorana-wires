@@ -52,6 +52,8 @@ def worker_simulation_step(iter_data, static_params):
     energies = static_params['energies']
     barrier_arr = static_params['barrier_arr']
     num_eigenvalues = static_params['num_eigenvalues']
+    eng_window_range = static_params['eng_window_range']
+    
     
     Vdisx = Vdisx * V0
     
@@ -77,6 +79,19 @@ def worker_simulation_step(iter_data, static_params):
     dIdVl, dIdVr, ldos = 0,0,0
     #dIdVl, dIdVr, ldos = hp.calc_dIdV(syst, energies)
     Gmat = hp.calc_conductance_matrix(syst, 0.0)
+    
+    
+    eng_window = np.linspace(-0.15, 0.15, eng_window_range)
+    csL = np.zeros_like(eng_window)
+    csR = np.zeros_like(eng_window)
+    for k, eng in enumerate(eng_window):
+        cL, cR = hp.calc_conductance(syst, energy=eng)
+        csL[k] = cL
+        csR[k] = cR
+        
+    pk_l = hp.detect_peaks(csL, eng_window)
+    pk_r = hp.detect_peaks(csR, eng_window)
+    
     
     # --- 2. Barrier Sweeps (Nested Loop logic) ---
     points = len(barrier_arr)
@@ -125,6 +140,8 @@ def worker_simulation_step(iter_data, static_params):
 
     
     # Pack all results into a dictionary to return to main process
+    
+    
     results = {
         'i':i,
         'dIdVl': dIdVl,
@@ -140,7 +157,9 @@ def worker_simulation_step(iter_data, static_params):
         'b_left_cond_right': b_left_cond_right,
         'rG_corr':rG_corr,
         'lG_corr':lG_corr,
-        'spectrum':spectrum
+        'spectrum':spectrum,
+        'peak_left':pk_l,
+        'peak_right':pk_r
     }
     return results
 
@@ -193,13 +212,13 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Run parallel transport and PDI simulation.")
     
-    parser.add_argument("--dirname", type=str, default="test", help="Directory name for saving output data.")
+    parser.add_argument("--dirname", type=str, default="testing", help="Directory name for saving output data.")
     parser.add_argument("--fname", type=str, default="Tdis.npz",help="File name for the disorder potential.")
     parser.add_argument("--Lb_pdi", type=int, default=3, help="Barrier length.")
     
     args = parser.parse_args()
 
-    dirname = f"spectra_fix/{args.dirname}"
+    dirname = f"peak_testing/{args.dirname}"
     fname = f"New_Disorders/{args.fname}"
     Lb = 3
     Lb_pdi = args.Lb_pdi  
@@ -310,7 +329,8 @@ if __name__ == "__main__":
         'energies': energies,
         'barrier_arr': barrier_arr,
         
-        'num_eigenvalues':num_eigenvalues
+        'num_eigenvalues':num_eigenvalues,
+        'eng_window_range':20
     }
     
 
@@ -330,7 +350,8 @@ if __name__ == "__main__":
     rG_corr_arr = np.zeros(shape = (len(params_list)))
     lG_corr_arr = np.zeros(shape = (len(params_list)))
     spectrum_arr = np.zeros(shape=(len(params_list), 22))
-    
+    peaks_left = np.zeros(shape=(len(params_list),2))
+    peaks_right = np.zeros_like(peaks_left)
     
     gamma_sq_arr = np.zeros_like(params_list, dtype=complex)
     mp_eng_arr = np.zeros_like(params_list)
@@ -373,6 +394,11 @@ if __name__ == "__main__":
             
             rG_corr_arr[idx]= res['rG_corr']
             lG_corr_arr[idx]= res['lG_corr']
+                        
+            peaks_left[idx,:] = res['peak_left']
+            peaks_right[idx,:] = res['peak_right']
+            
+            
             
 
         print("\n--- Starting PDI Calculation ---")
@@ -416,6 +442,9 @@ if __name__ == "__main__":
     
     hp.np_save_wrapped(rG_corr_arr,"rG_corr", dirname)
     hp.np_save_wrapped(lG_corr_arr,"lG_corr", dirname)
+    
+    hp.np_save_wrapped(peaks_left,"peaks_left", dirname)
+    hp.np_save_wrapped(peaks_right,"peaks_right", dirname)
     
     all_params = {
         **static_params,  # unpacks 't', 'mu_n', 'Delta', 'alpha', etc.

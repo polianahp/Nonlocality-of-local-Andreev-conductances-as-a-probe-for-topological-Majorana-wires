@@ -6,6 +6,8 @@ import os
 from config import PathConfigs
 from pathlib import Path
 import scipy.sparse.linalg as sla
+from scipy.signal import find_peaks
+
 
 
 
@@ -14,6 +16,7 @@ sigma_0 = tinyarray.array([[1, 0], [0, 1]])
 sigma_x = tinyarray.array([[0, 1], [1, 0]])
 sigma_y = tinyarray.array([[0, -1j], [1j, 0]])
 sigma_z = tinyarray.array([[1, 0], [0, -1]])
+
 
 ######## Path Configuration Helpers
 def get_data_path(file_name, subdirectory):
@@ -462,6 +465,34 @@ def calc_correlation(f1,f2):
     corr = np.dot(f1,f2)/(np.linalg.norm(f1)*np.linalg.norm(f2))
     
     return corr
+
+
+def calc_derivatives(x, y):
+    """
+    Calculates the average 1st and 2nd derivatives of y(x).
+    """
+    if len(x) < 3:
+        return 0.0, 0.0
+    
+    dx = x[1] - x[0]
+    dy = np.gradient(y, dx)
+    d2y = np.gradient(dy, dx)
+    
+    avg_d1 = np.mean(dy)
+    avg_d2 = np.mean(d2y)
+    
+    return avg_d1, avg_d2
+
+
+def calc_center_of_mass(x, y):
+    """
+    Calculates the center of mass (weighted average) of the curve y(x).
+    """
+    if np.sum(y) == 0:
+        return np.mean(x)
+    
+    com = np.sum(x * y) / np.sum(y)
+    return com
     
     
 def calc_spectrum(syst_closed, k=22):
