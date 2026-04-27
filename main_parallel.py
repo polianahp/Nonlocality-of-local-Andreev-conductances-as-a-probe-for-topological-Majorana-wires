@@ -212,7 +212,7 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Run parallel transport and PDI simulation.")
     
-    parser.add_argument("--dirname", type=str, default="testing", help="Directory name for saving output data.")
+    parser.add_argument("--dirname", type=str, default="peak_fixing", help="Directory name for saving output data.")
     parser.add_argument("--fname", type=str, default="Tdis.npz",help="File name for the disorder potential.")
     parser.add_argument("--Lb_pdi", type=int, default=3, help="Barrier length.")
     
@@ -269,14 +269,14 @@ if __name__ == "__main__":
 
     mu_n = 0.0
 
-    mu_max = 4.5
-    mu_min = 0.0
+    mu_max = 2#4.5
+    mu_min = 1.5#0.0
     mu_rng = mu_max - mu_min
     mu_dist = 0.02 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
     mu_var = np.linspace(mu_min, mu_max, Nmu)
     
-    Vz_max = 1.3
+    Vz_max = 0.25#1.3
     Vz_min = 0.0
     Vz_rng = Vz_max - Vz_min
     Vz_dist = 0.02 #spacing between points

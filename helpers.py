@@ -213,7 +213,7 @@ def calc_dIdV(syst, energies):
     return dIdV_left, dIdV_right, ldos 
 
 
-def detect_peaks(conductance_arr, energy_mesh, prominence=0.01):
+def detect_peaks_old(conductance_arr, energy_mesh, prominence=0.01):
     """
     Detects peaks in the differential conductance array with priority for Majorana physics.
     
@@ -267,6 +267,67 @@ def detect_peaks(conductance_arr, energy_mesh, prominence=0.01):
         splitting = 0.0
         
     return has_peak, splitting
+
+
+def detect_peaks(conductance_arr, energy_mesh, prominence=0.01, height=0.05, atol=None):
+    """
+    Robustly detects Majorana-like peaks (ZBP or symmetric splitting).
+    
+    Logic:
+    - Must meet prominence AND absolute height thresholds.
+    - ZBP: Peak at E=0 (within atol).
+    - Splitting: Symmetric peaks flanking zero (|E_pos + E_neg| < atol).
+    - Single off-zero peaks are rejected (has_peak=0).
+    
+    Parameters:
+    - conductance_arr: 1D array of conductance values.
+    - energy_mesh: 1D array of energy values.
+    - prominence: The required prominence of peaks.
+    - height: The minimum absolute conductance height.
+    - atol: Tolerance for zero-bias and symmetry (defaults to 1.5 * dE).
+    
+    Returns:
+    - has_peak: 1 if Majorana-like peaks are found, else 0.
+    - splitting: Energy splitting between the two modes closest to zero.
+    """
+    dE = np.abs(energy_mesh[1] - energy_mesh[0])
+    if atol is None:
+        atol = 1.5 * dE
+
+    # 1. Find peaks with both prominence and absolute height
+    from scipy.signal import find_peaks as scipy_find_peaks
+    peaks, _ = scipy_find_peaks(conductance_arr, prominence=prominence, height=height)
+    
+    # 2. Filter out peaks at the very edges (outer 5% or at least 1 index)
+    n = len(conductance_arr)
+    edge_buffer = max(1, int(n * 0.05))
+    filtered_peaks = peaks[(peaks >= edge_buffer) & (peaks < n - edge_buffer)]
+
+    if len(filtered_peaks) == 0:
+        return 0, 2.0
+
+    peak_energies = energy_mesh[filtered_peaks]
+
+    # 3. Check for a Zero-Bias Peak (ZBP)
+    is_zero_peak = np.any(np.isclose(peak_energies, 0, atol=atol))
+    if is_zero_peak:
+        return 1, 0.0
+
+    # 4. Check for Symmetric Splitting (Hybridization)
+    pos_idxs = filtered_peaks[energy_mesh[filtered_peaks] > atol]
+    neg_idxs = filtered_peaks[energy_mesh[filtered_peaks] < -atol]
+
+    if len(pos_idxs) > 0 and len(neg_idxs) > 0:
+        # Closest positive/negative peaks to zero
+        e_pos = energy_mesh[pos_idxs[np.argmin(energy_mesh[pos_idxs])]]
+        e_neg = energy_mesh[neg_idxs[np.argmax(energy_mesh[neg_idxs])]]
+        
+        # Verify symmetry: Majorana splitting should be roughly symmetric around zero
+        if np.abs(e_pos + e_neg) < atol:
+             return 1, e_pos - e_neg
+
+    # 5. Rejection: If no ZBP and no symmetric splitting, it's not "Majorana-like"
+    return 0, 1.0
 
 
 ######### The following function builds the system ########
