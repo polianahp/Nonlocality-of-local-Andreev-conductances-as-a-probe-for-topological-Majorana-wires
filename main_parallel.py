@@ -88,9 +88,26 @@ def worker_simulation_step(iter_data, static_params):
         cL, cR = hp.calc_conductance(syst, energy=eng)
         csL[k] = cL
         csR[k] = cR
-        
-    pk_l = hp.detect_peaks(csL, eng_window)
-    pk_r = hp.detect_peaks(csR, eng_window)
+    
+    max_csL = np.max(csL)
+    max_csR = np.max(csR)
+    
+    pk_l_pos = hp.detect_peaks(csL, eng_window, thresh = 0.01*max_csL)
+    pk_r_pos = hp.detect_peaks(csR, eng_window, thresh = 0.01*max_csR)
+    
+    if pk_l_pos is not None:
+        pk_l = np.asarray([1, eng_window[pk_l_pos]])
+    else:
+        pk_l = np.asarray([0, 10]) 
+        #setting difference to be a huge number comparable to the actual 
+        # gap so I can postprocess easily later
+    
+    if pk_r_pos is not None:
+        pk_r = np.asarray([1, eng_window[pk_r_pos]])
+        #setting difference to be a huge number comparable to the actual 
+        # gap so I can postprocess easily later
+    else:
+        pk_r = np.asarray([0,10])
     
     
     # --- 2. Barrier Sweeps (Nested Loop logic) ---
@@ -262,21 +279,21 @@ if __name__ == "__main__":
     
     barrier0 = 2 #barrier energy (meV)
     
-    V0 = 1.2#10.5 * Delta 
+    V0 = 1.2
 
     Upoints = 20 
     num_engs = 101  
 
     mu_n = 0.0
 
-    mu_max = 2#4.5
-    mu_min = 1.5#0.0
+    mu_max = 4.5
+    mu_min = 0.0
     mu_rng = mu_max - mu_min
     mu_dist = 0.02 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
     mu_var = np.linspace(mu_min, mu_max, Nmu)
     
-    Vz_max = 0.25#1.3
+    Vz_max = 1.3
     Vz_min = 0.0
     Vz_rng = Vz_max - Vz_min
     Vz_dist = 0.02 #spacing between points
@@ -330,7 +347,7 @@ if __name__ == "__main__":
         'barrier_arr': barrier_arr,
         
         'num_eigenvalues':num_eigenvalues,
-        'eng_window_range':20
+        'eng_window_range':31
     }
     
 

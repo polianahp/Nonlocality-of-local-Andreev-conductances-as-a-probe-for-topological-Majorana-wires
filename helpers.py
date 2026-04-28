@@ -270,16 +270,20 @@ def detect_peaks_old(conductance_arr, energy_mesh, prominence=0.01):
 
 
 def detect_peaks(ys, xs, thresh):
-    #returns the index for the peak closest to zero
     z_idx = np.where(xs.real == 0)[0][0]
     pks = find_peaks(ys, height = thresh)[0]
+
     if len(pks)==0:
         return None
     
     #center the peak indexes around the zero index
     zpks= pks - z_idx
+    idxs = np.where(np.isclose(zpks,0.0))[0]
+    if len(idxs) == 0:
+        return None
+    
     #get the index of the peak closest to zero energy
-    min_peak = np.min(np.abs(zpks)) + z_idx
+    min_peak = np.min(pks[idxs[0]])
     
     return min_peak
                 
