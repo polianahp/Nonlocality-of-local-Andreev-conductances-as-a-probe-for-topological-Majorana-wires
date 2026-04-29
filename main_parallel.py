@@ -89,23 +89,22 @@ def worker_simulation_step(iter_data, static_params):
         csL[k] = cL
         csR[k] = cR
     
-    
     pk_l_pos = hp.detect_peaks(csL, eng_window)
     pk_r_pos = hp.detect_peaks(csR, eng_window)
     
     if pk_l_pos is not None:
-        pk_l = np.asarray([1, eng_window[pk_l_pos]])
+        pk_l = np.asarray([1, eng_window[pk_l_pos], csL[pk_l_pos]])
     else:
-        pk_l = np.asarray([0, 10]) 
+        pk_l = np.asarray([0, 10, 10]) 
         #setting difference to be a huge number comparable to the actual 
         # gap so I can postprocess easily later
     
     if pk_r_pos is not None:
-        pk_r = np.asarray([1, eng_window[pk_r_pos]])
+        pk_r = np.asarray([1, eng_window[pk_r_pos], csR[pk_r_pos]])
         #setting difference to be a huge number comparable to the actual 
         # gap so I can postprocess easily later
     else:
-        pk_r = np.asarray([0,10])
+        pk_r = np.asarray([0, 10, 10])
     
     
     # --- 2. Barrier Sweeps (Nested Loop logic) ---
