@@ -89,11 +89,9 @@ def worker_simulation_step(iter_data, static_params):
         csL[k] = cL
         csR[k] = cR
     
-    max_csL = np.max(csL)
-    max_csR = np.max(csR)
     
-    pk_l_pos = hp.detect_peaks(csL, eng_window, thresh = 0.01*max_csL)
-    pk_r_pos = hp.detect_peaks(csR, eng_window, thresh = 0.01*max_csR)
+    pk_l_pos = hp.detect_peaks(csL, eng_window)
+    pk_r_pos = hp.detect_peaks(csR, eng_window)
     
     if pk_l_pos is not None:
         pk_l = np.asarray([1, eng_window[pk_l_pos]])
@@ -229,7 +227,7 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Run parallel transport and PDI simulation.")
     
-    parser.add_argument("--dirname", type=str, default="Tdis_nb2", help="Directory name for saving output data.")
+    parser.add_argument("--dirname", type=str, default="Tdis_nb_hir_res", help="Directory name for saving output data.")
     parser.add_argument("--fname", type=str, default="Tdis.npz",help="File name for the disorder potential.")
     parser.add_argument("--Lb_pdi", type=int, default=3, help="Barrier length.")
     
@@ -347,7 +345,7 @@ if __name__ == "__main__":
         'barrier_arr': barrier_arr,
         
         'num_eigenvalues':num_eigenvalues,
-        'eng_window_range':31
+        'eng_window_range':51
     }
     
 

@@ -213,7 +213,7 @@ def calc_dIdV(syst, energies):
     return dIdV_left, dIdV_right, ldos 
 
 
-def detect_peaks_old(conductance_arr, energy_mesh, prominence=0.01):
+def detect_peaks_oldold(conductance_arr, energy_mesh, prominence=0.01):
     """
     Detects peaks in the differential conductance array with priority for Majorana physics.
     
@@ -269,7 +269,7 @@ def detect_peaks_old(conductance_arr, energy_mesh, prominence=0.01):
     return has_peak, splitting
 
 
-def detect_peaks(ys, xs, thresh):
+def detect_peaksold(ys, xs, thresh):
     z_idx = np.where(xs.real == 0)[0][0]
     pks = find_peaks(ys, height = thresh)[0]
 
@@ -286,6 +286,20 @@ def detect_peaks(ys, xs, thresh):
     min_peak = np.min(pks[idxs[0]])
     
     return min_peak
+
+def detect_peaks(ys, xs):
+    z_idx = np.where(np.isclose(xs.real, 0))[0][0]
+
+    zpksidx =find_peaks(ys)[0] - z_idx
+
+    are_peaks = len(zpksidx) != 0
+    if not are_peaks:
+        min_idx = None
+    else:
+        min_idx = np.min(zpksidx[np.where(zpksidx>0)]) + z_idx
+    return min_idx
+
+
                 
 
 
