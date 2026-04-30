@@ -294,9 +294,14 @@ def detect_peaks(ys, xs):
 
     are_peaks = len(zpksidx) != 0
     if not are_peaks:
-        min_idx = None
-    else:
-        min_idx = np.min(zpksidx[np.where(zpksidx>0)]) + z_idx
+        return None
+    
+    # Filter for positive peaks and check if any exist
+    pos_pks = zpksidx[zpksidx > 0]
+    if len(pos_pks) == 0:
+        return None
+        
+    min_idx = np.min(pos_pks) + z_idx
     return min_idx
 
 

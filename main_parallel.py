@@ -364,8 +364,9 @@ if __name__ == "__main__":
     rG_corr_arr = np.zeros(shape = (len(params_list)))
     lG_corr_arr = np.zeros(shape = (len(params_list)))
     spectrum_arr = np.zeros(shape=(len(params_list), 22))
-    peaks_left = np.zeros(shape=(len(params_list),3))
+    peaks_left = np.zeros(shape=(len(params_list), 3))
     peaks_right = np.zeros_like(peaks_left)
+
     
     gamma_sq_arr = np.zeros_like(params_list, dtype=complex)
     mp_eng_arr = np.zeros_like(params_list)
