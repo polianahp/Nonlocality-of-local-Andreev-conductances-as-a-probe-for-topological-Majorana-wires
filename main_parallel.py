@@ -69,6 +69,9 @@ def worker_simulation_step(iter_data, static_params):
     
     syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
     
+    rho_M1, rho_M2, _ = hp.get_psiM_density(syst_closed, k = 2)
+    site_localization = hp.calc_MZM_localization(rho_M1, rho_M2)
+    
     spectrum = hp.calc_spectrum(syst_closed, k=num_eigenvalues)
     
     # Majorana metrics
@@ -173,7 +176,8 @@ def worker_simulation_step(iter_data, static_params):
         'lG_corr':lG_corr,
         'spectrum':spectrum,
         'peak_left':pk_l,
-        'peak_right':pk_r
+        'peak_right':pk_r,
+        'site_localization':site_localization
     }
     return results
 
@@ -226,7 +230,7 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Run parallel transport and PDI simulation.")
     
-    parser.add_argument("--dirname", type=str, default="Tdis_nb_hir_res", help="Directory name for saving output data.")
+    parser.add_argument("--dirname", type=str, default="mzm_loclz_test", help="Directory name for saving output data.")
     parser.add_argument("--fname", type=str, default="Tdis.npz",help="File name for the disorder potential.")
     parser.add_argument("--Lb_pdi", type=int, default=3, help="Barrier length.")
     
@@ -283,15 +287,15 @@ if __name__ == "__main__":
 
     mu_n = 0.0
 
-    mu_max = 4.5
-    mu_min = 0.0
+    mu_max = 2.5#4.5
+    mu_min = 2.0#0.0
     mu_rng = mu_max - mu_min
     mu_dist = 0.02 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
     mu_var = np.linspace(mu_min, mu_max, Nmu)
     
     Vz_max = 1.3
-    Vz_min = 0.0
+    Vz_min = 0.75 #0.0
     Vz_rng = Vz_max - Vz_min
     Vz_dist = 0.02 #spacing between points
     Nvz = int(Vz_rng/Vz_dist)
@@ -367,7 +371,7 @@ if __name__ == "__main__":
     peaks_left = np.zeros(shape=(len(params_list), 3))
     peaks_right = np.zeros_like(peaks_left)
 
-    
+    site_localizations = np.zeros_like(rG_corr_arr)
     gamma_sq_arr = np.zeros_like(params_list, dtype=complex)
     mp_eng_arr = np.zeros_like(params_list)
     lenw = Ls #+ 2*(Lb + Ln)
@@ -412,6 +416,8 @@ if __name__ == "__main__":
                         
             peaks_left[idx,:] = res['peak_left']
             peaks_right[idx,:] = res['peak_right']
+            site_localizations[idx] = res['site_localization']
+            
             
             
             
@@ -460,6 +466,7 @@ if __name__ == "__main__":
     
     hp.np_save_wrapped(peaks_left,"peaks_left", dirname)
     hp.np_save_wrapped(peaks_right,"peaks_right", dirname)
+    hp.np_save_wrapped(site_localizations,"site_localizations", dirname)
     
     all_params = {
         **static_params,  # unpacks 't', 'mu_n', 'Delta', 'alpha', etc.

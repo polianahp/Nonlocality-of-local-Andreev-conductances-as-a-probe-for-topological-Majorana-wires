@@ -305,6 +305,114 @@ def detect_peaks(ys, xs):
     return min_idx
 
 
+
+def calc_MZM_localization(rho_left, rho_right, pct_thresh = 80.0):
+    """Returns the length away from either end of the wire that 80% of the weight is contained in the integration.
+        The code starts at an index n = 1, which will correspond to the first and last site and integrate. If the pct weight is less than 80%, it will increase n by one and 
+        integrate over the first two sites and last two sites, increasing n until 80% is reached, then it will return the site number n.
+
+    :param rho_M1: _description_
+    :type rho_M1: _type_
+    :param rho_M2: _description_
+    :type rho_M2: _type_
+    """
+    tot_area = np.trapz(rho_left + rho_right)
+
+    
+    n=1
+    pct = 0
+    while not pct > pct_thresh:
+        rho_left_part = rho_left[0:n]
+        rho_right_part = rho_right[::-1][0:n]
+        
+        sum_M1 = np.trapz(rho_left_part)
+        sum_M2 = np.trapz(rho_right_part)
+        
+        pct = 100*(sum_M1 + sum_M2)/(tot_area)
+        
+        if pct  > pct_thresh:
+            break
+        else:
+            n += 1
+            
+    return n
+
+
+def get_psiM_density(syst, k=2):
+    """  
+    Calculates the Majorana mode densities rho_M1 (Left) and rho_M2 (Right)
+    at zero energy.
+    
+    Parameters:
+    - syst: The finalized kwant system (syst_closed).
+    - k: Number of eigenvalues to solve for (default 2 for the lowest pair).
+    
+    Returns:
+    - rho_M1: Spatial density of the first Majorana mode (Left).
+    - rho_M2: Spatial density of the second Majorana mode (Right).
+    - energies: The eigenvalues found (for verification).
+    """
+    # 1. Access Hamiltonian from Kwant
+    # sparse=True is essential for large systems
+    ham = syst.hamiltonian_submatrix(sparse=True) 
+    
+    # 2. Diagonalize to find states near Zero Energy (sigma=0)
+    # k=2 guarantees we find the lowest pair (E ~ +0 and E ~ -0)
+    try:
+        evals, evecs = sla.eigsh(ham, k=k, sigma=0, which='LM')
+    except:
+        # Fallback for small systems where sparse solvers might fail
+        evals, evecs = np.linalg.eigh(ham.toarray())
+        
+    # 3. Sort by Energy (Real values)
+    # We want the lowest POSITIVE energy state and its NEGATIVE partner.
+    # eigsh usually returns unsorted or sorted by magnitude. We sort by value.
+    sort_idx = np.argsort(evals)
+    evals = evals[sort_idx]
+    evecs = evecs[:, sort_idx]
+    
+    # Identify the index of the first positive energy state
+    # In a particle-hole symmetric system with 2*N states:
+    # indices 0 to N-1 are negative, N to 2N-1 are positive.
+    # For k retrieved states around 0, the one just above the middle is the lowest positive.
+    mid_idx = len(evals) // 2
+    
+    # Lowest positive state (psi_+)
+    psi_plus = evecs[:, mid_idx]
+    # Corresponding negative state (psi_-)
+    psi_minus = evecs[:, mid_idx - 1]
+    
+    # 4. Phase Correction (Standardize phases)
+    # We enforce a phase such that the first component is real/positive to align them
+    # This is similar to the 'ix' logic in the Mathematica script
+    phase_plus = np.conj(psi_plus[0]) / np.abs(psi_plus[0] + 1e-20)
+    phase_minus = np.conj(psi_minus[0]) / np.abs(psi_minus[0] + 1e-20)
+    
+    psi_plus = psi_plus * phase_plus
+    psi_minus = psi_minus * phase_minus
+    
+    # 5. Construct Majorana Basis
+    # gamma_1 = (psi_+ + psi_-) / sqrt(2)  (Usually Left)
+    # gamma_2 = (psi_+ - psi_-) / sqrt(2)  (Usually Right, times i)
+    gamma_1 = (psi_plus + psi_minus) / np.sqrt(2)
+    gamma_2 = (psi_plus - psi_minus) / np.sqrt(2)
+    
+    # 6. Calculate Site Densities
+    # Kwant stores wavefunctions as a flat array [site1_orb1, site1_orb2, ..., site2_orb1, ...]
+    # Your system has norbs=4 (e_up, e_dn, h_dn, h_up)
+    
+    n_sites = len(gamma_1) // 4
+    
+    # Reshape to (Sites, Orbitals)
+    g1_reshaped = gamma_1.reshape((n_sites, 4))
+    g2_reshaped = gamma_2.reshape((n_sites, 4))
+    
+    # Sum over orbitals (spin/particle-hole) to get density per site
+    rho_M1 = np.sum(np.abs(g1_reshaped)**2, axis=1)
+    rho_M2 = np.sum(np.abs(g2_reshaped)**2, axis=1)
+    
+    return rho_M1, rho_M2, evals
+        
                 
 
 
