@@ -233,6 +233,7 @@ if __name__ == "__main__":
     parser.add_argument("--dirname", type=str, default="mzm_loclz_test", help="Directory name for saving output data.")
     parser.add_argument("--fname", type=str, default="Tdis.npz",help="File name for the disorder potential.")
     parser.add_argument("--Lb_pdi", type=int, default=3, help="Barrier length.")
+    parser.add_argument("--no_pdi", action="store_true", help="Skip the time-consuming PDI calculation.")
     
     args = parser.parse_args()
 
@@ -287,15 +288,15 @@ if __name__ == "__main__":
 
     mu_n = 0.0
 
-    mu_max = 2.5#4.5
-    mu_min = 2.0#0.0
+    mu_max = 4.5#4.5
+    mu_min = 0.0
     mu_rng = mu_max - mu_min
     mu_dist = 0.02 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
     mu_var = np.linspace(mu_min, mu_max, Nmu)
     
     Vz_max = 1.3
-    Vz_min = 0.75 #0.0
+    Vz_min = 0.0
     Vz_rng = Vz_max - Vz_min
     Vz_dist = 0.02 #spacing between points
     Nvz = int(Vz_rng/Vz_dist)
@@ -310,7 +311,7 @@ if __name__ == "__main__":
     energies = np.linspace(-0.5, 0.5, num_engs)
     
     
-    num_eigenvalues = 22 #number of eigenvalues to calculate in the low energy spectra, so 10 above and below the MZMs in this case
+    num_eigenvalues = 12 #number of eigenvalues to calculate in the low energy spectra, so 10 above and below the MZMs in this case
 
     # Initialize Disorder
     print(f"Run Files Path Exists: {os.path.exists(PathConfigs.RUN_FILES)}")
@@ -367,7 +368,7 @@ if __name__ == "__main__":
     barrier_left_conductance_right_arr  = np.zeros_like(barrier_right_conductance_left_arr)
     rG_corr_arr = np.zeros(shape = (len(params_list)))
     lG_corr_arr = np.zeros(shape = (len(params_list)))
-    spectrum_arr = np.zeros(shape=(len(params_list), 22))
+    spectrum_arr = np.zeros(shape=(len(params_list), num_eigenvalues))
     peaks_left = np.zeros(shape=(len(params_list), 3))
     peaks_right = np.zeros_like(peaks_left)
 
@@ -422,19 +423,22 @@ if __name__ == "__main__":
             
             
 
-        print("\n--- Starting PDI Calculation ---")
-        
-        
-        # Create partial function
-        func_pdi = partial(worker_pdi_step, static_params=static_params)
-        
-        pdi_results_iter = pool.imap(func_pdi, params_list, chunksize=1)
-        
-        # pdi_data structure: list of [mu*Vc, Vz_raw, pdi_val]
-        pdi_data = []
-        for res in tqdm(pdi_results_iter, total=len(params_list), desc="PDI Sweep"):
-            pdi_data.append(res)
-        pdi_data = np.array(pdi_data)
+        if not args.no_pdi:
+            print("\n--- Starting PDI Calculation ---")
+            
+            # Create partial function
+            func_pdi = partial(worker_pdi_step, static_params=static_params)
+            
+            pdi_results_iter = pool.imap(func_pdi, params_list, chunksize=1)
+            
+            # pdi_data structure: list of [mu*Vc, Vz_raw, pdi_val]
+            pdi_data = []
+            for res in tqdm(pdi_results_iter, total=len(params_list), desc="PDI Sweep"):
+                pdi_data.append(res)
+            pdi_data = np.array(pdi_data)
+        else:
+            print("\n--- Skipping PDI Calculation ---")
+            pdi_data = np.array([])
 
     # -------------------------------------------------------------------------
     # Saving Results
