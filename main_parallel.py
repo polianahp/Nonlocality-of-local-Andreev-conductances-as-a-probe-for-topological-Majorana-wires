@@ -54,62 +54,6 @@ def worker_simulation_step(iter_data, static_params):
     num_eigenvalues = static_params['num_eigenvalues']
     eng_window_range = static_params['eng_window_range']
     
-    
-    Vdisx = Vdisx * V0
-    
-    barrier_tot = barrier0 #+ mu
-    
-    
-    
-    # --- 1. Build Symmetric System & Calculate Spectral Properties ---
-    syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma, V_z=vz, 
-                           alpha=alpha, Ln=Ln, Lb=Lb, 
-                           Ls=Ls, mu_leads=mu_leads,
-                           barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
-    
-    syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
-    
-    rho_M1, rho_M2, _ = hp.get_psiM_density(syst_closed, k = 2)
-    site_localization = hp.calc_MZM_localization(rho_M1, rho_M2)
-    
-    spectrum = hp.calc_spectrum(syst_closed, k=num_eigenvalues)
-    
-    # Majorana metrics
-    M_profile, energy_0 = hp.calculate_local_mp(syst_closed)
-    gamma_sq = hp.calculate_gamma_squared(syst_closed)
-    
-    # dI/dV and Conductance Matrix
-    dIdVl, dIdVr, ldos = 0,0,0
-    #dIdVl, dIdVr, ldos = hp.calc_dIdV(syst, energies)
-    Gmat = hp.calc_conductance_matrix(syst, 0.0)
-    
-    
-    eng_window = np.linspace(-0.15, 0.15, eng_window_range)
-    csL = np.zeros_like(eng_window)
-    csR = np.zeros_like(eng_window)
-    for k, eng in enumerate(eng_window):
-        cL, cR = hp.calc_conductance(syst, energy=eng)
-        csL[k] = cL
-        csR[k] = cR
-    
-    pk_l_pos = hp.detect_peaks(csL, eng_window)
-    pk_r_pos = hp.detect_peaks(csR, eng_window)
-    
-    if pk_l_pos is not None:
-        pk_l = np.asarray([1, eng_window[pk_l_pos], csL[pk_l_pos]])
-    else:
-        pk_l = np.asarray([0, 10, 10]) 
-        #setting difference to be a huge number comparable to the actual 
-        # gap so I can postprocess easily later
-    
-    if pk_r_pos is not None:
-        pk_r = np.asarray([1, eng_window[pk_r_pos], csR[pk_r_pos]])
-        #setting difference to be a huge number comparable to the actual 
-        # gap so I can postprocess easily later
-    else:
-        pk_r = np.asarray([0, 10, 10])
-    
-    
     # --- 2. Barrier Sweeps (Nested Loop logic) ---
     points = len(barrier_arr)
     
@@ -118,42 +62,98 @@ def worker_simulation_step(iter_data, static_params):
     b_right_cond_right = np.zeros(points)
     b_left_cond_left = np.zeros(points)
     b_left_cond_right = np.zeros(points)
+    
+    dIdVl, dIdVr, ldos = 0,0,0
+    Vdisx = Vdisx * V0
+    barrier_tot = barrier0 #+ mu
+    gamma_sq = 0
+    energy_0 = 0
+    M_profile = [0]
+    spectrum = None
+    
+    syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
+    
+    # --- 1. Build Symmetric System & Calculate Spectral Properties ---
+    
+    rho_M1, rho_M2, _ = hp.get_psiM_density(syst_closed, k = 2)
+    site_localization = hp.calc_MZM_localization(rho_M1, rho_M2)
+    
+    if static_params['spectra_flag']:
+        spectrum = hp.calc_spectrum(syst_closed, k=num_eigenvalues)
+    
+        # Majorana metrics
+        M_profile, energy_0 = hp.calculate_local_mp(syst_closed)
+    
+    # dI/dV and Conductance Matrix
+    #dIdVl, dIdVr, ldos = hp.calc_dIdV(syst, energies)
+    
+    
+    eng_window = np.linspace(-0.15, 0.15, eng_window_range)
+    csL = np.zeros_like(eng_window)
+    csR = np.zeros_like(eng_window)
+    
+    pk_l = 0
+    pk_r = 0 
+    Gmat = 0
+    rG_corr = 0
+    lG_corr = 0
+    
+    if static_params['conductance_flag']:
+        
+        syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma, V_z=vz, 
+                           alpha=alpha, Ln=Ln, Lb=Lb, 
+                           Ls=Ls, mu_leads=mu_leads,
+                           barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
+    
+        Gmat = hp.calc_conductance_matrix(syst, 0.0)
+        for k, eng in enumerate(eng_window):
+            cL, cR = hp.calc_conductance(syst, energy=eng)
+            csL[k] = cL
+            csR[k] = cR
+    
+        pk_l_pos = hp.detect_peaks(csL, eng_window)
+        pk_r_pos = hp.detect_peaks(csR, eng_window)
+    
+        if pk_l_pos is not None:
+            pk_l = np.asarray([1, eng_window[pk_l_pos], csL[pk_l_pos]])
+        else:
+            pk_l = np.asarray([0, 10, 10]) 
+            #setting difference to be a huge number comparable to the actual 
+            # gap so I can postprocess easily later
+        
+        if pk_r_pos is not None:
+            pk_r = np.asarray([1, eng_window[pk_r_pos], csR[pk_r_pos]])
+            #setting difference to be a huge number comparable to the actual 
+            # gap so I can postprocess easily later
+        else:
+            pk_r = np.asarray([0, 10, 10])
+    
+    
+        
 
-    # Note: this is run serially inside the worker because the overhead 
-    # of spawning sub-processes here would be too high.
-    for k in range(points):
-        barrier_var_tot = barrier_arr[k] #+ mu
+
+        # Note: this is run serially inside the worker because the overhead 
+        # of spawning sub-processes here would be too high.
+        for k in range(points):
+            barrier_var_tot = barrier_arr[k] #+ mu
+            
+            # Varying Right Barrier (UR)
+            syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma,
+                                    V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
+                                    Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
+                                    barrier_r=barrier_var_tot, Vdisx=Vdisx)
+            
+            cL, cR = hp.calc_conductance(syst_UR, energy=0.0)
+            b_right_cond_left[k] = cL
+            b_right_cond_right[k] = cR
+            
+            
+        r_Gll, r_GRR = b_right_cond_left, b_right_cond_right #varying left barrier and getting local conductances
         
-        # Varying Right Barrier (UR)
-        syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma,
-                                  V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
-                                  Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
-                                  barrier_r=barrier_var_tot, Vdisx=Vdisx)
-        
-        cL, cR = hp.calc_conductance(syst_UR, energy=0.0)
-        b_right_cond_left[k] = cL
-        b_right_cond_right[k] = cR
-        
-        # Varying Left Barrier (UL)
-        #syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma,
-        #                          V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
-        #                          Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot, 
-        #                          barrier_r=barrier_tot, Vdisx=Vdisx)
-#
-        #cL, cR = hp.calc_conductance(syst_UL, energy=0.0)
-        #b_left_cond_left[k] = cL
-        #b_left_cond_right[k] = cR
-        
-    l_Gll, l_GRR = b_left_cond_left, b_left_cond_right #varying left barrier and getting local conductances
-    r_Gll, r_GRR = b_right_cond_left, b_right_cond_right #varying left barrier and getting local conductances
+        rG_corr = hp.calc_correlation(r_Gll, r_GRR)
     
+
     
-    
-    #rG_corr = np.dot(r_Gll, r_GRR)/(np.linalg.norm(r_Gll) * np.linalg.norm(r_GRR))
-    #rG_corr = np.dot(r_Gll, r_GRR)/(np.linalg.norm(    r_Gll) * np.linalg.norm(r_GRR))
-    
-    rG_corr = hp.calc_correlation(r_Gll, r_GRR)
-    lG_corr = 0#hp.calc_correlation(l_Gll, l_GRR)
 
     
     # Pack all results into a dictionary to return to main process
@@ -173,7 +173,7 @@ def worker_simulation_step(iter_data, static_params):
         'b_left_cond_left': b_left_cond_left,
         'b_left_cond_right': b_left_cond_right,
         'rG_corr':rG_corr,
-        'lG_corr':lG_corr,
+        'lG_corr':0,
         'spectrum':spectrum,
         'peak_left':pk_l,
         'peak_right':pk_r,
@@ -230,12 +230,16 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Run parallel transport and PDI simulation.")
     
+    action = 'store_false'
     parser.add_argument("--dirname", type=str, default="mzm_loclz_test", help="Directory name for saving output data.")
     parser.add_argument("--fname", type=str, default="Tdis.npz",help="File name for the disorder potential.")
     parser.add_argument("--Lb_pdi", type=int, default=3, help="Barrier length.")
-    parser.add_argument("--no_pdi", action="store_true", help="Skip the time-consuming PDI calculation.")
+    parser.add_argument("--no_pdi", action=action, help="Skip the time-consuming PDI calculation.")
+    parser.add_argument("--no_conductance", action=action, help="Skip Conductance Calculation.")
+    parser.add_argument("--no_spectra", action=action, help="Skip Spectra Calculations.")
     
     args = parser.parse_args()
+    
 
     dirname = f"peak_testing/{args.dirname}"
     fname = f"New_Disorders/{args.fname}"
@@ -291,15 +295,15 @@ if __name__ == "__main__":
     mu_max = 4.5#4.5
     mu_min = 0.0
     mu_rng = mu_max - mu_min
-    mu_dist = 0.02 #spacing between points
+    mu_dist = 0.04#0.02 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
     mu_var = np.linspace(mu_min, mu_max, Nmu)
     
     Vz_max = 1.3
     Vz_min = 0.0
     Vz_rng = Vz_max - Vz_min
-    Vz_dist = 0.02 #spacing between points
-    Nvz = int(Vz_rng/Vz_dist)
+    Vz_dist = 0.04#0.02 #spacing between points
+    Nvz =  int(Vz_rng/Vz_dist)
     Vz_var = np.linspace(Vz_min, Vz_max, Nvz) 
     
     
@@ -324,7 +328,6 @@ if __name__ == "__main__":
         
     #print(Vdisx)
     
-
     # Dictionary of static parameters to pass to workers
     static_params = {
         't': t,
@@ -349,8 +352,13 @@ if __name__ == "__main__":
         'barrier_arr': barrier_arr,
         
         'num_eigenvalues':num_eigenvalues,
-        'eng_window_range':51
+        'eng_window_range':51,
+        'conductance_flag': not args.no_conductance,
+        'spectra_flag': not args.no_spectra
     }
+    print("conductance_flag:", f"{static_params['conductance_flag']}")
+    print("spectra_flag:", f"{static_params['spectra_flag']}")
+
     
 
     # Pre-allocate main arrays
@@ -383,62 +391,99 @@ if __name__ == "__main__":
     num_workers = max(1, mp.cpu_count() - 1)
     print(f"Starting Parallel Execution with {num_workers} workers.")
     
-    with mp.Pool(processes=num_workers) as pool:
+#    with mp.Pool(processes=num_workers) as pool:
+#        
+#        
+#        # Prepare iterable: list of (index, val)
+#        #vz_iterable = list(enumerate(Vz_var))
+#        
+#        func_sim = partial(worker_simulation_step, static_params=static_params)
+#        
+#        # chunksize=1 is usually fine for heavy tasks, allows better load balancing
+#        results_iterator = pool.imap(func_sim, params_list, chunksize=1)
+#        
+#        # Iterate and fill arrays
+#        for res in tqdm(results_iterator, total=len(params_list), desc="mu/Vz Sweep"):
+#            idx = res['i']
+#            
+#            dIdVs_left_arr[idx, :] = res['dIdVl']
+#            dIdVs_right_arr[idx, :] = res['dIdVr']
+#            ldos_arr[idx, :, :] = res['ldos']
+#            Conductance_matrix[idx, :, :] = res['Gmat']
+#            gamma_sq_arr[idx] = res['gamma_sq']
+#            mp_eng_arr[idx] = res['energy_0']
+#            mp_arr[idx, :] = res['M_profile']
+#            
+#            barrier_right_conductance_left_arr[idx, :] = res['b_right_cond_left']
+#            barrier_right_conductance_right_arr[idx, :] = res['b_right_cond_right']
+#            barrier_left_conductance_left_arr[idx, :] = res['b_left_cond_left']
+#            barrier_left_conductance_right_arr[idx, :] = res['b_left_cond_right']
+#            spectrum_arr[idx, :] = res['spectrum']
+#            
+#            rG_corr_arr[idx]= res['rG_corr']
+#            lG_corr_arr[idx]= res['lG_corr']
+#                        
+#            peaks_left[idx,:] = res['peak_left']
+#            peaks_right[idx,:] = res['peak_right']
+#            site_localizations[idx] = res['site_localization']
+#            
+    
         
         
-        # Prepare iterable: list of (index, val)
-        #vz_iterable = list(enumerate(Vz_var))
+    # Prepare iterable: list of (index, val)
+    #vz_iterable = list(enumerate(Vz_var))
+    
+    func_sim = partial(worker_simulation_step, static_params=static_params)
+    
+    # chunksize=1 is usually fine for heavy tasks, allows better load balancing
+    
+    # Iterate and fill arrays
+    for params in tqdm(params_list, desc="mu/Vz Sweep"):
+        res = func_sim(params)
+        idx = res['i']
         
-        func_sim = partial(worker_simulation_step, static_params=static_params)
+        dIdVs_left_arr[idx, :] = res['dIdVl']
+        dIdVs_right_arr[idx, :] = res['dIdVr']
+        ldos_arr[idx, :, :] = res['ldos']
+        Conductance_matrix[idx, :, :] = res['Gmat']
+        gamma_sq_arr[idx] = res['gamma_sq']
+        mp_eng_arr[idx] = res['energy_0']
+        mp_arr[idx, :] = res['M_profile']
         
-        # chunksize=1 is usually fine for heavy tasks, allows better load balancing
-        results_iterator = pool.imap(func_sim, params_list, chunksize=1)
+        barrier_right_conductance_left_arr[idx, :] = res['b_right_cond_left']
+        barrier_right_conductance_right_arr[idx, :] = res['b_right_cond_right']
+        barrier_left_conductance_left_arr[idx, :] = res['b_left_cond_left']
+        barrier_left_conductance_right_arr[idx, :] = res['b_left_cond_right']
+        spectrum_arr[idx, :] = res['spectrum']
         
-        # Iterate and fill arrays
-        for res in tqdm(results_iterator, total=len(params_list), desc="mu/Vz Sweep"):
-            idx = res['i']
-            
-            dIdVs_left_arr[idx, :] = res['dIdVl']
-            dIdVs_right_arr[idx, :] = res['dIdVr']
-            ldos_arr[idx, :, :] = res['ldos']
-            Conductance_matrix[idx, :, :] = res['Gmat']
-            gamma_sq_arr[idx] = res['gamma_sq']
-            mp_eng_arr[idx] = res['energy_0']
-            mp_arr[idx, :] = res['M_profile']
-            
-            barrier_right_conductance_left_arr[idx, :] = res['b_right_cond_left']
-            barrier_right_conductance_right_arr[idx, :] = res['b_right_cond_right']
-            barrier_left_conductance_left_arr[idx, :] = res['b_left_cond_left']
-            barrier_left_conductance_right_arr[idx, :] = res['b_left_cond_right']
-            spectrum_arr[idx, :] = res['spectrum']
-            
-            rG_corr_arr[idx]= res['rG_corr']
-            lG_corr_arr[idx]= res['lG_corr']
-                        
-            peaks_left[idx,:] = res['peak_left']
-            peaks_right[idx,:] = res['peak_right']
-            site_localizations[idx] = res['site_localization']
+        rG_corr_arr[idx]= res['rG_corr']
+        lG_corr_arr[idx]= res['lG_corr']
+                    
+        peaks_left[idx,:] = res['peak_left']
+        peaks_right[idx,:] = res['peak_right']
+        site_localizations[idx] = res['site_localization']
+        
             
             
             
             
-
-        if not args.no_pdi:
-            print("\n--- Starting PDI Calculation ---")
-            
-            # Create partial function
-            func_pdi = partial(worker_pdi_step, static_params=static_params)
-            
-            pdi_results_iter = pool.imap(func_pdi, params_list, chunksize=1)
-            
-            # pdi_data structure: list of [mu*Vc, Vz_raw, pdi_val]
-            pdi_data = []
-            for res in tqdm(pdi_results_iter, total=len(params_list), desc="PDI Sweep"):
-                pdi_data.append(res)
-            pdi_data = np.array(pdi_data)
-        else:
-            print("\n--- Skipping PDI Calculation ---")
-            pdi_data = np.array([])
+        #OVERRIDE = False
+        #if OVERRIDE:#not args.no_pdi:
+        #    print("\n--- Starting PDI Calculation ---")
+        #    
+        #    # Create partial function
+        #    func_pdi = partial(worker_pdi_step, static_params=static_params)
+        #    
+        #    pdi_results_iter = pool.imap(func_pdi, params_list, chunksize=1)
+        #    
+        #    # pdi_data structure: list of [mu*Vc, Vz_raw, pdi_val]
+        #    pdi_data = []
+        #    for res in tqdm(pdi_results_iter, total=len(params_list), desc="PDI Sweep"):
+        #        pdi_data.append(res)
+        #    pdi_data = np.array(pdi_data)
+        #else:
+        #    print("\n--- Skipping PDI Calculation ---")
+        pdi_data = np.array([])
 
     # -------------------------------------------------------------------------
     # Saving Results
