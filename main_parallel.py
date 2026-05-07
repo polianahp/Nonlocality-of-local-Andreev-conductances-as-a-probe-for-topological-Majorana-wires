@@ -20,6 +20,8 @@ from config import PathConfigs
 import itertools as itr
 from functools import partial
 import argparse
+import scipy.sparse.linalg as sla
+
 
 
 
@@ -34,6 +36,7 @@ def worker_simulation_step(iter_data, static_params):
     static_params: dict containing all constant physics parameters
     """
     i, mu, vz = iter_data
+    
     
     
     # Unpack static parameters
@@ -53,6 +56,7 @@ def worker_simulation_step(iter_data, static_params):
     barrier_arr = static_params['barrier_arr']
     num_eigenvalues = static_params['num_eigenvalues']
     eng_window_range = static_params['eng_window_range']
+    solver_type = static_params.get('solver_type', 'cpu')
     
     # --- 2. Barrier Sweeps (Nested Loop logic) ---
     points = len(barrier_arr)
@@ -70,22 +74,26 @@ def worker_simulation_step(iter_data, static_params):
     energy_0 = 0
     M_profile = [0]
     spectrum = None
-    
-    syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
+    rho_M1 = np.zeros(Ls, dtype = complex)
+    rho_M2 = np.zeros(rho_M1.shape, dtype = complex)
+    site_localization = 100
     
     # --- 1. Build Symmetric System & Calculate Spectral Properties ---
     
-    rho_M1, rho_M2, _ = hp.get_psiM_density(syst_closed, k = 2)
-    site_localization = hp.calc_MZM_localization(rho_M1, rho_M2)
+    if static_params['spectra_flag'] or static_params['localization_flag']:
+        syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
+        evals, evecs = hp.solve_ham(syst_closed, solver_type=solver_type, k=num_eigenvalues)
+
     
-    if static_params['spectra_flag']:
-        spectrum = hp.calc_spectrum(syst_closed, k=num_eigenvalues)
-    
-        # Majorana metrics
-        M_profile, energy_0 = hp.calculate_local_mp(syst_closed)
-    
-    # dI/dV and Conductance Matrix
-    #dIdVl, dIdVr, ldos = hp.calc_dIdV(syst, energies)
+        if static_params['localization_flag']:
+            rho_M1, rho_M2, _ = hp.get_psiM_density(evals, evecs)
+            site_localization = hp.calc_MZM_localization(rho_M1, rho_M2)
+        
+            
+        if static_params['spectra_flag']:
+            spectrum = hp.sort_spectrum(evals, evecs)
+            #gamma_sq = hp.calculate_gamma_squared(evals, evecs)
+            #M_profile, energy_0 = hp.calculate_local_mp(evals, evecs)
     
     
     eng_window = np.linspace(-0.15, 0.15, eng_window_range)
@@ -105,9 +113,10 @@ def worker_simulation_step(iter_data, static_params):
                            Ls=Ls, mu_leads=mu_leads,
                            barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
     
-        Gmat = hp.calc_conductance_matrix(syst, 0.0)
+        dIdVl, dIdVr, ldos = hp.calc_dIdV(syst, energies, solver_type=solver_type)
+        Gmat = hp.calc_conductance_matrix(syst, 0.0, solver_type=solver_type)
         for k, eng in enumerate(eng_window):
-            cL, cR = hp.calc_conductance(syst, energy=eng)
+            cL, cR = hp.calc_conductance(syst, energy=eng, solver_type=solver_type)
             csL[k] = cL
             csR[k] = cR
     
@@ -128,9 +137,6 @@ def worker_simulation_step(iter_data, static_params):
         else:
             pk_r = np.asarray([0, 10, 10])
     
-    
-        
-
 
         # Note: this is run serially inside the worker because the overhead 
         # of spawning sub-processes here would be too high.
@@ -143,7 +149,7 @@ def worker_simulation_step(iter_data, static_params):
                                     Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
                                     barrier_r=barrier_var_tot, Vdisx=Vdisx)
             
-            cL, cR = hp.calc_conductance(syst_UR, energy=0.0)
+            cL, cR = hp.calc_conductance(syst_UR, energy=0.0, solver_type=solver_type)
             b_right_cond_left[k] = cL
             b_right_cond_right[k] = cR
             
@@ -151,12 +157,6 @@ def worker_simulation_step(iter_data, static_params):
         r_Gll, r_GRR = b_right_cond_left, b_right_cond_right #varying left barrier and getting local conductances
         
         rG_corr = hp.calc_correlation(r_Gll, r_GRR)
-    
-
-    
-
-    
-    # Pack all results into a dictionary to return to main process
     
     
     results = {
@@ -181,11 +181,11 @@ def worker_simulation_step(iter_data, static_params):
     }
     return results
 
-def worker_pdi_step(param_tuple, static_params):
+def worker_pdi_step(iter_data, static_params):
     """
     Worker function for the PDI calculation loop (Loop 2).
     """
-    i, mu_pm, vz = param_tuple
+    i, mu_pm, vz = iter_data
     
     # Unpack necessary static params
     ts = static_params['t']
@@ -230,16 +230,18 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Run parallel transport and PDI simulation.")
     
-    action = 'store_false'
-    parser.add_argument("--dirname", type=str, default="mzm_loclz_test", help="Directory name for saving output data.")
+    action = 'store_true'
+    parser.add_argument("--dirname", type=str, default="non_interacting_test", help="Directory name for saving output data.")
     parser.add_argument("--fname", type=str, default="Tdis.npz",help="File name for the disorder potential.")
     parser.add_argument("--Lb_pdi", type=int, default=3, help="Barrier length.")
     parser.add_argument("--no_pdi", action=action, help="Skip the time-consuming PDI calculation.")
     parser.add_argument("--no_conductance", action=action, help="Skip Conductance Calculation.")
     parser.add_argument("--no_spectra", action=action, help="Skip Spectra Calculations.")
+    parser.add_argument("--no_localization", action=action, help="Skip Localization Calculations.")
+    parser.add_argument("--acceleration_type", type=str, default="parallel", choices=["gpu", "parallel", "None"], help="Acceleration mode (gpu, parallel, or None).")
     
     args = parser.parse_args()
-    
+
 
     dirname = f"peak_testing/{args.dirname}"
     fname = f"New_Disorders/{args.fname}"
@@ -251,22 +253,12 @@ if __name__ == "__main__":
     print(f"Disorder File: {fname}")
     print(f"Barrier Length (Lb): {Lb}")
     print(f"PDI Barrier Length (Lb_pdi): {Lb_pdi}")
+    print(f"Acceleration Mode: {args.acceleration_type}")
     print(f"--------------------------------\n")
     
+    
+    
     ####### System Parameters
-    '''
-    t = 102.0
-    mu_n = 0.2
-    mu_leads = 20.0
-    Delta = 0.5
-    alpha = 3.5
-    Ln = 20 # normal metal length
-    Lb = 4 #barrier length
-    Lb_pdi = Lb
-    Ls = 500 #super conductor length
-    #V_c = np.sqrt(mu**2 + Delta**2)
-    barrier0 = 5
-    '''
     
     Ls = 300 # wire length
 
@@ -292,17 +284,17 @@ if __name__ == "__main__":
 
     mu_n = 0.0
 
-    mu_max = 4.5#4.5
-    mu_min = 0.0
+    mu_max = 2#4.5
+    mu_min = -2
     mu_rng = mu_max - mu_min
-    mu_dist = 0.04#0.02 #spacing between points
+    mu_dist = 0.02 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
     mu_var = np.linspace(mu_min, mu_max, Nmu)
     
     Vz_max = 1.3
     Vz_min = 0.0
     Vz_rng = Vz_max - Vz_min
-    Vz_dist = 0.04#0.02 #spacing between points
+    Vz_dist = 0.02 #spacing between points
     Nvz =  int(Vz_rng/Vz_dist)
     Vz_var = np.linspace(Vz_min, Vz_max, Nvz) 
     
@@ -323,11 +315,8 @@ if __name__ == "__main__":
     
     path = Path(PathConfigs.RUN_FILES/fname)
     
-    Vdisx = hp.initialize_vdis_from_data(path)  
+    Vdisx = hp.initialize_vdis_from_data(path)  * 0
 
-        
-    #print(Vdisx)
-    
     # Dictionary of static parameters to pass to workers
     static_params = {
         't': t,
@@ -354,7 +343,9 @@ if __name__ == "__main__":
         'num_eigenvalues':num_eigenvalues,
         'eng_window_range':51,
         'conductance_flag': not args.no_conductance,
-        'spectra_flag': not args.no_spectra
+        'spectra_flag': not args.no_spectra,
+        'localization_flag': not args.no_localization,
+        'solver_type': 'gpu' if args.acceleration_type == 'gpu' else 'cpu'
     }
     print("conductance_flag:", f"{static_params['conductance_flag']}")
     print("spectra_flag:", f"{static_params['spectra_flag']}")
@@ -387,59 +378,25 @@ if __name__ == "__main__":
     mp_arr = np.zeros(shape= (len(params_list), lenw))
     Conductance_matrix = np.zeros(shape=(len(params_list),2, 2))
     
-    
-    num_workers = max(1, mp.cpu_count() - 1)
-    print(f"Starting Parallel Execution with {num_workers} workers.")
-    
-#    with mp.Pool(processes=num_workers) as pool:
-#        
-#        
-#        # Prepare iterable: list of (index, val)
-#        #vz_iterable = list(enumerate(Vz_var))
-#        
-#        func_sim = partial(worker_simulation_step, static_params=static_params)
-#        
-#        # chunksize=1 is usually fine for heavy tasks, allows better load balancing
-#        results_iterator = pool.imap(func_sim, params_list, chunksize=1)
-#        
-#        # Iterate and fill arrays
-#        for res in tqdm(results_iterator, total=len(params_list), desc="mu/Vz Sweep"):
-#            idx = res['i']
-#            
-#            dIdVs_left_arr[idx, :] = res['dIdVl']
-#            dIdVs_right_arr[idx, :] = res['dIdVr']
-#            ldos_arr[idx, :, :] = res['ldos']
-#            Conductance_matrix[idx, :, :] = res['Gmat']
-#            gamma_sq_arr[idx] = res['gamma_sq']
-#            mp_eng_arr[idx] = res['energy_0']
-#            mp_arr[idx, :] = res['M_profile']
-#            
-#            barrier_right_conductance_left_arr[idx, :] = res['b_right_cond_left']
-#            barrier_right_conductance_right_arr[idx, :] = res['b_right_cond_right']
-#            barrier_left_conductance_left_arr[idx, :] = res['b_left_cond_left']
-#            barrier_left_conductance_right_arr[idx, :] = res['b_left_cond_right']
-#            spectrum_arr[idx, :] = res['spectrum']
-#            
-#            rG_corr_arr[idx]= res['rG_corr']
-#            lG_corr_arr[idx]= res['lG_corr']
-#                        
-#            peaks_left[idx,:] = res['peak_left']
-#            peaks_right[idx,:] = res['peak_right']
-#            site_localizations[idx] = res['site_localization']
-#            
-    
+    results = []
+    if args.acceleration_type == 'gpu':
+        print("Using GPU acceleration (Serial Sweep).")
+        results = [worker_simulation_step(pms, static_params) for pms in tqdm(params_list, desc="mu/Vz Sweep")]
         
+    elif args.acceleration_type == 'parallel':
+        num_workers = max(1, mp.cpu_count() - 1)
+        print(f"Starting Parallel Execution with {num_workers} workers.")
         
-    # Prepare iterable: list of (index, val)
-    #vz_iterable = list(enumerate(Vz_var))
-    
-    func_sim = partial(worker_simulation_step, static_params=static_params)
-    
-    # chunksize=1 is usually fine for heavy tasks, allows better load balancing
-    
-    # Iterate and fill arrays
-    for params in tqdm(params_list, desc="mu/Vz Sweep"):
-        res = func_sim(params)
+        with mp.Pool(processes=num_workers) as pool:
+            func_sim = partial(worker_simulation_step, static_params=static_params)
+            results = list(tqdm(pool.imap(func_sim, params_list, chunksize=1), total=len(params_list), desc="mu/Vz Sweep"))
+    else: # None
+        print("Using Serial Execution (CPU).")
+        for pms in tqdm(params_list, desc="mu/Vz Sweep"):
+            results.append(worker_simulation_step(pms, static_params))
+
+    for res in results:
+        
         idx = res['i']
         
         dIdVs_left_arr[idx, :] = res['dIdVl']
@@ -463,28 +420,34 @@ if __name__ == "__main__":
         peaks_right[idx,:] = res['peak_right']
         site_localizations[idx] = res['site_localization']
         
-            
-            
-            
-            
-        #OVERRIDE = False
-        #if OVERRIDE:#not args.no_pdi:
-        #    print("\n--- Starting PDI Calculation ---")
-        #    
-        #    # Create partial function
-        #    func_pdi = partial(worker_pdi_step, static_params=static_params)
-        #    
-        #    pdi_results_iter = pool.imap(func_pdi, params_list, chunksize=1)
-        #    
-        #    # pdi_data structure: list of [mu*Vc, Vz_raw, pdi_val]
-        #    pdi_data = []
-        #    for res in tqdm(pdi_results_iter, total=len(params_list), desc="PDI Sweep"):
-        #        pdi_data.append(res)
-        #    pdi_data = np.array(pdi_data)
-        #else:
-        #    print("\n--- Skipping PDI Calculation ---")
-        pdi_data = np.array([])
+        
+        
+    pdi_data = np.array([])
 
+    if not args.no_pdi:
+        print("\nStarting PDI Calculation Loop.")
+        pdi_results = []
+        if args.acceleration_type == 'gpu':
+            print("Using GPU acceleration (Serial Sweep).")
+            pdi_results = [worker_pdi_step(pms, static_params) for pms in tqdm(params_list, desc="PDI Sweep")]
+
+        elif args.acceleration_type == 'parallel':
+            num_workers = max(1, mp.cpu_count() - 1)
+            print(f"Starting Parallel Execution with {num_workers} workers.")
+
+            with mp.Pool(processes=num_workers) as pool:
+                func_pdi = partial(worker_pdi_step, static_params=static_params)
+                pdi_results = list(tqdm(pool.imap(func_pdi, params_list, chunksize=1), total=len(params_list), desc="PDI Sweep"))
+        else: # None
+            print("Using Serial Execution (CPU).")
+            for pms in tqdm(params_list, desc="PDI Sweep"):
+                pdi_results.append(worker_pdi_step(pms, static_params))
+
+        pdi_data = np.array(pdi_results)
+
+
+    
+    
     # -------------------------------------------------------------------------
     # Saving Results
     # -------------------------------------------------------------------------

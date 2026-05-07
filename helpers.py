@@ -8,7 +8,13 @@ from pathlib import Path
 import scipy.sparse.linalg as sla
 from scipy.signal import find_peaks
 
-
+try:
+    import cupy as cp
+    import cupyx.scipy.sparse as cps
+    from cupyx.scipy.sparse.linalg import splu as cp_splu
+    GPU_AVAILABLE = True
+except ImportError:
+    GPU_AVAILABLE = False
 
 
 #pauli matrices
@@ -44,9 +50,40 @@ def np_load_wrapped(filename, subdirectory):
     
 ######## Calculation Helpers ########
 
+if GPU_AVAILABLE:
+    class GPUSolver(kwant.solvers.common.SparseSolver):
+        """Kwant solver using CuPy for GPU acceleration."""
+        lhsformat = 'csc'
+        rhsformat = 'csc'
 
-def calc_conductance(syst, energy = 0.0, return_smatrix = False):
-    smatrix = kwant.smatrix(syst, energy)
+        def _factorized(self, A):
+            # Kwant passes A as a scipy.sparse.coo_matrix
+            A_gpu = cps.csc_matrix(A)
+            return cp_splu(A_gpu)
+
+        def _solve_linear_sys(self, factorized_a, b, kept_vars):
+            # Ensure b is a dense numpy array with numeric dtype
+            if hasattr(b, 'toarray'):
+                b = b.toarray()
+            b = np.ascontiguousarray(b, dtype=np.complex128)
+            b_gpu = cp.asarray(b)
+            x_gpu = factorized_a.solve(b_gpu)
+            # Return result as numpy array for Kwant compatibility
+            return cp.asnumpy(x_gpu[kept_vars])
+
+    gpu_solver = GPUSolver()
+
+def get_gpu_smatrix(syst, energy=0.0, args=(), params=None):
+    if not GPU_AVAILABLE:
+        raise RuntimeError("CuPy not installed. Cannot use GPU solver.")
+    return gpu_solver.smatrix(syst, energy, args=args, params=params)
+
+
+def calc_conductance(syst, energy = 0.0, return_smatrix = False, solver_type='cpu'):
+    if solver_type == 'gpu':
+        smatrix = get_gpu_smatrix(syst, energy)
+    else:
+        smatrix = kwant.smatrix(syst, energy)
     
     R = 0
     A = 0
@@ -70,9 +107,12 @@ def calc_conductance(syst, energy = 0.0, return_smatrix = False):
         return cleft, cright
     
     
-def calc_conductance_matrix(syst, eng):
+def calc_conductance_matrix(syst, eng, solver_type='cpu'):
     G_matrix = np.zeros(shape=(2, 2))
-    smatrix = kwant.smatrix(syst, eng)
+    if solver_type == 'gpu':
+        smatrix = get_gpu_smatrix(syst, eng)
+    else:
+        smatrix = kwant.smatrix(syst, eng)
     Rl = 0
     Al = 0
     Rr = 0
@@ -105,7 +145,7 @@ def calc_conductance_matrix(syst, eng):
     return G_matrix
 
 
-def calculate_gamma_squared(syst_closed, k=0):
+def calculate_gamma_squared(evals, evecs):
     """
     Calculates the Squared Majorana Operator 
     Formula: gamma^2 = Sum_j (u_j * v_j)
@@ -114,11 +154,6 @@ def calculate_gamma_squared(syst_closed, k=0):
     - syst_closed: finalized system (without leads attached).
     - k: The index of the eigenstate
     """
-    ham = syst_closed.hamiltonian_submatrix(sparse=True)
-    try:
-        evals, evecs = sla.eigsh(ham, k=k+4, sigma=0, which='LM')
-    except:
-        evals, evecs = np.linalg.eigh(ham.toarray())
         
     idx = np.argsort(np.abs(evals))
     psi = evecs[:, idx[k]]  # Wavefunction of the k-th mode
@@ -134,7 +169,7 @@ def calculate_gamma_squared(syst_closed, k=0):
     return gamma_sq
 
 
-def calculate_local_mp(syst_closed):
+def calculate_local_mp(evals, evecs):
     """
     Calculates the Local Majorana Polarization (Mj) for each site j.
     Formula: M_j = (2 * u * v) / (u^2 + v^2)
@@ -144,11 +179,6 @@ def calculate_local_mp(syst_closed):
     - M_profile: Array of length L (number of sites), containing Mj for each site.
     - energy_0: The energy of the analyzed mode.
     """
-    ham = syst_closed.hamiltonian_submatrix(sparse=True)
-    try:
-        evals, evecs = sla.eigsh(ham, k=2, sigma=0, which='LM')
-    except:
-        evals, evecs = np.linalg.eigh(ham.toarray())
         
     idx = np.argsort(np.abs(evals))
     psi = evecs[:, idx[0]]
@@ -180,7 +210,7 @@ def calculate_local_mp(syst_closed):
     return M_profile, energy_0
 
 
-def calc_dIdV(syst, energies):
+def calc_dIdV(syst, energies, solver_type='cpu'):
     num_engs = len(energies)
     
     num_orbitals = syst.graph.num_nodes * 4
@@ -192,7 +222,10 @@ def calc_dIdV(syst, energies):
     for k, eng in tqdm(enumerate(energies), total=num_engs, desc="Calculating dI/dV"):
         #print(f"running energy {k}/{num_engs}")
         eng = energies[k]
-        smatrix = kwant.smatrix(syst, eng)
+        if solver_type == 'gpu':
+            smatrix = get_gpu_smatrix(syst, eng)
+        else:
+            smatrix = kwant.smatrix(syst, eng)
         R = 0
         A = 0
         for i in range(2):
@@ -317,9 +350,12 @@ def calc_MZM_localization(rho_left, rho_right, pct_thresh = 80.0):
     :type rho_M2: _type_
     """
     tot_area = np.trapz(rho_left + rho_right)
-
     
-    n=1
+    if np.isclose(tot_area, 0):
+        #returning index as full length of the wire. 
+        return len(rho_left)
+    
+    n=4
     pct = 0
     while not pct > pct_thresh:
         rho_left_part = rho_left[0:n]
@@ -328,7 +364,12 @@ def calc_MZM_localization(rho_left, rho_right, pct_thresh = 80.0):
         sum_M1 = np.trapz(rho_left_part)
         sum_M2 = np.trapz(rho_right_part)
         
-        pct = 100*(sum_M1 + sum_M2)/(tot_area)
+        with np.errstate(divide='raise'):
+            try:
+                pct = 100*(sum_M1 + sum_M2)/(tot_area)
+            except FloatingPointError as e:
+                print("Caught Zero Division")
+                pct = 0 
         
         if pct  > pct_thresh:
             break
@@ -338,62 +379,78 @@ def calc_MZM_localization(rho_left, rho_right, pct_thresh = 80.0):
     return n
 
 
-def get_psiM_density(syst, k=2):
+
+def solve_ham(syst, k, solver_type='cpu'):
+    """
+    Diagonalizes the Hamiltonian of the system.
+    Returns k eigenvalues and eigenvectors closest to zero.
+    """
+    ham = syst.hamiltonian_submatrix(sparse=True)
+    if solver_type == 'gpu':
+        if cp is None:
+            raise ImportError("CuPy is not installed or no GPU is available.")
+
+        try:
+            # Try GPU sparse solver if cupyx is fully available
+            from cupyx.scipy.sparse.linalg import eigsh as cp_eigsh
+            evals_gpu, evecs_gpu = cp_eigsh(cps.csr_matrix(ham), k=k, sigma=0, which='LM')
+            evals = cp.asnumpy(evals_gpu)
+            evecs = cp.asnumpy(evecs_gpu)
+        except (ImportError, AttributeError, Exception):
+            # Fallback to dense diagonalization on GPU (cp.linalg.eigh does not take k)
+            ham_gpu = cp.asarray(ham.toarray())
+            evals_all, evecs_all = cp.linalg.eigh(ham_gpu)
+            # cp.linalg.eigh returns all eigenvalues sorted. 
+            # We want the k eigenvalues closest to 0 (since sigma=0 in eigsh).
+            idx = cp.argsort(cp.abs(evals_all))[:k]
+            evals = cp.asnumpy(evals_all[idx])
+            evecs = cp.asnumpy(evecs_all[:, idx])
+    else:
+        try:
+            evals, evecs = sla.eigsh(ham, k=k, sigma=0, which='LM')
+        except Exception:
+            # Fallback to dense diagonalization on CPU (np.linalg.eigh does not take k)
+            evals_all, evecs_all = np.linalg.eigh(ham.toarray())
+            idx = np.argsort(np.abs(evals_all))[:k]
+            evals = evals_all[idx]
+            evecs = evecs_all[:, idx]
+
+    return evals, evecs
+
+def get_psiM_density(evals, evecs):
     """  
     Calculates the Majorana mode densities rho_M1 (Left) and rho_M2 (Right)
     at zero energy.
     
     Parameters:
-    - syst: The finalized kwant system (syst_closed).
-    - k: Number of eigenvalues to solve for (default 2 for the lowest pair).
+    - evals: Eigenvalues of the system.
+    - evecs: Eigenvectors of the system.
     
     Returns:
     - rho_M1: Spatial density of the first Majorana mode (Left).
     - rho_M2: Spatial density of the second Majorana mode (Right).
     - energies: The eigenvalues found (for verification).
     """
-    # 1. Access Hamiltonian from Kwant
-    # sparse=True is essential for large systems
-    ham = syst.hamiltonian_submatrix(sparse=True) 
-    
-    # 2. Diagonalize to find states near Zero Energy (sigma=0)
-    # k=2 guarantees we find the lowest pair (E ~ +0 and E ~ -0)
-    try:
-        evals, evecs = sla.eigsh(ham, k=k, sigma=0, which='LM')
-    except:
-        # Fallback for small systems where sparse solvers might fail
-        evals, evecs = np.linalg.eigh(ham.toarray())
-        
-    # 3. Sort by Energy (Real values)
-    # We want the lowest POSITIVE energy state and its NEGATIVE partner.
-    # eigsh usually returns unsorted or sorted by magnitude. We sort by value.
-    sort_idx = np.argsort(evals)
-    evals = evals[sort_idx]
-    evecs = evecs[:, sort_idx]
-    
-    # Identify the index of the first positive energy state
-    # In a particle-hole symmetric system with 2*N states:
-    # indices 0 to N-1 are negative, N to 2N-1 are positive.
-    # For k retrieved states around 0, the one just above the middle is the lowest positive.
-    mid_idx = len(evals) // 2
-    
-    # Lowest positive state (psi_+)
-    psi_plus = evecs[:, mid_idx]
-    # Corresponding negative state (psi_-)
-    psi_minus = evecs[:, mid_idx - 1]
-    
+    # 1. Identify the two states closest to zero energy (the zero-energy pair)
+    # This is more robust than mid_idx when k > 2 or if the spectrum is not perfectly symmetric.
+    idx_closest = np.argsort(np.abs(evals))[:2]
+    # Sort these two algebraically so idx_pair[0] is the negative state and idx_pair[1] is the positive state
+    idx_pair = idx_closest[np.argsort(evals[idx_closest])]
+
+    # Highest negative state (psi_-) and Lowest positive state (psi_+)
+    psi_minus = evecs[:, idx_pair[0]]
+    psi_plus = evecs[:, idx_pair[1]]
+
     # 4. Phase Correction (Standardize phases)
     # We enforce a phase such that the first component is real/positive to align them
     # This is similar to the 'ix' logic in the Mathematica script
-    phase_plus = np.conj(psi_plus[0]) / np.abs(psi_plus[0] + 1e-20)
-    phase_minus = np.conj(psi_minus[0]) / np.abs(psi_minus[0] + 1e-20)
-    
+    phase_plus = np.conj(psi_plus[0]) / (np.abs(psi_plus[0]) + 1e-20)
+    phase_minus = np.conj(psi_minus[0]) / (np.abs(psi_minus[0]) + 1e-20)
+
     psi_plus = psi_plus * phase_plus
     psi_minus = psi_minus * phase_minus
-    
     # 5. Construct Majorana Basis
-    # gamma_1 = (psi_+ + psi_-) / sqrt(2)  (Usually Left)
-    # gamma_2 = (psi_+ - psi_-) / sqrt(2)  (Usually Right, times i)
+
     gamma_1 = (psi_plus + psi_minus) / np.sqrt(2)
     gamma_2 = (psi_plus - psi_minus) / np.sqrt(2)
     
@@ -642,14 +699,13 @@ def calc_center_of_mass(x, y):
     return com
     
     
-def calc_spectrum(syst_closed, k=22):
+def calc_spectrum(syst_closed, k):
     """
     Calculates the k eigenvalues closest to zero for the closed system.
     Returns them sorted from lowest (most negative) to highest (most positive).
     """
-    # Extract the tight-binding matrix from the Kwant system
+    # Extract the tight-binding matrix from the Kwant system    
     ham = syst_closed.hamiltonian_submatrix(sparse=True)
-    
     try:
         evals, evecs = sla.eigsh(ham, k=k, sigma=0, which='LM')
     except:
@@ -662,6 +718,12 @@ def calc_spectrum(syst_closed, k=22):
     sorted_evals = np.sort(closest_evals)
     
     return sorted_evals
+
+def sort_spectrum(evals, evecs):
+    """
+    Sorts the provided eigenvalues algebraically.
+    """
+    return np.sort(evals)
     
         
     
