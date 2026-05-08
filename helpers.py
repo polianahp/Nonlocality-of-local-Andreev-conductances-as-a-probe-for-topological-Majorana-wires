@@ -246,7 +246,7 @@ def calc_dIdV(syst, energies, solver_type='cpu'):
     return dIdV_left, dIdV_right, ldos 
 
 
-def detect_peaks_oldold(conductance_arr, energy_mesh, prominence=0.01):
+def detect_peaks_oldoldold(conductance_arr, energy_mesh, prominence=0.01):
     """
     Detects peaks in the differential conductance array with priority for Majorana physics.
     
@@ -302,7 +302,7 @@ def detect_peaks_oldold(conductance_arr, energy_mesh, prominence=0.01):
     return has_peak, splitting
 
 
-def detect_peaksold(ys, xs, thresh):
+def detect_peaksoldold(ys, xs, thresh):
     z_idx = np.where(xs.real == 0)[0][0]
     pks = find_peaks(ys, height = thresh)[0]
 
@@ -320,7 +320,7 @@ def detect_peaksold(ys, xs, thresh):
     
     return min_peak
 
-def detect_peaks(ys, xs):
+def detect_peaksold(ys, xs):
     z_idx = np.where(np.isclose(xs.real, 0))[0][0]
 
     zpksidx =find_peaks(ys)[0] - z_idx
@@ -336,6 +336,17 @@ def detect_peaks(ys, xs):
         
     min_idx = np.min(pos_pks) + z_idx
     return min_idx
+
+def detect_peaks(ys, xs):
+    pks = find_peaks(ys)[0]
+    if len(pks) == 0:
+        return None
+    
+    eng_pks = xs[pks]
+    mineng = np.min(np.abs(eng_pks))
+    minengidx = np.where(xs == mineng)
+    return minengidx[0][0]
+
 
 
 
@@ -416,6 +427,9 @@ def solve_ham(syst, k, solver_type='cpu'):
             evecs = evecs_all[:, idx]
 
     return evals, evecs
+
+
+
 
 def get_psiM_density(evals, evecs):
     """  
@@ -568,8 +582,43 @@ def build_system_closed(t, mu, gamma, Delta0, V_z, alpha, Ls, Vdisx, a=1):
 
 ######## Disorder Calculation Helper Functions ########
 
-def calc_normalized(x):
-    return x/np.max(np.abs(x))
+def calc_weight_localization(rho_M1, rho_M2, weight_threshold=0.9):
+    """
+    Calculates the percentage of the wire length that contains 
+    the specified weight threshold of the total Majorana density.
+    
+    Parameters:
+    - rho_M1: Spatial density of the first Majorana mode.
+    - rho_M2: Spatial density of the second Majorana mode.
+    - weight_threshold: Target weight percentage (default 0.9).
+    
+    Returns:
+    - fraction: Percentage of the wire length (0 to 1).
+    """
+    step = 0.00001
+    n = 0
+    
+    totrho = rho_M1 + rho_M2
+    totsum = sum(totrho)
+    wpct = 0.0
+    rgn_pct = 0.0
+    while wpct < weight_threshold:
+        thresh = np.max(totrho) - step * n
+        idx = np.where(totrho>=thresh)[0]
+        wpct = np.sum(totrho[idx])/totsum
+        rgn_pct = (np.max(idx) - np.min(idx))/len(totrho)
+        n +=1
+        
+    return rgn_pct
+
+
+
+def calc_overlap(rho1, rho2):
+    """
+    Calculates the spatial overlap integral between two densities.
+    overlap = sum(rho1 * rho2)
+    """
+    return np.sum(np.abs(rho1) * np.abs(rho2))
     
 
 

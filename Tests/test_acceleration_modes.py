@@ -24,6 +24,7 @@ def test_worker_step_cpu():
         'Ls': Ls, 'mu_leads': mu_leads, 'barrier0': barrier0, 'Vdisx': Vdisx,
         'energies': energies, 'barrier_arr': barrier_arr, 'num_eigenvalues': 4,
         'eng_window_range': 3, 'conductance_flag': True, 'spectra_flag': True,
+        'localization_flag': False,
         'solver_type': 'cpu'
     }
     
@@ -55,6 +56,7 @@ def test_worker_step_gpu():
         'Ls': Ls, 'mu_leads': mu_leads, 'barrier0': barrier0, 'Vdisx': Vdisx,
         'energies': energies, 'barrier_arr': barrier_arr, 'num_eigenvalues': 4,
         'eng_window_range': 3, 'conductance_flag': True, 'spectra_flag': True,
+        'localization_flag': False,
         'solver_type': 'gpu'
     }
     

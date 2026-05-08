@@ -77,19 +77,21 @@ def worker_simulation_step(iter_data, static_params):
     rho_M1 = np.zeros(Ls, dtype = complex)
     rho_M2 = np.zeros(rho_M1.shape, dtype = complex)
     site_localization = 100
-    
+    weight_localization = 1.0
+    overlap_integral = 0.0
+
     # --- 1. Build Symmetric System & Calculate Spectral Properties ---
-    
+
     if static_params['spectra_flag'] or static_params['localization_flag']:
         syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
         evals, evecs = hp.solve_ham(syst_closed, solver_type=solver_type, k=num_eigenvalues)
 
-    
+
         if static_params['localization_flag']:
             rho_M1, rho_M2, _ = hp.get_psiM_density(evals, evecs)
             site_localization = hp.calc_MZM_localization(rho_M1, rho_M2)
-        
-            
+            weight_localization = hp.calc_weight_localization(rho_M1, rho_M2, weight_threshold=static_params['weight_threshold'])
+            overlap_integral = hp.calc_overlap(rho_M1, rho_M2)
         if static_params['spectra_flag']:
             spectrum = hp.sort_spectrum(evals, evecs)
             #gamma_sq = hp.calculate_gamma_squared(evals, evecs)
@@ -175,9 +177,11 @@ def worker_simulation_step(iter_data, static_params):
         'rG_corr':rG_corr,
         'lG_corr':0,
         'spectrum':spectrum,
-        'peak_left':pk_l,
         'peak_right':pk_r,
-        'site_localization':site_localization
+        'peak_left':pk_l,
+        'site_localization':site_localization,
+        'weight_localization': weight_localization,
+        'overlap_integral': overlap_integral
     }
     return results
 
@@ -315,7 +319,7 @@ if __name__ == "__main__":
     
     path = Path(PathConfigs.RUN_FILES/fname)
     
-    Vdisx = hp.initialize_vdis_from_data(path)  * 0
+    Vdisx = 0*hp.initialize_vdis_from_data(path)  
 
     # Dictionary of static parameters to pass to workers
     static_params = {
@@ -341,6 +345,7 @@ if __name__ == "__main__":
         'barrier_arr': barrier_arr,
         
         'num_eigenvalues':num_eigenvalues,
+        'weight_threshold': 0.9,
         'eng_window_range':51,
         'conductance_flag': not args.no_conductance,
         'spectra_flag': not args.no_spectra,
@@ -372,6 +377,8 @@ if __name__ == "__main__":
     peaks_right = np.zeros_like(peaks_left)
 
     site_localizations = np.zeros_like(rG_corr_arr)
+    weight_localization_arr = np.zeros_like(rG_corr_arr)
+    overlap_integral_arr = np.zeros_like(rG_corr_arr)
     gamma_sq_arr = np.zeros_like(params_list, dtype=complex)
     mp_eng_arr = np.zeros_like(params_list)
     lenw = Ls #+ 2*(Lb + Ln)
@@ -419,6 +426,8 @@ if __name__ == "__main__":
         peaks_left[idx,:] = res['peak_left']
         peaks_right[idx,:] = res['peak_right']
         site_localizations[idx] = res['site_localization']
+        weight_localization_arr[idx] = res['weight_localization']
+        overlap_integral_arr[idx] = res['overlap_integral']
         
         
         
@@ -478,7 +487,10 @@ if __name__ == "__main__":
     
     hp.np_save_wrapped(peaks_left,"peaks_left", dirname)
     hp.np_save_wrapped(peaks_right,"peaks_right", dirname)
-    hp.np_save_wrapped(site_localizations,"site_localizations", dirname)
+    hp.np_save_wrapped(site_localizations, "site_localizations", dirname)
+    hp.np_save_wrapped(weight_localization_arr, "weight_localization_arr", dirname)
+    hp.np_save_wrapped(overlap_integral_arr, "OverlapIntegral", dirname)
+
     
     all_params = {
         **static_params,  # unpacks 't', 'mu_n', 'Delta', 'alpha', etc.
