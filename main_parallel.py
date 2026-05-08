@@ -235,7 +235,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run parallel transport and PDI simulation.")
     
     action = 'store_true'
-    parser.add_argument("--dirname", type=str, default="non_interacting_test", help="Directory name for saving output data.")
+    parser.add_argument("--dirname", type=str, default="peaktesting_Agaiinnn", help="Directory name for saving output data.")
     parser.add_argument("--fname", type=str, default="Tdis.npz",help="File name for the disorder potential.")
     parser.add_argument("--Lb_pdi", type=int, default=3, help="Barrier length.")
     parser.add_argument("--no_pdi", action=action, help="Skip the time-consuming PDI calculation.")
@@ -288,8 +288,8 @@ if __name__ == "__main__":
 
     mu_n = 0.0
 
-    mu_max = 2#4.5
-    mu_min = -2
+    mu_max = 4.5
+    mu_min = 0
     mu_rng = mu_max - mu_min
     mu_dist = 0.02 #spacing between points
     Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
@@ -319,7 +319,7 @@ if __name__ == "__main__":
     
     path = Path(PathConfigs.RUN_FILES/fname)
     
-    Vdisx = 0*hp.initialize_vdis_from_data(path)  
+    Vdisx = hp.initialize_vdis_from_data(path)  
 
     # Dictionary of static parameters to pass to workers
     static_params = {
