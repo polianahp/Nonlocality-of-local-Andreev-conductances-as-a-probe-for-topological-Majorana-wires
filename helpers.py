@@ -344,7 +344,7 @@ def detect_peaks(ys, xs):
     
     eng_pks = xs[pks]
     mineng = np.min(np.abs(eng_pks))
-    minengidx = np.where(xs == mineng)
+    minengidx = np.where(np.isclose(xs,mineng))
     return minengidx[0][0]
 
 
