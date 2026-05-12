@@ -76,7 +76,7 @@ def worker_simulation_step(iter_data, static_params):
     spectrum = None
     rho_M1 = np.zeros(Ls, dtype = complex)
     rho_M2 = np.zeros(rho_M1.shape, dtype = complex)
-    site_localization = 100
+    site_localization = 0
     weight_localization = 1.0
     overlap_integral = 0.0
 
@@ -235,7 +235,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run parallel transport and PDI simulation.")
     
     action = 'store_true'
-    parser.add_argument("--dirname", type=str, default="peaktesting_Agaiinnn", help="Directory name for saving output data.")
+    parser.add_argument("--dirname", type=str, default="localization_8wgt", help="Directory name for saving output data.")
     parser.add_argument("--fname", type=str, default="Tdis.npz",help="File name for the disorder potential.")
     parser.add_argument("--Lb_pdi", type=int, default=3, help="Barrier length.")
     parser.add_argument("--no_pdi", action=action, help="Skip the time-consuming PDI calculation.")
@@ -345,7 +345,7 @@ if __name__ == "__main__":
         'barrier_arr': barrier_arr,
         
         'num_eigenvalues':num_eigenvalues,
-        'weight_threshold': 0.9,
+        'weight_threshold': 0.8,
         'eng_window_range':51,
         'conductance_flag': not args.no_conductance,
         'spectra_flag': not args.no_spectra,

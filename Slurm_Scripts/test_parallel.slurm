@@ -15,6 +15,6 @@ source /shared/software/conda/conda_init.sh
 
 conda activate kwant_fresh
 cd $SCRATCH/nonlocalcond
-python -u main_parallel.py
+python -u main_parallel.py --no_pdi --no_conductance
 
 conda deactivate
