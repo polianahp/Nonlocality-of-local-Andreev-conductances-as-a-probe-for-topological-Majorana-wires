@@ -6,12 +6,12 @@ dirname: "non_interacting_results"
 fname: "ZeroDis.npz"
 
 # Sweep Ranges
-mu_max: 4.0
-mu_min: 0.0
+mu_max: 2.0
+mu_min: -2.0
 mu_dist: 0.05
 #Nmu: 5
 
-Vz_max: 1.5
+Vz_max: 1.4
 Vz_min: 0.0
 Vz_dist: 0.05
 #Nvz: 3
