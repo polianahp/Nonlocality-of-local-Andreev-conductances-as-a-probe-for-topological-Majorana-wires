@@ -1004,6 +1004,26 @@ class PDICalculator:
             invariant = 0.0
         return invariant
 
+    def get_full_Hamiltonian(self, gm, mu):
+        """
+        Constructs the full Hamiltonian matrix for the finite system (Nx sites).
+        This serves as the source of truth for verifying the Kwant implementation.
+        """
+        dim = self.Nx * 4
+        H_full = np.zeros((dim, dim), dtype=complex)
+        
+        for i in range(1, self.Nx + 1):
+            idx = (i-1) * 4
+            # On-site block (including disorder)
+            H_full[idx:idx+4, idx:idx+4] = self.H1(gm, mu, i)
+            
+            # Hopping to next site
+            if i < self.Nx:
+                H_full[idx:idx+4, idx+4:idx+8] = self.h1
+                H_full[idx+4:idx+8, idx:idx+4] = self.h1T
+                
+        return H_full
+
 def calculate_pdi(ts, alphas, gamma, Nx, Vdisx, V0, gm, mu, NL):
     """Wrapper function to instantiate the calculator and get the invariant."""
     calculator = PDICalculator(ts, alphas, gamma, Nx, Vdisx, V0)

@@ -190,7 +190,7 @@ def worker_pdi_step(iter_data, static_params):
     Worker function for the PDI calculation loop (Loop 2).
     """
     i, mu_pm, vz = iter_data
-    
+
     # Unpack necessary static params
     ts = static_params['t']
     alphas = static_params['alpha']
@@ -199,21 +199,30 @@ def worker_pdi_step(iter_data, static_params):
     Vdisx = static_params['Vdisx']
     V0 = static_params['V0']
     qn = static_params['qn']
-    
+    Delta0 = static_params['Delta0']
+
+    # Apply Renormalization Factor Z to align with Kwant physics
+    Z = Delta0 / (Delta0 + gamma)
+    Z = 1
+    ts *= Z
+    alphas *= Z
+    gamma *= Z
+    V0 *= Z
+    mu_pm *= Z
+    vz *= Z
+
     NL_val = qn
-    
-    Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, NL_val)
-    
+
+    # Pass the already-renormalized parameters
+    Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, NL_val)        
     if 0.05 < abs(Q_nu - int(Q_nu)) < 0.95:
         Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 2 * NL_val)
-        
+
         if 0.1 < abs(Q_nu - int(Q_nu)) < 0.9:
             Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 5 * NL_val)
-            
+
             if 0.1 < abs(Q_nu - int(Q_nu)) < 0.9:
-                Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 10 * NL_val) 
-                
-    # round the converged invariant to the nearest integer
+                Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 10 * NL_val)    # round the converged invariant to the nearest integer
     pdi_value = int(np.round(Q_nu))
     
     return [mu_pm, vz, pdi_value]
