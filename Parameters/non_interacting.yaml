@@ -1,0 +1,23 @@
+# non_interacting.yaml
+# Configuration for non-interacting system with zero disorder.
+
+# Disorder Management
+dirname: "non_interacting_results"
+fname: "ZeroDis.npz"
+
+# Sweep Ranges
+mu_max: 4.0
+mu_min: 0.0
+mu_dist: 0.05
+#Nmu: 5
+
+Vz_max: 1.5
+Vz_min: 0.0
+Vz_dist: 0.05
+#Nvz: 3
+
+
+# Simulation Resolution
+Upoints: 10
+num_engs: 51
+acceleration_type: "parallel"

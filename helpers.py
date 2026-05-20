@@ -32,13 +32,13 @@ def get_data_path(file_name, subdirectory):
     pth = Path(subdirectory/ file_name)
     return PathConfigs.DATA / subdirectory / file_name
 
-def np_save_wrapped(arr, name, dirname):
-    dir = f"{PathConfigs.DATA}/{dirname}"
+def np_save_wrapped(arr, name, target_dir):
+    dir = f"{PathConfigs.DATA}/{target_dir}"
     Path(f'{dir}').mkdir(parents=True, exist_ok=True)
     np.save(f"{dir}/{name}.npy", arr)
 
-def np_savez_wrapped(name, dirname, **kwargs):
-    dir = f"{PathConfigs.DATA}/{dirname}"
+def np_savez_wrapped(name, target_dir, **kwargs):
+    dir = f"{PathConfigs.DATA}/{target_dir}"
     Path(f'{dir}').mkdir(parents=True, exist_ok=True)
     np.savez(f"{dir}/{name}.npz", **kwargs)
     

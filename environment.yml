@@ -307,4 +307,6 @@ dependencies:
       - mdurl==0.1.2
       - rich==14.2.0
       - tqdm==4.67.1
+      - pydantic
+      - omegaconf
 prefix: /home/pseudonym/miniconda3/envs/kwant_fresh

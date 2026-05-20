@@ -21,6 +21,7 @@ import itertools as itr
 from functools import partial
 import argparse
 import scipy.sparse.linalg as sla
+from parameter_handler import ConfigManager, SimulationState
 
 
 
@@ -241,147 +242,62 @@ meVpK = 8.6173325e-2 # Kelvin into meV
 
 if __name__ == "__main__":
     
-    parser = argparse.ArgumentParser(description="Run parallel transport and PDI simulation.")
-    
-    action = 'store_true'
-    parser.add_argument("--dirname", type=str, default="localization_8wgt", help="Directory name for saving output data.")
-    parser.add_argument("--fname", type=str, default="Tdis.npz",help="File name for the disorder potential.")
-    parser.add_argument("--Lb_pdi", type=int, default=3, help="Barrier length.")
-    parser.add_argument("--no_pdi", action=action, help="Skip the time-consuming PDI calculation.")
-    parser.add_argument("--no_conductance", action=action, help="Skip Conductance Calculation.")
-    parser.add_argument("--no_spectra", action=action, help="Skip Spectra Calculations.")
-    parser.add_argument("--no_localization", action=action, help="Skip Localization Calculations.")
-    parser.add_argument("--acceleration_type", type=str, default="parallel", choices=["gpu", "parallel", "None"], help="Acceleration mode (gpu, parallel, or None).")
-    
-    args = parser.parse_args()
+    # --- Hardcoded Configuration Path (For VS Code Debugging) ---
+    # Set this to a path like "Parameters/my_config.yaml" to use it as the default.
+    CONFIG_PATH = "Parameters/non_interacting.yaml" 
+    # ------------------------------------------------------------
 
-
-    dirname = f"peak_testing/{args.dirname}"
-    fname = f"New_Disorders/{args.fname}"
-    Lb = 3
-    Lb_pdi = args.Lb_pdi  
+    # 1. Configuration Orchestration
+    config = ConfigManager.get_config(config_path=CONFIG_PATH)
+    state = SimulationState(config)
+    
+    dirname = f"peak_testing/{config.dirname}"
+    fname = f"New_Disorders/{config.fname}"
 
     print(f"--- Starting Simulation ---")
     print(f"Output Directory: {dirname}")
     print(f"Disorder File: {fname}")
-    print(f"Barrier Length (Lb): {Lb}")
-    print(f"PDI Barrier Length (Lb_pdi): {Lb_pdi}")
-    print(f"Acceleration Mode: {args.acceleration_type}")
+    print(f"Barrier Length (Lb): {config.Lb}")
+    print(f"PDI Barrier Length (Lb_pdi): {config.Lb_pdi}")
+    print(f"Acceleration Mode: {config.acceleration_type}")
     print(f"--------------------------------\n")
     
+    # 2. Artifact Logging
+    ConfigManager.log_artifact(config, PathConfigs.DATA / dirname)
     
-    
-    ####### System Parameters
-    
-    Ls = 300 # wire length
-
-    Ln = 0 #length of normal region. See Dourado 2023
-    a0 = 100 # unit cell in A
-    ms = 0.023 # effective mass
-    
-    t = 1000 * eta_m/(2 * a0**2 * ms) # hopping in meV
-    alpha = 140.0/a0 # Rashba SOC
-    
-    Delta_0= 0.3 # parent SC gap
-    gamma = 0.2 # SM-SC coupling strength in meV
-    Delta = Delta_0 * gamma /(Delta_0 + gamma) #induced gap
-    
-    mu_leads = t # lead chemical potential (meV)
-    
-    barrier0 = 2 #barrier energy (meV)
-    
-    V0 = 1.2
-
-    Upoints = 20 
-    num_engs = 101  
-
-    mu_n = 0.0
-
-    mu_max = 4.5
-    mu_min = 0
-    mu_rng = mu_max - mu_min
-    mu_dist = 0.02 #spacing between points
-    Nmu = int(mu_rng/mu_dist) #total number of paramter space points for mu
-    mu_var = np.linspace(mu_min, mu_max, Nmu)
-    
-    Vz_max = 1.3
-    Vz_min = 0.0
-    Vz_rng = Vz_max - Vz_min
-    Vz_dist = 0.02 #spacing between points
-    Nvz =  int(Vz_rng/Vz_dist)
-    Vz_var = np.linspace(Vz_min, Vz_max, Nvz) 
-    
-    
-    params_list = [pms for pms in itr.product(mu_var, Vz_var)]
-    params_list = [[i, pms[0], pms[1]] for i, pms in enumerate(params_list)]
-    
-    
-    barrier_arr = np.linspace(barrier0, 40*barrier0, Upoints)
-    energies = np.linspace(-0.5, 0.5, num_engs)
-    
-    
-    num_eigenvalues = 12 #number of eigenvalues to calculate in the low energy spectra, so 10 above and below the MZMs in this case
-
     # Initialize Disorder
     print(f"Run Files Path Exists: {os.path.exists(PathConfigs.RUN_FILES)}")
-    
-    
-    path = Path(PathConfigs.RUN_FILES/fname)
-    
+    path = Path(PathConfigs.RUN_FILES / fname)
     Vdisx = hp.initialize_vdis_from_data(path)  
 
-    # Dictionary of static parameters to pass to workers
-    static_params = {
-        't': t,
-        'mu_n': mu_n,
-        'Delta0': Delta_0,
-        'alpha': alpha,
-        'gamma': gamma,
-        'V0': V0,
-        'qn': 20,
-
-        'Ln': Ln,
-        'Lb': Lb,
-        #'Lb_pdi':Lb_pdi,
-        'Barrier_Height': barrier0,
-        'Ls': Ls,
-        'mu_leads': mu_leads,
-
-        'barrier0': barrier0,
-        'Vdisx': Vdisx,
-
-        'energies': energies,
-        'barrier_arr': barrier_arr,
-        
-        'num_eigenvalues':num_eigenvalues,
-        'weight_threshold': 0.8,
-        'eng_window_range':51,
-        'conductance_flag': not args.no_conductance,
-        'spectra_flag': not args.no_spectra,
-        'localization_flag': not args.no_localization,
-        'solver_type': 'gpu' if args.acceleration_type == 'gpu' else 'cpu'
-    }
+    # 3. Parameter Preparation
+    static_params = state.get_static_params(Vdisx, config)
+    
+    params_list = state.params_list
+    mu_var = state.mu_var
+    Vz_var = state.Vz_var
+    barrier_arr = state.barrier_arr
+    energies = state.energies
+    
     print("conductance_flag:", f"{static_params['conductance_flag']}")
     print("spectra_flag:", f"{static_params['spectra_flag']}")
 
-    
-
     # Pre-allocate main arrays
-    lenw = Ls + 2*(Lb + Ln)
+    lenw = config.Ls + 2*(config.Lb + config.Ln)
     num_orbitals = lenw * 4
     print(f"LEN: {num_orbitals}")
-    ldos_arr = np.zeros(shape = (len(params_list), len(energies), num_orbitals)) 
+    #ldos_arr = np.zeros(shape = (len(params_list), len(energies), num_orbitals)) 
     
     dIdVs_left_arr = np.zeros(shape = (len(params_list), len(energies)))
     dIdVs_right_arr = np.zeros(shape = (len(params_list), len(energies)))
 
-    barrier_right_conductance_left_arr  = np.zeros(shape=(len(params_list), Upoints))
+    barrier_right_conductance_left_arr  = np.zeros(shape=(len(params_list), config.Upoints))
     barrier_right_conductance_right_arr = np.zeros_like(barrier_right_conductance_left_arr)
     barrier_left_conductance_left_arr   = np.zeros_like(barrier_right_conductance_left_arr)
     barrier_left_conductance_right_arr  = np.zeros_like(barrier_right_conductance_left_arr)
     rG_corr_arr = np.zeros(shape = (len(params_list)))
     lG_corr_arr = np.zeros(shape = (len(params_list)))
-    spectrum_arr = np.zeros(shape=(len(params_list), num_eigenvalues))
+    spectrum_arr = np.zeros(shape=(len(params_list), config.num_eigenvalues))
     peaks_left = np.zeros(shape=(len(params_list), 3))
     peaks_right = np.zeros_like(peaks_left)
 
@@ -390,16 +306,16 @@ if __name__ == "__main__":
     overlap_integral_arr = np.zeros_like(rG_corr_arr)
     gamma_sq_arr = np.zeros_like(params_list, dtype=complex)
     mp_eng_arr = np.zeros_like(params_list)
-    lenw = Ls #+ 2*(Lb + Ln)
+    lenw = config.Ls #+ 2*(Lb + Ln)
     mp_arr = np.zeros(shape= (len(params_list), lenw))
     Conductance_matrix = np.zeros(shape=(len(params_list),2, 2))
     
     results = []
-    if args.acceleration_type == 'gpu':
+    if config.acceleration_type == 'gpu':
         print("Using GPU acceleration (Serial Sweep).")
         results = [worker_simulation_step(pms, static_params) for pms in tqdm(params_list, desc="mu/Vz Sweep")]
         
-    elif args.acceleration_type == 'parallel':
+    elif config.acceleration_type == 'parallel':
         num_workers = max(1, mp.cpu_count() - 1)
         print(f"Starting Parallel Execution with {num_workers} workers.")
         
@@ -417,7 +333,7 @@ if __name__ == "__main__":
         
         dIdVs_left_arr[idx, :] = res['dIdVl']
         dIdVs_right_arr[idx, :] = res['dIdVr']
-        ldos_arr[idx, :, :] = res['ldos']
+        #ldos_arr[idx, :, :] = res['ldos']
         Conductance_matrix[idx, :, :] = res['Gmat']
         gamma_sq_arr[idx] = res['gamma_sq']
         mp_eng_arr[idx] = res['energy_0']
@@ -442,14 +358,14 @@ if __name__ == "__main__":
         
     pdi_data = np.array([])
 
-    if not args.no_pdi:
+    if config.pdi_flag:
         print("\nStarting PDI Calculation Loop.")
         pdi_results = []
-        if args.acceleration_type == 'gpu':
+        if config.acceleration_type == 'gpu':
             print("Using GPU acceleration (Serial Sweep).")
             pdi_results = [worker_pdi_step(pms, static_params) for pms in tqdm(params_list, desc="PDI Sweep")]
 
-        elif args.acceleration_type == 'parallel':
+        elif config.acceleration_type == 'parallel':
             num_workers = max(1, mp.cpu_count() - 1)
             print(f"Starting Parallel Execution with {num_workers} workers.")
 
@@ -503,29 +419,7 @@ if __name__ == "__main__":
     
     all_params = {
         **static_params,  # unpacks 't', 'mu_n', 'Delta', 'alpha', etc.
-        
-        'a0': a0,
-        'ms': ms,
-        'Delta_0': Delta_0,
-        'gamma': gamma,
-        'V0': V0,
-        'Upoints': Upoints,
-        'num_engs': num_engs,
-        
-        'mu_max': mu_max,
-        'mu_min': mu_min,
-        'mu_rng': mu_rng,
-        'mu_dist': mu_dist,
-        'Nmu': Nmu,
-        'mu_var': mu_var,
-        
-        'Vz_max': Vz_max,
-        'Vz_min': Vz_min,
-        'Vz_rng': Vz_rng,
-        'Vz_dist': Vz_dist,
-        'Nvz': Nvz,
-        'Vz_var': Vz_var,
-        
+        **config.model_dump()   # unpacks all input parameters from SimulationConfig
     }
     hp.np_savez_wrapped("all_params", dirname, **all_params)
     

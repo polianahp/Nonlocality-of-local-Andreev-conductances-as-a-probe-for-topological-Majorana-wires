@@ -1,0 +1,21 @@
+# resolution_sweep_test.yaml
+# Modifying resolution and sweep parameters while keeping geometry constant.
+
+# Simulation Resolution
+Upoints: 30
+num_engs: 201
+num_eigenvalues: 16
+eng_window_range: 101
+weight_threshold: 0.9
+
+# Sweep Ranges
+mu_max: 5.0
+mu_min: 0.5
+mu_dist: 0.01
+Vz_max: 2.0
+Vz_min: 0.1
+Vz_dist: 0.01
+
+# Execution Settings (Optional overrides)
+dirname: "high_res_test"
+acceleration_type: "parallel"
