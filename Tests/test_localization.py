@@ -1,5 +1,10 @@
 import pytest
 import numpy as np
+import sys
+import os
+
+# Add parent directory to path so that helpers can be imported when running pytest directly from the Tests directory
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import helpers as hp
 from scipy.special import erf, erfinv
 
