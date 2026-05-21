@@ -199,6 +199,8 @@ class SimulationState:
             'Vdisx': Vdisx,
             'energies': self.energies,
             'barrier_arr': self.barrier_arr,
+            'mu_var': self.mu_var,
+            'Vz_var': self.Vz_var,
             'num_eigenvalues': config.num_eigenvalues,
             'weight_threshold': config.weight_threshold,
             'eng_window_range': config.eng_window_range,

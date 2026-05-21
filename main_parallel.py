@@ -418,8 +418,8 @@ if __name__ == "__main__":
 
     
     all_params = {
-        **static_params,  # unpacks 't', 'mu_n', 'Delta', 'alpha', etc.
-        **config.model_dump()   # unpacks all input parameters from SimulationConfig
+        **config.model_dump(),  # unpacks all input parameters from SimulationConfig
+        **static_params         # unpacks 't', 'mu_n', 'Delta', 'alpha', etc. (overrides None with calculated values)
     }
     hp.np_savez_wrapped("all_params", dirname, **all_params)
     
