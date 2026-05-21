@@ -80,6 +80,7 @@ def worker_simulation_step(iter_data, static_params):
     site_localization = 0
     weight_localization = 1.0
     overlap_integral = 0.0
+    mzm_separation = 0
 
     # --- 1. Build Symmetric System & Calculate Spectral Properties ---
 
@@ -93,6 +94,7 @@ def worker_simulation_step(iter_data, static_params):
             site_localization = hp.calc_MZM_localization(rho_M1, rho_M2)
             weight_localization = hp.calc_weight_localization(rho_M1, rho_M2, weight_threshold=static_params['weight_threshold'])
             overlap_integral = hp.calc_overlap(rho_M1, rho_M2)
+            mzm_separation = hp.calc_MZM_separation(rho_M1, rho_M2, sep_thresh=0.8)
         if static_params['spectra_flag']:
             spectrum = hp.sort_spectrum(evals, evecs)
             #gamma_sq = hp.calculate_gamma_squared(evals, evecs)
@@ -182,7 +184,8 @@ def worker_simulation_step(iter_data, static_params):
         'peak_left':pk_l,
         'site_localization':site_localization,
         'weight_localization': weight_localization,
-        'overlap_integral': overlap_integral
+        'overlap_integral': overlap_integral,
+        'mzm_separation': mzm_separation
     }
     return results
 
@@ -304,6 +307,7 @@ if __name__ == "__main__":
     site_localizations = np.zeros_like(rG_corr_arr)
     weight_localization_arr = np.zeros_like(rG_corr_arr)
     overlap_integral_arr = np.zeros_like(rG_corr_arr)
+    mzm_separation_arr = np.zeros_like(rG_corr_arr)
     gamma_sq_arr = np.zeros_like(params_list, dtype=complex)
     mp_eng_arr = np.zeros_like(params_list)
     lenw = config.Ls #+ 2*(Lb + Ln)
@@ -353,6 +357,7 @@ if __name__ == "__main__":
         site_localizations[idx] = res['site_localization']
         weight_localization_arr[idx] = res['weight_localization']
         overlap_integral_arr[idx] = res['overlap_integral']
+        mzm_separation_arr[idx] = res['mzm_separation']
         
         
         
@@ -415,6 +420,7 @@ if __name__ == "__main__":
     hp.np_save_wrapped(site_localizations, "site_localizations", dirname)
     hp.np_save_wrapped(weight_localization_arr, "weight_localization_arr", dirname)
     hp.np_save_wrapped(overlap_integral_arr, "OverlapIntegral", dirname)
+    hp.np_save_wrapped(mzm_separation_arr, "mzm_separation_arr", dirname)
 
     
     all_params = {

@@ -1028,3 +1028,26 @@ def calculate_pdi(ts, alphas, gamma, Nx, Vdisx, V0, gm, mu, NL):
     """Wrapper function to instantiate the calculator and get the invariant."""
     calculator = PDICalculator(ts, alphas, gamma, Nx, Vdisx, V0)
     return calculator.fq(gm, mu, NL)
+
+def calc_MZM_separation(rho_M1, rho_M2, sep_thresh = 0.8):
+    #checks if mzm wave functions are separated. Condition is that some percentage of the total weight
+    #for each mzm should be on a separate side of "idx" when integrated. This is a precondition before calculating
+    #how well the mzms
+    
+    m1_pct = 0
+    m2_pct = 0
+    
+    idx = 3
+    while (m1_pct < sep_thresh or m2_pct < sep_thresh):
+        
+        if idx >= len(rho_M1):
+            return 0
+        
+        m1sum = np.trapz(rho_M1[:idx])
+        m2sum = np.trapz(rho_M2[idx:])
+        
+        m1_pct = m1sum
+        m2_pct = m2sum
+        idx +=1
+        
+    return 1
