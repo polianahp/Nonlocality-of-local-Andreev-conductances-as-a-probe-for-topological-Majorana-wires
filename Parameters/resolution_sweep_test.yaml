@@ -6,7 +6,8 @@ Upoints: 30
 num_engs: 201
 num_eigenvalues: 16
 eng_window_range: 101
-weight_threshold: 0.9
+weight_threshold: 0.75
+separation_threshold: 0.8
 
 # Sweep Ranges
 mu_max: 5.0

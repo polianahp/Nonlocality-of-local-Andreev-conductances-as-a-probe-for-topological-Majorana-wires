@@ -94,7 +94,7 @@ def worker_simulation_step(iter_data, static_params):
             site_localization = hp.calc_MZM_localization(rho_M1, rho_M2)
             weight_localization = hp.calc_weight_localization(rho_M1, rho_M2, weight_threshold=static_params['weight_threshold'])
             overlap_integral = hp.calc_overlap(rho_M1, rho_M2)
-            mzm_separation = hp.calc_MZM_separation(rho_M1, rho_M2, sep_thresh=0.8)
+            mzm_separation = hp.calc_MZM_separation(rho_M1, rho_M2, sep_thresh=static_params['separation_threshold'])
         if static_params['spectra_flag']:
             spectrum = hp.sort_spectrum(evals, evecs)
             #gamma_sq = hp.calculate_gamma_squared(evals, evecs)

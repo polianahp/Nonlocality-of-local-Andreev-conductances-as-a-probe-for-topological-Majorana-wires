@@ -1,5 +1,5 @@
 # weight_30.yaml
-dirname: "weight_30_results"
+dirname: "sep_30_results"
 fname: "ZeroDis.npz"
 mu_max: 2.0
 mu_min: -2.0
@@ -9,5 +9,6 @@ Vz_min: 0.0
 Vz_dist: 0.05
 Upoints: 10
 num_engs: 51
-weight_threshold: 0.30
+weight_threshold: 0.75
+separation_threshold: 0.30
 acceleration_type: "parallel"

@@ -41,6 +41,7 @@ class SimulationConfig(BaseModel):
     num_eigenvalues: PositiveInt = 12
     eng_window_range: PositiveInt = 51
     weight_threshold: float = Field(0.8, ge=0, le=1)
+    separation_threshold: float = Field(0.8, ge=0, le=1)
     
     # Sweep Ranges
     mu_max: float = 4.5
@@ -203,6 +204,7 @@ class SimulationState:
             'Vz_var': self.Vz_var,
             'num_eigenvalues': config.num_eigenvalues,
             'weight_threshold': config.weight_threshold,
+            'separation_threshold': config.separation_threshold,
             'eng_window_range': config.eng_window_range,
             'conductance_flag': config.conductance_flag,
             'spectra_flag': config.spectra_flag,

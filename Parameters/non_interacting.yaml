@@ -21,3 +21,5 @@ Nvz: 3
 Upoints: 10
 num_engs: 51
 acceleration_type: "parallel"
+weight_threshold: 0.75
+separation_threshold: 0.8
