@@ -610,10 +610,40 @@ def calc_overlap(rho1, rho2):
     
 
 
-def initialize_vdis_from_data(path):
+def generate_disorder_from_raw(vdk_vec, lambda_val, Ls):
+    ii = np.arange(1, Ls + 1)
+    Qdis = np.tanh(ii / 2.0) * np.exp(-(ii**2) * (lambda_val**2) / (4.0 * (Ls**2)))
     
-    x = np.load(path)['Vdisx']
-    return x
+    vdkq = vdk_vec * Qdis
+    
+    nn_grid = np.arange(1, Ls + 1).reshape(-1, 1)
+    ii_grid = np.arange(1, Ls + 1).reshape(1, -1)
+    psiKx = np.sqrt(2.0 / (Ls + 1.0)) * np.sin(ii_grid * nn_grid * np.pi / (Ls + 1.0))
+    
+    vtp = psiKx @ vdkq
+    vtp = vtp - np.mean(vtp)
+    v2 = np.mean(vtp**2)
+    return vtp / np.sqrt(v2)
+
+
+def initialize_vdis_from_data(path, lambda_dis=None, Ls=None):
+    path_str = str(path)
+    
+    is_raw_disorder = "Raw_Disorders" in path_str
+    
+    if is_raw_disorder and lambda_dis is None:
+        raise ValueError("lambda_dis cannot be None when using a raw disorder file from Raw_Disorders.")
+    if lambda_dis is not None and not is_raw_disorder:
+        raise ValueError("lambda_dis is provided, but the file path does not contain 'Raw_Disorders'.")
+        
+    if is_raw_disorder:
+        raw_vector = np.load(path_str)
+        if Ls is None:
+            raise ValueError("Ls must be provided for raw disorder reconstruction.")
+        return generate_disorder_from_raw(raw_vector, lambda_dis, Ls)
+    else:
+        x = np.load(path_str)['Vdisx']
+        return x
 
 
 

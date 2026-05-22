@@ -1,0 +1,23 @@
+# disorder_realization_144.yaml
+# Configuration for system with dynamically generated disorder realization 144.
+
+# Disorder Management
+dirname: "disorder_realization_144_results"
+realization_index: 144
+lambda_dis: 4.5   # Envelope decay parameter
+
+# Sweep Ranges
+mu_max: 4.5
+mu_min: 0.0
+mu_dist: 0.02
+
+Vz_max: 1.4
+Vz_min: 0.0
+Vz_dist: 0.02
+
+# Simulation Resolution
+Upoints: 10
+num_engs: 51
+acceleration_type: "parallel"
+weight_threshold: 0.8
+separation_threshold: 0.65

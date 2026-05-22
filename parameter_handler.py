@@ -25,6 +25,10 @@ class SimulationConfig(BaseModel):
     Lb_pdi: int = 3
     a0: PositiveFloat = 100.0
     
+    # Disorder Parameters
+    lambda_dis: Optional[PositiveFloat] = None
+    realization_index: Optional[int] = None
+    
     # Physics Parameters
     ms: PositiveFloat = 0.023
     Delta_0: float = Field(0.3, ge=0)

@@ -247,15 +247,19 @@ if __name__ == "__main__":
     
     # --- Hardcoded Configuration Path (For VS Code Debugging) ---
     # Set this to a path like "Parameters/my_config.yaml" to use it as the default.
-    CONFIG_PATH = "Parameters/non_interacting.yaml" 
+    CONFIG_PATH = "Parameters/disorder_realization_0.yaml" 
     # ------------------------------------------------------------
 
     # 1. Configuration Orchestration
     config = ConfigManager.get_config(config_path=CONFIG_PATH)
     state = SimulationState(config)
     
-    dirname = f"peak_testing/{config.dirname}"
-    fname = f"New_Disorders/{config.fname}"
+    dirname = f"dis_testing/{config.dirname}"
+    
+    if config.realization_index is not None:
+        fname = f"Raw_Disorders/raw_disorder_{config.realization_index}.npy"
+    else:
+        fname = f"New_Disorders/{config.fname}"
 
     print(f"--- Starting Simulation ---")
     print(f"Output Directory: {dirname}")
@@ -271,7 +275,7 @@ if __name__ == "__main__":
     # Initialize Disorder
     print(f"Run Files Path Exists: {os.path.exists(PathConfigs.RUN_FILES)}")
     path = Path(PathConfigs.RUN_FILES / fname)
-    Vdisx = hp.initialize_vdis_from_data(path)  
+    Vdisx = hp.initialize_vdis_from_data(path, lambda_dis=config.lambda_dis, Ls=config.Ls)
 
     # 3. Parameter Preparation
     static_params = state.get_static_params(Vdisx, config)
@@ -404,13 +408,13 @@ if __name__ == "__main__":
     hp.np_save_wrapped(barrier_left_conductance_right_arr, "barrier_left_conductance_right_arr", dirname)
     hp.np_save_wrapped(barrier_arr,"barrier_arr", dirname)
 
-    hp.np_save_wrapped(Conductance_matrix, "Conductance_matrix_zero_energy", dirname)
-    hp.np_save_wrapped(gamma_sq_arr, "gamma_sq_arr", dirname)
-    hp.np_save_wrapped(mp_eng_arr, "mp_eng_arr", dirname)
+    #hp.np_save_wrapped(Conductance_matrix, "Conductance_matrix_zero_energy", dirname)
+    #hp.np_save_wrapped(gamma_sq_arr, "gamma_sq_arr", dirname)
+    #hp.np_save_wrapped(mp_eng_arr, "mp_eng_arr", dirname)
     hp.np_save_wrapped(mp_arr, "mp_arr", dirname)
     hp.np_save_wrapped(params_list, "params_list", dirname) 
     
-    hp.np_save_wrapped(spectrum_arr,"spectrum_arr", dirname)
+    #hp.np_save_wrapped(spectrum_arr,"spectrum_arr", dirname)
     
     hp.np_save_wrapped(rG_corr_arr,"rG_corr", dirname)
     hp.np_save_wrapped(lG_corr_arr,"lG_corr", dirname)
