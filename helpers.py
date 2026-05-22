@@ -445,45 +445,33 @@ def get_psiM_density(evals, evecs):
     - rho_M2: Spatial density of the second Majorana mode (Right).
     - energies: The eigenvalues found (for verification).
     """
-    # 1. Identify the two states closest to zero energy (the zero-energy pair)
-    # This is more robust than mid_idx when k > 2 or if the spectrum is not perfectly symmetric.
     idx_closest = np.argsort(np.abs(evals))[:2]
-    # Sort these two algebraically so idx_pair[0] is the negative state and idx_pair[1] is the positive state
     idx_pair = idx_closest[np.argsort(evals[idx_closest])]
 
-    # Highest negative state (psi_-) and Lowest positive state (psi_+)
     psi_minus = evecs[:, idx_pair[0]]
     psi_plus = evecs[:, idx_pair[1]]
 
-    # 4. Phase Correction (Standardize phases)
-    # We enforce a phase such that the first component is real/positive to align them
-    # This is similar to the 'ix' logic in the Mathematica script
-    phase_plus = np.conj(psi_plus[0]) / (np.abs(psi_plus[0]) + 1e-20)
-    phase_minus = np.conj(psi_minus[0]) / (np.abs(psi_minus[0]) + 1e-20)
-
-    psi_plus = psi_plus * phase_plus
-    psi_minus = psi_minus * phase_minus
-    # 5. Construct Majorana Basis
+    shared_idx = np.argmax(np.abs(psi_plus))
+    
+    phase_plus_max = np.conj(psi_plus[shared_idx]) / (np.abs(psi_plus[shared_idx]) + 1e-20)
+    phase_minus_max = np.conj(psi_minus[shared_idx]) / (np.abs(psi_minus[shared_idx]) + 1e-20)
+    
+    psi_plus = psi_plus * phase_plus_max
+    psi_minus = psi_minus * phase_minus_max
 
     gamma_1 = (psi_plus + psi_minus) / np.sqrt(2)
     gamma_2 = (psi_plus - psi_minus) / np.sqrt(2)
     
-    # 6. Calculate Site Densities
-    # Kwant stores wavefunctions as a flat array [site1_orb1, site1_orb2, ..., site2_orb1, ...]
-    # Your system has norbs=4 (e_up, e_dn, h_dn, h_up)
-    
     n_sites = len(gamma_1) // 4
-    
-    # Reshape to (Sites, Orbitals)
+     
+     
     g1_reshaped = gamma_1.reshape((n_sites, 4))
     g2_reshaped = gamma_2.reshape((n_sites, 4))
     
-    # Sum over orbitals (spin/particle-hole) to get density per site
     rho_M1 = np.sum(np.abs(g1_reshaped)**2, axis=1)
     rho_M2 = np.sum(np.abs(g2_reshaped)**2, axis=1)
     
     return rho_M1, rho_M2, evals
-        
                 
 
 
@@ -1028,6 +1016,8 @@ def calculate_pdi(ts, alphas, gamma, Nx, Vdisx, V0, gm, mu, NL):
     """Wrapper function to instantiate the calculator and get the invariant."""
     calculator = PDICalculator(ts, alphas, gamma, Nx, Vdisx, V0)
     return calculator.fq(gm, mu, NL)
+
+
 
 def calc_MZM_separation(rho_M1, rho_M2, sep_thresh = 0.8):
     #checks if mzm wave functions are separated. Condition is that some percentage of the total weight
