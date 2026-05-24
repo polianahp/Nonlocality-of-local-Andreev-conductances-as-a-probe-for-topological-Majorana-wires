@@ -4,7 +4,6 @@
 # Disorder Management
 dirname: "Tdis_pfaff"
 fname: "Tdis.npz"
-lambda_dis: 4.5   # Envelope decay parameter
 
 # Sweep Ranges
 mu_max: 4.5
