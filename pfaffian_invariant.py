@@ -427,7 +427,13 @@ class PfaffianSimulator:
         sc_diss_factor = gamma0 * self.SCdiss2D[last_idx][:, np.newaxis] * self.delta_2D
         
         Hi = self.Symm(h0 + self.T1 + v_diss_factor + sc_diss_factor)
-        Hi1 = self.Symm(np.linalg.inv(Hi))
+        
+        # NOTE: Added infinitesimal imaginary broadening to avoid exactly singular matrices
+        # at topological gap closings or exact zero modes. 
+        # The user noted this fix is OK for now, but may decide to handle this differently later.
+        eta = 1e-10j * np.eye(Hi.shape[0])
+        
+        Hi1 = self.Symm(np.linalg.inv(Hi + eta))
         
         # First loop: from Nx/2 - 2 down to delta_N + 1 (inclusive)
         for ii in range(self.Nx // 2 - 2, self.delta_N, -1):
@@ -435,7 +441,7 @@ class PfaffianSimulator:
             sc_diss_factor = gamma0 * self.SCdiss2D[ii][:, np.newaxis] * self.delta_2D
             
             Hi = self.Symm(h0 + v_diss_factor + sc_diss_factor - self.T2D.conj().T @ Hi1 @ self.T2D)
-            Hi1 = self.Symm(np.linalg.inv(Hi))
+            Hi1 = self.Symm(np.linalg.inv(Hi + eta))
             
         pff_1 = []
         pff_2 = []
@@ -458,7 +464,8 @@ class PfaffianSimulator:
             pff_1.append(np.real(PfP))
             pff_2.append(np.real(PfM))
             
-            Hi1 = self.Symm(np.linalg.inv(Hi))
+            if ii > 0:
+                Hi1 = self.Symm(np.linalg.inv(Hi + eta))
             
         return [pff_1, pff_2]
 
@@ -486,16 +493,16 @@ def run_tests():
         print("Running Test Case 1: Gamma=0.87, mu=-0.49...")
         res1 = sim.vPf2Dx(0.87, -0.49, 0.0, 0.35, 0.0)
         print("Test 1 Result:", res1)
-        expected1 = [1] * 21
-        assert res1 == expected1, f"Expected {expected1}, got {res1}"
+        expected1 = 1.0
+        assert np.mean(res1) == expected1, f"Expected {expected1}, got {np.mean(res1)}"
         print("Test Case 1 Passed!")
         
         # Test case 2: Gamma = 0.35, mu = -0.49, V0 = 0.0, gamma0 = 0.35, theta = 0.0
         print("Running Test Case 2: Gamma=0.35, mu=-0.49...")
         res2 = sim.vPf2Dx(0.35, -0.49, 0.0, 0.35, 0.0)
         print("Test 2 Result:", res2)
-        expected2 = [0] * 21
-        assert res2 == expected2, f"Expected {expected2}, got {res2}"
+        expected2 = 0.0
+        assert np.mean(res2) == expected2, f"Expected {expected2}, got {np.mean(res2)}"
         print("Test Case 2 Passed!")
         
         # Test case 3: 10 points validation against SMDisStrongMapNy1.dat (Layer 6)
@@ -512,8 +519,9 @@ def run_tests():
             print(f"Warning: SMVdissNy1.dat not found. Skipping Test Case 3.")
             continue
             
-        sim3 = PfaffianSimulator(Nx=410, Ny=1, delta_N=10, method=method)
-        sim3.load_disorder(dis)
+        sim3 = PfaffianSimulator(Nx=400, Ny=1, delta_N=0, method=method)
+        # Slice the 410-site disorder array to represent the 400-site bulk
+        sim3.load_disorder(dis[5:-5])
         
         test_points = [
             (2.13, 1.0, 1),
@@ -530,52 +538,33 @@ def run_tests():
         
         for mu, gm, expected in test_points:
             res = sim3.vPf2Dx(gm, mu, 1.5, 0.35, 0.0)
-            actual = res[5]
+            actual = np.mean(res)
             assert actual == expected, f"For method {method}, mu={mu}, gm={gm}: expected {expected}, got {actual}"
         print("Test Case 3 Passed!")
         
     print("\nAll test cases verified successfully for all methods against Mathematica outputs!")
 
 
-def run_phase_sweep(V0, output_path, gmmin=0.34, gmmax=1.22, gmstep=0.01, mumin=-1.0, mumax=3.0, mustep=0.01, method="h"):
-    print(f"Running Phase Diagram Sweep with V0 = {V0} using method = {method}...")
-    sim = PfaffianSimulator(Nx=400, Ny=1, delta_N=20, method=method)
+def run_phase_sweep(V0, output_path, gmmin=0.34, gmmax=1.22, gmstep=0.01, mumin=-1.0, mumax=3.0, mustep=0.01, method="h", Nx=400, delta_N=0):
+    print(f"Running Phase Diagram Sweep with Nx={Nx}, delta_N={delta_N}, V0={V0} using method={method}...")
+    sim = PfaffianSimulator(Nx=Nx, Ny=1, delta_N=delta_N, method=method)
     
     gms = np.arange(gmmin, gmmax + 1e-9, gmstep)
     mus = np.arange(mumin, mumax + 1e-9, mustep)
     
     print(f"Grid size: {len(mus)} chemical potentials x {len(gms)} Zeeman fields")
     
-    # We will compute the phase map
-    # Since delta_N = 20, vPf2Dx returns a list of 21 values.
-    # The phase map in Mathematica averages this map or exports it.
-    # Specifically, it writes:
-    # PhaseDiagram := Block[{mu, gm, Qv, sumQ1, map, ii},
-    #   map = Table[{}, {ii, 1, \Delta N + 1}];
-    #   For[mu = mumin, mu <= mumax, mu += mustep,
-    #     For[gm = gmmin, gm <= gmmax, gm += gmstep,
-    #       Qv = vPf2Dx[gm, mu, V0, \gamma0, \theta];
-    #       For[ii = 1, ii <= Length[map], ii++,
-    #         map[[ii]] = Join[map[[ii]], {{gm, mu, Qv[[ii]]}}];
-    #       ...
-    # The map structure: map[[ii]] is a list of [gm, mu, Qv[[ii]]] tuples.
-    # So we have delta_N + 1 maps. Let's initialize them.
-    num_maps = sim.delta_N + 1
-    maps = [[] for _ in range(num_maps)]
+    phase_map = []
     
     for mu in mus:
         # Print progress
         print(f"mu = {mu:.2f} ...")
         for gm in gms:
             Qv = sim.vPf2Dx(gm, mu, V0, sim.gamma0, 0.0)
-            for ii in range(num_maps):
-                maps[ii].append([gm, mu, Qv[ii]])
+            phase_map.append([gm, mu, np.mean(Qv)])
                 
     # Save the output
-    # Since there are multiple maps, we can save them to a file.
-    # The user can choose to plot or export them.
-    # We can save as a numpy .npz file
-    save_data = {f"map_{i}": np.array(maps[i]) for i in range(num_maps)}
+    save_data = {"phase_map": np.array(phase_map)}
     np.savez(output_path, **save_data)
     print(f"Successfully saved phase diagram sweep data to {output_path}")
 
@@ -593,6 +582,8 @@ def main():
     parser.add_argument("--mumin", type=float, default=-1.0, help="Min chemical potential mu")
     parser.add_argument("--mumax", type=float, default=3.0, help="Max chemical potential mu")
     parser.add_argument("--mustep", type=float, default=0.01, help="Step size for chemical potential mu")
+    parser.add_argument("--Nx", type=int, default=400, help="Number of sites in wire")
+    parser.add_argument("--delta_N", type=int, default=0, help="Decimation window size")
     parser.add_argument("--method", type=str, default="h", choices=["h", "ltl", "hessenberg"],
                         help="Pfaffian calculation method: 'h' (Householder, default), 'ltl' (Parlett-Reid), 'hessenberg' (Hessenberg decomposition, real only)")
     args = parser.parse_args()
@@ -605,7 +596,7 @@ def main():
         if args.disorder:
             dis_data = np.load(args.disorder)
             # Just parsing disorder to verify load works
-            sim_dummy = PfaffianSimulator(Nx=400, Ny=1, delta_N=20)
+            sim_dummy = PfaffianSimulator(Nx=args.Nx, Ny=1, delta_N=args.delta_N)
             sim_dummy.load_disorder(dis_data)
             print(f"Loaded disorder file from {args.disorder}")
         else:
@@ -619,7 +610,9 @@ def main():
             mumin=args.mumin,
             mumax=args.mumax,
             mustep=args.mustep,
-            method=args.method
+            method=args.method,
+            Nx=args.Nx,
+            delta_N=args.delta_N
         )
         sys.exit(0)
         

@@ -229,7 +229,26 @@ def worker_pdi_step(iter_data, static_params):
                 Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 10 * NL_val)    # round the converged invariant to the nearest integer
     pdi_value = int(np.round(Q_nu))
     
-    return [mu_pm, vz, pdi_value]
+    result = [mu_pm, vz, pdi_value]
+    
+    if static_params.get('calc_pfaffian', False):
+        pfaffian_delta_N = static_params.get('pfaffian_delta_N', 0)
+        # Delta0 is multiplied by the same renormalization factor Z as other parameters
+        pfaff_val = hp.cal_pfaffian_invariant(
+            ts=ts, 
+            alphas=alphas, 
+            gamma=gamma, 
+            delta0=Delta0 * Z, 
+            Nx=Ls, 
+            Vdisx=Vdisx, 
+            V0=V0, 
+            gm=vz, 
+            mu=mu_pm,
+            delta_N=pfaffian_delta_N
+        )
+        result.append(pfaff_val)
+        
+    return result
 
 
 
@@ -247,7 +266,7 @@ if __name__ == "__main__":
     
     # --- Hardcoded Configuration Path (For VS Code Debugging) ---
     # Set this to a path like "Parameters/my_config.yaml" to use it as the default.
-    CONFIG_PATH = "Parameters/disorder_realization_0.yaml" 
+    CONFIG_PATH = "Parameters/non_interacting.yaml" 
     # ------------------------------------------------------------
 
     # 1. Configuration Orchestration

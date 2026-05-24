@@ -1,9 +1,9 @@
-# disorder_realization_15.yaml
-# Configuration for system with dynamically generated disorder realization 15.
+# disorder_realization_3.yaml
+# Configuration for system with dynamically generated disorder realization 3.
 
 # Disorder Management
-dirname: "disorder_realization_15_results"
-realization_index: 15
+dirname: "Tdis_pfaff"
+fname: "Tdis.npz"
 lambda_dis: 4.5   # Envelope decay parameter
 
 # Sweep Ranges
@@ -22,4 +22,4 @@ acceleration_type: "parallel"
 weight_threshold: 0.8
 separation_threshold: 0.65
 
-calc_pfaffian: true
+calc_pfaffian: True

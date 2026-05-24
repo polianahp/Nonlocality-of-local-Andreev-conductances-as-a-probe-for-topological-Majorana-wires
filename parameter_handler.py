@@ -79,6 +79,8 @@ class SimulationConfig(BaseModel):
     spectra_flag: bool = True
     localization_flag: bool = True
     pdi_flag: bool = True
+    calc_pfaffian: bool = False
+    pfaffian_delta_N: int = 0
 
     class Config:
         arbitrary_types_allowed = True
@@ -213,5 +215,7 @@ class SimulationState:
             'conductance_flag': config.conductance_flag,
             'spectra_flag': config.spectra_flag,
             'localization_flag': config.localization_flag,
-            'solver_type': self.solver_type
+            'solver_type': self.solver_type,
+            'calc_pfaffian': config.calc_pfaffian,
+            'pfaffian_delta_N': config.pfaffian_delta_N
         }

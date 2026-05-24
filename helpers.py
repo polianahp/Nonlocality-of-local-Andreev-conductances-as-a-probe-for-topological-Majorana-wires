@@ -7,6 +7,7 @@ from config import PathConfigs
 from pathlib import Path
 import scipy.sparse.linalg as sla
 from scipy.signal import find_peaks
+from pfaffian_invariant import PfaffianSimulator
 
 try:
     import cupy as cp
@@ -1047,6 +1048,88 @@ def calculate_pdi(ts, alphas, gamma, Nx, Vdisx, V0, gm, mu, NL):
     calculator = PDICalculator(ts, alphas, gamma, Nx, Vdisx, V0)
     return calculator.fq(gm, mu, NL)
 
+
+def cal_pfaffian_invariant(ts, alphas, gamma, delta0, Nx, Vdisx, V0, gm, mu,
+                           theta=0.0, delta_N=0, method="h"):
+    """
+    Calculates the topological (Pfaffian) invariant for a 1D SM-SC nanowire.
+
+    Uses the PfaffianSimulator's O(N) decimation algorithm translated from
+    Bobby's Mathematica notebook. The function accepts the same abstract
+    physics parameters used by PDICalculator for consistency.
+
+    Parameters
+    ----------
+    ts : float
+        Hopping amplitude (maps to PfaffianSimulator's tx).
+    alphas : float
+        Rashba spin-orbit coupling strength (maps to alphax).
+    gamma : float
+        SM-SC coupling (self-energy parameter, maps to gamma0).
+    delta0 : float
+        Parent SC gap.
+    Nx : int
+        Number of sites in the wire.
+    Vdisx : array_like
+        Disorder potential array of length Nx. Pass np.zeros(Nx) for clean.
+    V0 : float
+        Disorder amplitude scaling factor.
+    gm : float
+        Zeeman field (maps to PfaffianSimulator's Gamma argument).
+    mu : float
+        Chemical potential.
+    theta : float, optional
+        Zeeman field angle (default 0.0).
+    delta_N : int, optional
+        Decimation window size (default 0). Controls the number of
+        spatial invariant values calculated at the boundary. The final
+        returned value is the average across all decimation steps.
+    method : str, optional
+        Pfaffian calculation method: 'h' (Householder, default),
+        'ltl' (Parlett-Reid), or 'hessenberg' (real matrices only).
+
+    Returns
+    -------
+    float
+        The average topological invariant value across the delta_N window.
+        0.0 means completely trivial, 1.0 means completely topological.
+        Fractional values indicate finite-size effects at the boundary.
+
+    Notes
+    -----
+    Parameter mapping to PfaffianSimulator:
+    - PfaffianSimulator derives tx, alphax from physical constants (ax, ms).
+      Here we bypass that and use the abstract parameters directly by
+      computing ax and ms from ts and alphas to get the same tx and alphax.
+    - The on-site energy uses epsilon0 = 2*ts (for Ny=1), matching the
+      PDICalculator's convention h0 = (2*ts - mu).
+    """
+    # Compute ax and ms from abstract parameters ts and alphas.
+    # From PfaffianSimulator:
+    #   tx = 1000 * eta_m / (2 * ax^2 * ms)
+    #   alphax = 200 / ax
+    # So:
+    #   ax = 200 / alphas
+    #   ms = 1000 * eta_m / (2 * ax^2 * ts)
+    from pfaffian_invariant import eta_m
+
+    ax = 200.0 / alphas
+    ms = 1000.0 * eta_m / (2.0 * ax**2 * ts)
+
+    sim = PfaffianSimulator(
+        Nx=Nx, Ny=1, delta_N=delta_N,
+        ax=ax, ay=ax, ms=ms,
+        gamma0=gamma, delta0=delta0,
+        method=method
+    )
+
+    # Load disorder if present
+    if Vdisx is not None and np.any(Vdisx != 0):
+        sim.load_disorder(Vdisx)
+
+    result = sim.vPf2Dx(gm, mu, V0, gamma, theta)
+
+    return float(np.mean(result))
 
 
 def calc_MZM_separation(rho_M1, rho_M2, sep_thresh = 0.8):

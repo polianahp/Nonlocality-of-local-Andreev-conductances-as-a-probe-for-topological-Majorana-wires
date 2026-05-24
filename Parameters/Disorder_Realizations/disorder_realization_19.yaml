@@ -21,3 +21,5 @@ num_engs: 51
 acceleration_type: "parallel"
 weight_threshold: 0.8
 separation_threshold: 0.65
+
+calc_pfaffian: true
