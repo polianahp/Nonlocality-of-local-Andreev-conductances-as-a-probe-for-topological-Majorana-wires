@@ -1,10 +1,11 @@
-# disorder_realization_0.yaml
-# Configuration for system with dynamically generated disorder realization 0.
+# disorder_realization_2_lambda_4-5.yaml
+# Configuration for system with dynamically generated disorder realization 2 and length scale 4.5.
 
 # Disorder Management
-dirname: "disorder_realization_0_results"
-realization_index: 0
+dirname: "disorder_realization_2_lambda_4-5_results"
+realization_index: 2
 lambda_dis: 4.5   # Envelope decay parameter
+V0: 1.2
 
 # Sweep Ranges
 mu_max: 4.5
@@ -21,3 +22,5 @@ num_engs: 51
 acceleration_type: "parallel"
 weight_threshold: 0.8
 separation_threshold: 0.65
+
+calc_pfaffian: true

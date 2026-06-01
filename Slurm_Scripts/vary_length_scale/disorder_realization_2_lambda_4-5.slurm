@@ -1,6 +1,6 @@
 #!/bin/sh 
 
-#SBATCH -J dis_2 #Job Name
+#SBATCH -J dis_2_4-5 #Job Name
 #SBATCH -N 2 #Number of nodes 
 #SBATCH -c 40 #Cores
 #SBATCH -n 2 #Tasks
@@ -14,7 +14,7 @@ source /shared/software/conda/conda_init.sh
 conda activate kwant_fresh
 cd $SCRATCH/nonlocalcond
 
-# Running with disorder realization 2
-python -u main_parallel.py --config_path Parameters/disorder_realization_2.yaml
+# Running with disorder realization 2 and length scale 4.5
+python -u main_parallel.py --config_path Parameters/vary_length_scale/disorder_realization_2_lambda_4-5.yaml
 
 conda deactivate
