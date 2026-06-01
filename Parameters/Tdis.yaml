@@ -2,7 +2,7 @@
 # Configuration for system with dynamically generated disorder realization 3.
 
 # Disorder Management
-dirname: "Tdis_pfaff"
+dirname: "Tdis_pfaff2"
 fname: "Tdis.npz"
 
 # Sweep Ranges
