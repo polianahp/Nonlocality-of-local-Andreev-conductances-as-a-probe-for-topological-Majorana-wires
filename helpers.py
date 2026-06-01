@@ -1132,7 +1132,7 @@ def cal_pfaffian_invariant(ts, alphas, gamma, delta0, Nx, Vdisx, V0, gm, mu,
     return float(np.mean(result))
 
 
-def calc_MZM_separation(rho_M1, rho_M2, sep_thresh = 0.8):
+def calc_one_MZM_separation(rho_M1, rho_M2, sep_thresh = 0.8):
     #checks if mzm wave functions are separated. Condition is that some percentage of the total weight
     #for each mzm should be on a separate side of "idx" when integrated. This is a precondition before calculating
     #how well the mzms
@@ -1154,3 +1154,17 @@ def calc_MZM_separation(rho_M1, rho_M2, sep_thresh = 0.8):
         idx +=1
         
     return 1
+
+
+def calc_MZM_separation(rho_M1, rho_M2):
+    
+    sep_thresh = 1.0
+    is_separated = 0
+    while is_separated == 0:
+        if sep_thresh <= 0:
+            sep_thresh = 0.0
+            break
+        is_separated = calc_one_MZM_separation(rho_M1, rho_M2, sep_thresh)
+        sep_thresh -=0.2
+    
+    return sep_thresh
