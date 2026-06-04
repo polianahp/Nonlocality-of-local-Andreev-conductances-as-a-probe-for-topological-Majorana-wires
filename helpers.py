@@ -1168,3 +1168,52 @@ def calc_MZM_separation(rho_M1, rho_M2):
         sep_thresh -=0.2
     
     return sep_thresh
+
+def get_psiM_density_excited(evals, evecs, offset=1):
+    """  
+    Calculates the Majorana mode densities rho_M1 (Left) and rho_M2 (Right)
+    for higher-energy BdG states (sub-gap states).
+    
+    Parameters:
+    - evals: Eigenvalues of the system.
+    - evecs: Eigenvectors of the system.
+    - offset: Which pair of states to project.
+              offset=0 -> Lowest energy pair (MZMs)
+              offset=1 -> Next lowest energy pair
+              offset=2 -> Second next lowest energy pair
+    
+    Returns:
+    - rho_M1: Spatial density of the first projected mode.
+    - rho_M2: Spatial density of the second projected mode.
+    - energies: The eigenvalues found (for verification).
+    """
+    # Skip the lower energy pairs and grab the next two closest to zero
+    start_idx = offset * 2
+    end_idx = start_idx + 2
+    
+    idx_closest = np.argsort(np.abs(evals))[start_idx:end_idx]
+    idx_pair = idx_closest[np.argsort(evals[idx_closest])]
+
+    psi_minus = evecs[:, idx_pair[0]]
+    psi_plus = evecs[:, idx_pair[1]]
+
+    shared_idx = np.argmax(np.abs(psi_plus))
+
+    phase_plus_max = np.conj(psi_plus[shared_idx]) / (np.abs(psi_plus[shared_idx]) + 1e-20)
+    phase_minus_max = np.conj(psi_minus[shared_idx]) / (np.abs(psi_minus[shared_idx]) + 1e-20)
+
+    psi_plus = psi_plus * phase_plus_max
+    psi_minus = psi_minus * phase_minus_max
+
+    gamma_1 = (psi_plus + psi_minus) / np.sqrt(2)
+    gamma_2 = (psi_plus - psi_minus) / np.sqrt(2)
+
+    n_sites = len(gamma_1) // 4
+
+    g1_reshaped = gamma_1.reshape((n_sites, 4))
+    g2_reshaped = gamma_2.reshape((n_sites, 4))
+
+    rho_M1 = np.sum(np.abs(g1_reshaped)**2, axis=1)
+    rho_M2 = np.sum(np.abs(g2_reshaped)**2, axis=1)
+
+    return rho_M1, rho_M2, evals

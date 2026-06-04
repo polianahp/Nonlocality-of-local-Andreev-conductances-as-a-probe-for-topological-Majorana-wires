@@ -120,9 +120,11 @@ def process_single_realization(data, width_thresh, height_thresh, pdi_thresh):
     PA = np.sum(A_bool) / total_points
     PB = np.sum(B_bool) / total_points
     PAB = np.sum(A_bool & B_bool) / total_points
+    P_notAB = np.sum(~A_bool & B_bool) / total_points
     
-    p_a_given_b = PAB / PB if PB > 0.0 else np.nan
-    p_b_given_a = PAB / PA if PA > 0.0 else np.nan
+    p_a_given_b = PAB / PB 
+    p_b_given_a = PAB / PA 
+    p_not_a_given_b = P_notAB / PB 
     
     # 5. Confusion matrix counts
     tp = np.sum(A_bool & B_bool)
@@ -136,6 +138,7 @@ def process_single_realization(data, width_thresh, height_thresh, pdi_thresh):
         'conductance_binary': conductance_binary,
         'p_a_given_b': p_a_given_b,
         'p_b_given_a': p_b_given_a,
+        'p_not_a_given_b': p_not_a_given_b,
         'tp': int(tp),
         'fp': int(fp),
         'fn': int(fn),
@@ -247,6 +250,7 @@ def main(input_dir, width_thresh=0.015, height_thresh=0.0, pdi_thresh=0.8, outpu
     all_conductance_binary_maps = []
     all_p_a_given_b = []
     all_p_b_given_a = []
+    all_p_not_a_given_b = []
     
     total_tp = 0
     total_fp = 0
@@ -276,6 +280,7 @@ def main(input_dir, width_thresh=0.015, height_thresh=0.0, pdi_thresh=0.8, outpu
         all_conductance_binary_maps.append(res['conductance_binary'])
         all_p_a_given_b.append(res['p_a_given_b'])
         all_p_b_given_a.append(res['p_b_given_a'])
+        all_p_not_a_given_b.append(res['p_not_a_given_b'])
         
         total_tp += res['tp']
         total_fp += res['fp']
@@ -303,6 +308,7 @@ def main(input_dir, width_thresh=0.015, height_thresh=0.0, pdi_thresh=0.8, outpu
     np.save(output_path / 'agreement_fraction_map.npy', agreement)
     np.save(output_path / 'p_a_given_b_values.npy', np.array(all_p_a_given_b))
     np.save(output_path / 'p_b_given_a_values.npy', np.array(all_p_b_given_a))
+    np.save(output_path / 'p_not_a_given_b_values.npy', np.array(all_p_not_a_given_b))
     if params_grid is not None:
         np.save(output_path / 'params_grid.npy', params_grid)
         
@@ -318,6 +324,8 @@ def main(input_dir, width_thresh=0.015, height_thresh=0.0, pdi_thresh=0.8, outpu
     fn_pct = (total_fn / total_pooled_points * 100.0) if total_pooled_points > 0 else 0.0
     tn_pct = (total_tn / total_pooled_points * 100.0) if total_pooled_points > 0 else 0.0
     
+    p_not_a_given_b_pooled = total_fp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0.0
+    
     confusion = {
         'tp': tp_pct,
         'fp': fp_pct,
@@ -327,6 +335,7 @@ def main(input_dir, width_thresh=0.015, height_thresh=0.0, pdi_thresh=0.8, outpu
         'recall': recall,
         'f1': f1,
         'accuracy': accuracy,
+        'p_not_a_given_b': p_not_a_given_b_pooled,
         'n_realizations': num_realizations,
         'n_points_per_realization': len(avg_pdi) if len(all_pdi_maps) > 0 else 0,
         'total_points_pooled': total_pooled_points
@@ -368,6 +377,7 @@ def main(input_dir, width_thresh=0.015, height_thresh=0.0, pdi_thresh=0.8, outpu
     # 8. Print and save summary
     p_a_given_b_clean = np.array(all_p_a_given_b)[~np.isnan(all_p_a_given_b)]
     p_b_given_a_clean = np.array(all_p_b_given_a)[~np.isnan(all_p_b_given_a)]
+    p_not_a_given_b_clean = np.array(all_p_not_a_given_b)[~np.isnan(all_p_not_a_given_b)]
     
     summary_lines = [
         "=" * 60,
@@ -381,6 +391,7 @@ def main(input_dir, width_thresh=0.015, height_thresh=0.0, pdi_thresh=0.8, outpu
         "",
         "--- Conditional Probabilities (Mean ± Std Across Realizations) ---",
         f"  P(A|B) = P(Topological | Protocol Positive):   {np.mean(p_a_given_b_clean):.4f} ± {np.std(p_a_given_b_clean):.4f}" if len(p_a_given_b_clean) > 0 else "  P(A|B): N/A",
+        f"  P(~A|B) = P(Trivial | Protocol Positive):       {np.mean(p_not_a_given_b_clean):.4f} ± {np.std(p_not_a_given_b_clean):.4f}" if len(p_not_a_given_b_clean) > 0 else "  P(~A|B): N/A",
         f"  P(B|A) = P(Protocol Positive | Topological):   {np.mean(p_b_given_a_clean):.4f} ± {np.std(p_b_given_a_clean):.4f}" if len(p_b_given_a_clean) > 0 else "  P(B|A): N/A",
         "",
         "--- Pooled Confusion Matrix (% of Total Grid Points) ---",
@@ -402,18 +413,23 @@ def main(input_dir, width_thresh=0.015, height_thresh=0.0, pdi_thresh=0.8, outpu
 
 
 if __name__ == '__main__':
+    from config import PathConfigs
+    from pathlib import Path
+    
     parser = argparse.ArgumentParser(
         description="Aggregate and post-process simulation results across disorder realizations."
     )
     parser.add_argument(
         'input_dir',
         type=str,
+        nargs='?',
+        default='/home/pseudonym/code/Nonlocal_Conductance/Nonlocality-of-local-Andreev-conductances-as-a-probe-for-topological-Majorana-wires/Data/Disorder_Realizations',
         help="Path to directory containing realization subdirectories."
     )
     parser.add_argument(
         '--width_thresh',
         type=float,
-        default=0.015,
+        default=0.01,
         help="Peak energy width threshold (default: 0.015)"
     )
     parser.add_argument(
@@ -425,14 +441,14 @@ if __name__ == '__main__':
     parser.add_argument(
         '--pdi_thresh',
         type=float,
-        default=0.8,
+        default=0.98,
         help="PDI binarization threshold (default: 0.8)"
     )
     parser.add_argument(
         '--output_dir',
         type=str,
         default=None,
-        help="Override output directory (default: sibling post_process_results/)"
+        help="Override output directory (default: input_dir/post_process_results)"
     )
     
     args = parser.parse_args()

@@ -207,7 +207,7 @@ def worker_pdi_step(iter_data, static_params):
 
     # Apply Renormalization Factor Z to align with Kwant physics
     Z = Delta0 / (Delta0 + gamma)
-    Z = 1
+    #Z = 1
     ts *= Z
     alphas *= Z
     gamma *= Z
