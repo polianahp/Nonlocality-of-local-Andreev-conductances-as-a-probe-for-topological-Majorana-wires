@@ -125,22 +125,25 @@ def worker_simulation_step(iter_data, static_params):
             csL[k] = cL
             csR[k] = cR
     
-        pk_l_pos = hp.detect_peaks(csL, eng_window)
-        pk_r_pos = hp.detect_peaks(csR, eng_window)
-    
-        if pk_l_pos is not None:
-            pk_l = np.asarray([1, eng_window[pk_l_pos], csL[pk_l_pos]])
-        else:
-            pk_l = np.asarray([0, 10, 10]) 
-            #setting difference to be a huge number comparable to the actual 
-            # gap so I can postprocess easily later
+        pk_l_result = hp.detect_peaks_v2(csL, eng_window)
+        pk_l = np.asarray([
+            1.0 if pk_l_result['has_peaks'] else 0.0,
+            1.0 if pk_l_result['has_both'] else 0.0,
+            pk_l_result['pos_energy'] if not np.isnan(pk_l_result['pos_energy']) else 10.0,
+            pk_l_result['pos_height'] if not np.isnan(pk_l_result['pos_height']) else 0.0,
+            pk_l_result['neg_energy'] if not np.isnan(pk_l_result['neg_energy']) else -10.0,
+            pk_l_result['neg_height'] if not np.isnan(pk_l_result['neg_height']) else 0.0,
+        ])
         
-        if pk_r_pos is not None:
-            pk_r = np.asarray([1, eng_window[pk_r_pos], csR[pk_r_pos]])
-            #setting difference to be a huge number comparable to the actual 
-            # gap so I can postprocess easily later
-        else:
-            pk_r = np.asarray([0, 10, 10])
+        pk_r_result = hp.detect_peaks_v2(csR, eng_window)
+        pk_r = np.asarray([
+            1.0 if pk_r_result['has_peaks'] else 0.0,
+            1.0 if pk_r_result['has_both'] else 0.0,
+            pk_r_result['pos_energy'] if not np.isnan(pk_r_result['pos_energy']) else 10.0,
+            pk_r_result['pos_height'] if not np.isnan(pk_r_result['pos_height']) else 0.0,
+            pk_r_result['neg_energy'] if not np.isnan(pk_r_result['neg_energy']) else -10.0,
+            pk_r_result['neg_height'] if not np.isnan(pk_r_result['neg_height']) else 0.0,
+        ])
     
 
         # Note: this is run serially inside the worker because the overhead 
@@ -273,7 +276,7 @@ if __name__ == "__main__":
     config = ConfigManager.get_config(config_path=CONFIG_PATH)
     state = SimulationState(config)
     
-    dirname = f"dis_testing/{config.dirname}"
+    dirname = config.dirname
     
     if config.realization_index is not None:
         fname = f"Raw_Disorders/raw_disorder_{config.realization_index}.npy"
@@ -324,7 +327,7 @@ if __name__ == "__main__":
     rG_corr_arr = np.zeros(shape = (len(params_list)))
     lG_corr_arr = np.zeros(shape = (len(params_list)))
     spectrum_arr = np.zeros(shape=(len(params_list), config.num_eigenvalues))
-    peaks_left = np.zeros(shape=(len(params_list), 3))
+    peaks_left = np.zeros(shape=(len(params_list), 6))
     peaks_right = np.zeros_like(peaks_left)
 
     site_localizations = np.zeros_like(rG_corr_arr)

@@ -91,7 +91,9 @@ def load_realization(subdir_path):
     return data
 
 
-def process_single_realization(data, width_thresh, height_thresh, pdi_thresh, corr_thresh, peaks_diff_tol):
+def process_single_realization(data, width_thresh, height_thresh, pdi_thresh,
+                               corr_thresh, symmetry_tol,
+                               peak_diff_tol, stability_radius, stability_frac):
     """
     Processes the data of a single realization to calculate:
     - Binarized PDI map
@@ -112,8 +114,17 @@ def process_single_realization(data, width_thresh, height_thresh, pdi_thresh, co
     
     corrs = np.asarray([hp.calc_invariant_metric(brcl[i,:], brcr[i,:]) for i in range(brcr.shape[0])])
     
-    prot_dat = hp.calc_protocol(corrs, data['peaks_left'], data['peaks_right'], I, 
-                                width_thresh=width_thresh, height_thresh=height_thresh, corr_thresh=corr_thresh, peaks_diff_tol=peaks_diff_tol)
+    prot_dat = hp.calc_protocol_new(
+        corrs, data['peaks_left'], data['peaks_right'],
+        corr_thresh=corr_thresh,
+        symmetry_tol=symmetry_tol,
+        peak_diff_tol=peak_diff_tol,
+        width_thresh=width_thresh,
+        height_thresh=height_thresh,
+        params_list=data['params_list'],
+        stability_radius=stability_radius,
+        stability_frac=stability_frac
+    )
     
     Ppcor = len(np.where(np.isclose(prot_dat, 1.0))[0])/len(prot_dat)
     Pncor = len(np.where(np.isclose(prot_dat - 1, -1.0))[0])/len(prot_dat)
@@ -220,7 +231,7 @@ def plot_histogram(values, title, xlabel, savepath, bins=15):
     print(f"  Saved plot: {savepath}")
 
 
-def main(input_dir, width_thresh, height_thresh, pdi_thresh, corr_thresh, peaks_diff_tol, output_dir=None):
+def main(input_dir, width_thresh, height_thresh, pdi_thresh, corr_thresh, symmetry_tol, peak_diff_tol, stability_radius, stability_frac, output_dir=None):
     input_path = Path(input_dir)
     if not input_path.exists() or not input_path.is_dir():
         raise FileNotFoundError(f"Input directory does not exist or is not a directory: {input_dir}")
@@ -284,7 +295,10 @@ def main(input_dir, width_thresh, height_thresh, pdi_thresh, corr_thresh, peaks_
             height_thresh=height_thresh,
             pdi_thresh=pdi_thresh,
             corr_thresh=corr_thresh,
-            peaks_diff_tol=peaks_diff_tol
+            symmetry_tol=symmetry_tol,
+            peak_diff_tol=peak_diff_tol,
+            stability_radius=stability_radius,
+            stability_frac=stability_frac
         )
         
         all_pdi_maps.append(res['pdi_binary'])
@@ -399,7 +413,7 @@ def main(input_dir, width_thresh, height_thresh, pdi_thresh, corr_thresh, peaks_
         f"Output directory:                 {output_path}",
         f"Realizations processed:           {num_realizations}",
         f"Grid points per realization:      {len(avg_pdi) if len(all_pdi_maps) > 0 else 0}",
-        f"Thresholds:                       PDI={pdi_thresh}, Width={width_thresh}, Height={height_thresh}, Peaks Diff Tol={peaks_diff_tol}",
+        f"Thresholds:                       PDI={pdi_thresh}, Width={width_thresh}, Height={height_thresh}, Corr={corr_thresh}, SymmetryTol={symmetry_tol}, PeakDiffTol={peak_diff_tol}, StabilityR={stability_radius}, StabilityFrac={stability_frac}",
         "",
         "--- Conditional Probabilities (Mean ± Std Across Realizations) ---",
         f"  P(A|B) = P(Topological | Protocol Positive):   {np.mean(p_a_given_b_clean):.4f} ± {np.std(p_a_given_b_clean):.4f}" if len(p_a_given_b_clean) > 0 else "  P(A|B): N/A",
@@ -467,10 +481,28 @@ if __name__ == '__main__':
         help="Correlation threshold (default: 0.9)"
     )
     parser.add_argument(
-        '--peaks_diff_tol',
+        '--symmetry_tol',
         type=float,
-        default=0.1,
-        help="Peaks difference tolerance (default: 0.1)"
+        default=0.005,
+        help="Peak symmetry tolerance in meV (Condition 1)"
+    )
+    parser.add_argument(
+        '--peak_diff_tol',
+        type=float,
+        default=0.01,
+        help="Left-right peak agreement tolerance in meV (Condition 2)"
+    )
+    parser.add_argument(
+        '--stability_radius',
+        type=int,
+        default=None,
+        help="Chebyshev neighborhood radius for mode stability (Condition 3)"
+    )
+    parser.add_argument(
+        '--stability_frac',
+        type=float,
+        default=None,
+        help="Fraction threshold for mode stability (Condition 3)"
     )
     parser.add_argument(
         '--output_dir',
@@ -487,6 +519,9 @@ if __name__ == '__main__':
         height_thresh=args.height_thresh,
         pdi_thresh=args.pdi_thresh,
         corr_thresh=args.corr_thresh,
-        peaks_diff_tol=args.peaks_diff_tol,
+        symmetry_tol=args.symmetry_tol,
+        peak_diff_tol=args.peak_diff_tol,
+        stability_radius=args.stability_radius,
+        stability_frac=args.stability_frac,
         output_dir=args.output_dir
     )

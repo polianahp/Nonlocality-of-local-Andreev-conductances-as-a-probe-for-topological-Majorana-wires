@@ -7,6 +7,7 @@ import argparse
 import os
 from pathlib import Path
 from omegaconf import OmegaConf
+from config import PathConfigs
 
 class SimulationConfig(BaseModel):
     """
@@ -117,7 +118,10 @@ class ConfigManager:
         # 1. Load YAML Base if provided
         yaml_dict = {}
         if args.config_path:
-            if os.path.exists(args.config_path):
+            config_file_path = PathConfigs.ROOT / args.config_path
+            if config_file_path.exists():
+                yaml_dict = OmegaConf.to_container(OmegaConf.load(str(config_file_path)), resolve=True)
+            elif os.path.exists(args.config_path):
                 yaml_dict = OmegaConf.to_container(OmegaConf.load(args.config_path), resolve=True)
             else:
                 print(f"Warning: Config file {args.config_path} not found. Using defaults/CLI.")
@@ -135,7 +139,6 @@ class ConfigManager:
     def log_artifact(config: SimulationConfig, output_dir: Path):
         """
         Dumps the fully resolved configuration to a YAML file in the output directory.
-        Ensures 100% reproducibility.
         """
         output_dir.mkdir(parents=True, exist_ok=True)
         artifact_file = output_dir / "resolved_params.yaml"

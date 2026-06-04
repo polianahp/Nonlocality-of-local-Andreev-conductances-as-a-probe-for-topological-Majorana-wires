@@ -349,6 +349,228 @@ def detect_peaks(ys, xs):
     return minengidx[0][0]
 
 
+def detect_peaks_v2(ys, xs):
+    """Detect the two innermost peaks flanking zero bias in a dI/dV spectrum.
+
+    Finds all peaks in the conductance array `ys`, then identifies:
+    - The closest peak at positive bias (V > 0)
+    - The closest peak at negative bias (V < 0)
+
+    Parameters
+    ----------
+    ys : np.ndarray
+        1D array of conductance values (dI/dV).
+    xs : np.ndarray
+        1D array of bias voltage values, must span negative to positive.
+
+    Returns
+    -------
+    dict with keys:
+        'has_peaks' : bool
+            True if at least one peak was found anywhere in the spectrum.
+        'has_both' : bool
+            True if peaks were found on BOTH sides of zero bias.
+        'pos_energy' : float
+            Bias voltage of the closest peak at V > 0. NaN if no positive peak.
+        'pos_height' : float
+            Conductance value at the positive peak. NaN if no positive peak.
+        'neg_energy' : float
+            Bias voltage of the closest peak at V < 0. NaN if no negative peak.
+        'neg_height' : float
+            Conductance value at the negative peak. NaN if no negative peak.
+    """
+    pks = find_peaks(ys)[0]
+    
+    # Exclude boundary peaks
+    pks = pks[(pks > 0) & (pks < len(ys) - 1)]
+    
+    result = {
+        'has_peaks': False,
+        'has_both': False,
+        'pos_energy': np.nan,
+        'pos_height': np.nan,
+        'neg_energy': np.nan,
+        'neg_height': np.nan
+    }
+    
+    if len(pks) == 0:
+        return result
+        
+    result['has_peaks'] = True
+    
+    peak_energies = xs[pks]
+    peak_heights = ys[pks]
+    
+    # Check for exact zero bias peak
+    zero_idx = np.where(peak_energies == 0.0)[0]
+    if len(zero_idx) > 0:
+        idx = zero_idx[0]
+        result['pos_energy'] = 0.0
+        result['neg_energy'] = 0.0
+        result['pos_height'] = peak_heights[idx]
+        result['neg_height'] = peak_heights[idx]
+        result['has_both'] = True
+        return result
+        
+    pos_mask = peak_energies > 0
+    neg_mask = peak_energies < 0
+    
+    if np.any(pos_mask):
+        pos_energies = peak_energies[pos_mask]
+        pos_idx = np.argmin(pos_energies)
+        orig_idx = np.where(pos_mask)[0][pos_idx]
+        result['pos_energy'] = peak_energies[orig_idx]
+        result['pos_height'] = peak_heights[orig_idx]
+        
+    if np.any(neg_mask):
+        neg_energies = peak_energies[neg_mask]
+        neg_idx = np.argmax(neg_energies)
+        orig_idx = np.where(neg_mask)[0][neg_idx]
+        result['neg_energy'] = peak_energies[orig_idx]
+        result['neg_height'] = peak_heights[orig_idx]
+        
+    if np.any(pos_mask) and np.any(neg_mask):
+        result['has_both'] = True
+        
+    return result
+
+
+
+
+def check_peak_symmetry(peak_dat, symmetry_tol):
+    """Check particle-hole symmetry of peaks for each grid point.
+
+    For each grid point, verifies that the innermost positive and negative
+    peaks are at equal absolute distances from zero bias:
+        | |pos_energy| - |neg_energy| | <= symmetry_tol
+
+    Parameters
+    ----------
+    peak_dat : np.ndarray, shape (N, 6)
+        Peak data array for one wire end. Columns:
+        [has_peaks, has_both, pos_energy, pos_height, neg_energy, neg_height]
+    symmetry_tol : float
+        Maximum allowed difference in absolute peak positions (in meV).
+
+    Returns
+    -------
+    np.ndarray, shape (N,)
+        Binary array: 1.0 where symmetry check passes, 0.0 where it fails.
+        Points without peaks on both sides (has_both == 0) automatically fail.
+    """
+    has_both = peak_dat[:, 1]
+    pos_energy = peak_dat[:, 2]
+    neg_energy = peak_dat[:, 4]
+    
+    diff = np.abs(np.abs(pos_energy) - np.abs(neg_energy))
+    result = (has_both == 1.0) & (diff <= symmetry_tol)
+    return result.astype(float)
+
+
+def check_peak_position_agreement(peak_dat_left, peak_dat_right, peak_diff_tol):
+    """Check that peaks appear at the same bias voltages on both wire ends.
+
+    For each grid point, verifies:
+    1. |pos_energy_left - pos_energy_right| <= peak_diff_tol  (positive peaks match)
+    2. |neg_energy_left - neg_energy_right| <= peak_diff_tol  (negative peaks match)
+
+    Both checks must pass. Both wire ends must have peaks on both sides of zero
+    (has_both == 1 for both left and right).
+
+    Parameters
+    ----------
+    peak_dat_left : np.ndarray, shape (N, 6)
+        Peak data for the left wire end.
+    peak_dat_right : np.ndarray, shape (N, 6)
+        Peak data for the right wire end.
+    peak_diff_tol : float
+        Maximum allowed difference in peak positions (in meV).
+
+    Returns
+    -------
+    np.ndarray, shape (N,)
+        Binary array: 1.0 where agreement passes, 0.0 where it fails.
+        Points without peaks on both sides on either wire end automatically fail.
+    """
+    has_both_left = peak_dat_left[:, 1]
+    has_both_right = peak_dat_right[:, 1]
+    
+    both_have_both = (has_both_left == 1.0) & (has_both_right == 1.0)
+    
+    pos_diff = np.abs(peak_dat_left[:, 2] - peak_dat_right[:, 2])
+    neg_diff = np.abs(peak_dat_left[:, 4] - peak_dat_right[:, 4])
+    
+    result = both_have_both & (pos_diff <= peak_diff_tol) & (neg_diff <= peak_diff_tol)
+    return result.astype(float)
+
+
+def check_mode_stability(protocol_map, params_list, stability_radius, stability_frac):
+    """Check that protocol-positive points have stable neighborhoods.
+
+    For each grid point, examines all neighbors within a Chebyshev distance
+    of `stability_radius` grid steps. The point passes if at least
+    `stability_frac` fraction of its neighbors are also protocol-positive.
+
+    The "protocol_map" input should be the binary result of conditions 1 & 2
+    AND-ed with the correlation filter, BEFORE this stability check is applied.
+    This function is applied as a final filter.
+
+    Parameters
+    ----------
+    protocol_map : np.ndarray, shape (N,)
+        Binary array (1.0 / 0.0) from the pre-stability protocol evaluation.
+        Only points where protocol_map == 1.0 are candidates for stability check.
+        Points where protocol_map == 0.0 remain 0.0 in the output regardless.
+    params_list : np.ndarray, shape (N, 3)
+        Parameter grid. Columns: [index, mu, vz].
+    stability_radius : int
+        Chebyshev neighborhood radius in grid steps.
+    stability_frac : float
+        Minimum fraction of neighbors that must be protocol-positive (0.0 to 1.0).
+
+    Returns
+    -------
+    np.ndarray, shape (N,)
+        Binary array: 1.0 where the stability check passes, 0.0 otherwise.
+    """
+    mu_vals = np.unique(params_list[:, 1])
+    vz_vals = np.unique(params_list[:, 2])
+    n_mu = len(mu_vals)
+    n_vz = len(vz_vals)
+    
+    if len(params_list) > 1:
+        if params_list[1, 2] != params_list[0, 2]:
+            grid = protocol_map.reshape(n_mu, n_vz)
+        elif params_list[1, 1] != params_list[0, 1]:
+            grid = protocol_map.reshape(n_vz, n_mu).T
+        else:
+            grid = protocol_map.reshape(n_mu, n_vz)
+    else:
+        grid = protocol_map.reshape(n_mu, n_vz)
+        
+    out_grid = np.zeros_like(grid)
+    
+    for i in range(grid.shape[0]):
+        for j in range(grid.shape[1]):
+            if grid[i, j] == 1.0:
+                i_start = max(0, i - stability_radius)
+                i_end = min(grid.shape[0] - 1, i + stability_radius)
+                j_start = max(0, j - stability_radius)
+                j_end = min(grid.shape[1] - 1, j + stability_radius)
+                
+                neighborhood = grid[i_start:i_end+1, j_start:j_end+1]
+                
+                count_positive = np.sum(neighborhood) - 1.0
+                total_neighbors = neighborhood.size - 1
+                
+                if total_neighbors > 0:
+                    if (count_positive / total_neighbors) >= stability_frac:
+                        out_grid[i, j] = 1.0
+                        
+    if len(params_list) > 1 and params_list[1, 1] != params_list[0, 1] and params_list[1, 2] == params_list[0, 2]:
+        return out_grid.T.flatten()
+    else:
+        return out_grid.flatten()
 
 
 def calc_MZM_localization(rho_left, rho_right, pct_thresh = 80.0):
@@ -1251,15 +1473,91 @@ def calc_protocol(corr_map, peak_dat_left, peak_dat_right, Wnumber,
         
     
     return corr_map * combined_filter
-        
-        
-        
-    
-    
 
-        
-        
-    
-    
+def calc_protocol_new(corr_map, peak_dat_left, peak_dat_right,
+                      corr_thresh=0.9, symmetry_tol=0.005,
+                      peak_diff_tol=0.01, width_thresh=None,
+                      height_thresh=None, params_list=None,
+                      stability_radius=None, stability_frac=None):
+    """Evaluate Protocol v2.0 conditions on simulation data.
 
+    Applies conditions in sequence (AND logic):
+    1. Correlation filter: barrier-sweep correlation >= corr_thresh
+    2. Condition 1 (Peak Symmetry): |V+| approx |V-| on each wire end
+    3. Condition 2 (Peak Position Agreement): peaks match between left and right wire ends
+    4. Condition 3 (Mode Stability): neighborhood check (optional, requires params_list)
+
+    Additionally applies optional peak width and height filters if thresholds are provided.
+
+    Parameters
+    ----------
+    corr_map : np.ndarray, shape (N,)
+        Raw correlation metric values from calc_invariant_metric.
+    peak_dat_left : np.ndarray, shape (N, 6)
+        Peak data for left wire end (new 6-column format from detect_peaks_v2).
+    peak_dat_right : np.ndarray, shape (N, 6)
+        Peak data for right wire end (new 6-column format from detect_peaks_v2).
+    corr_thresh : float
+        Minimum correlation threshold. Points below this -> 0.
+    symmetry_tol : float
+        Tolerance for Condition 1 (peak symmetry), in meV.
+    peak_diff_tol : float
+        Tolerance for Condition 2 (left-right agreement), in meV.
+    width_thresh : float or None
+        If provided, peaks must have |energy| <= width_thresh on both sides.
+        Applied to the positive peak energy (column 2).
+    height_thresh : float or None
+        If provided, peaks must have height >= height_thresh on both sides.
+        Applied to both pos_height (column 3) and neg_height (column 5).
+    params_list : np.ndarray, shape (N, 3), optional
+        Parameter grid, required for Condition 3.
+    stability_radius : int or None
+        Chebyshev radius for Condition 3. If None, skip Condition 3.
+    stability_frac : float or None
+        Fraction threshold for Condition 3. If None, skip Condition 3.
+
+    Returns
+    -------
+    np.ndarray, shape (N,)
+        Binary array: 1.0 where ALL active conditions pass, 0.0 otherwise.
+    """
+    # 1. Correlation filter
+    corr_map = np.clip(corr_map, 0.0, 1.0)
+    corr_binary = (corr_map >= corr_thresh).astype(float)
     
+    N = len(corr_map)
+    
+    # 2. Width filter
+    if width_thresh is not None:
+        width_pass = ((peak_dat_left[:, 2] <= width_thresh) & 
+                      (peak_dat_right[:, 2] <= width_thresh) & 
+                      (np.abs(peak_dat_left[:, 4]) <= width_thresh) & 
+                      (np.abs(peak_dat_right[:, 4]) <= width_thresh)).astype(float)
+    else:
+        width_pass = np.ones(N)
+        
+    # 3. Height filter
+    if height_thresh is not None:
+        height_pass = ((peak_dat_left[:, 3] >= height_thresh) & 
+                       (peak_dat_right[:, 3] >= height_thresh) & 
+                       (peak_dat_left[:, 5] >= height_thresh) & 
+                       (peak_dat_right[:, 5] >= height_thresh)).astype(float)
+    else:
+        height_pass = np.ones(N)
+        
+    # 4. Condition 1 (Peak Symmetry)
+    sym_left = check_peak_symmetry(peak_dat_left, symmetry_tol)
+    sym_right = check_peak_symmetry(peak_dat_right, symmetry_tol)
+    symmetry_pass = sym_left * sym_right
+    
+    # 5. Condition 2 (Peak Position Agreement)
+    agreement_pass = check_peak_position_agreement(peak_dat_left, peak_dat_right, peak_diff_tol)
+    
+    # Combine pre-stability
+    result = corr_binary * width_pass * height_pass * symmetry_pass * agreement_pass
+    
+    # 6. Condition 3 (Mode Stability)
+    if params_list is not None and stability_radius is not None and stability_frac is not None:
+        result = check_mode_stability(result, params_list, stability_radius, stability_frac)
+        
+    return result
