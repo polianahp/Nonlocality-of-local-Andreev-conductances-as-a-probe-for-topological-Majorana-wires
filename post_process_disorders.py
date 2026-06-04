@@ -11,6 +11,7 @@ import json
 import argparse
 from pathlib import Path
 import numpy as np
+import helpers as hp
 
 # Use Agg backend for headless matplotlib operations
 import matplotlib
@@ -73,7 +74,9 @@ def load_realization(subdir_path):
         'peaks_right': 'peaks_right.npy',
         'rG_corr': 'rG_corr.npy',
         'params_list': 'params_list.npy',
-        'weight_localization': 'weight_localization_arr.npy'
+        'weight_localization': 'weight_localization_arr.npy',
+        'barrier_right_conductance_left_arr': 'barrier_right_conductance_left_arr.npy',
+        'barrier_right_conductance_right_arr': 'barrier_right_conductance_right_arr.npy'
     }
     
     data = {}
@@ -88,7 +91,7 @@ def load_realization(subdir_path):
     return data
 
 
-def process_single_realization(data, width_thresh, height_thresh, pdi_thresh):
+def process_single_realization(data, width_thresh, height_thresh, pdi_thresh, corr_thresh, peaks_diff_tol):
     """
     Processes the data of a single realization to calculate:
     - Binarized PDI map
@@ -101,44 +104,51 @@ def process_single_realization(data, width_thresh, height_thresh, pdi_thresh):
     
     # 1. PDI binarization (Col index 2 of pdi_data is PDI_winding_number)
     pdi_winding = data['pdi_data'][:, 2]
-    pdi_binary = filter_pdi(pdi_winding, thresh=pdi_thresh)
+    I = filter_pdi(pdi_winding, thresh=pdi_thresh)
     
     # 2. Conductance protocol map
-    int_pks_left = filter_peaks(data['peaks_left'], width_thresh=width_thresh, height_thresh=height_thresh)
-    int_pks_right = filter_peaks(data['peaks_right'], width_thresh=width_thresh, height_thresh=height_thresh)
-    conductance_map = (int_pks_left * int_pks_right) * data['rG_corr']
+    brcl = data['barrier_right_conductance_left_arr']
+    brcr = data['barrier_right_conductance_right_arr']
     
-    # Binarize conductance map (non-zero means positive protocol detection)
-    conductance_binary = (conductance_map > 0.0).astype(float)
+    corrs = np.asarray([hp.calc_invariant_metric(brcl[i,:], brcr[i,:]) for i in range(brcr.shape[0])])
     
-    # 3. Boolean masks
-    A_bool = pdi_binary == 1.0
-    B_bool = conductance_binary == 1.0
-    total_points = len(A_bool)
+    prot_dat = hp.calc_protocol(corrs, data['peaks_left'], data['peaks_right'], I, 
+                                width_thresh=width_thresh, height_thresh=height_thresh, corr_thresh=corr_thresh, peaks_diff_tol=peaks_diff_tol)
     
-    # 4. Probabilities
-    PA = np.sum(A_bool) / total_points
-    PB = np.sum(B_bool) / total_points
-    PAB = np.sum(A_bool & B_bool) / total_points
-    P_notAB = np.sum(~A_bool & B_bool) / total_points
-    
-    p_a_given_b = PAB / PB 
-    p_b_given_a = PAB / PA 
-    p_not_a_given_b = P_notAB / PB 
-    
+    Ppcor = len(np.where(np.isclose(prot_dat, 1.0))[0])/len(prot_dat)
+    Pncor = len(np.where(np.isclose(prot_dat - 1, -1.0))[0])/len(prot_dat)
+    PpI = len(np.where(np.isclose(I, 1.0))[0])/len(I)
+    PnI = len(np.where(np.isclose(I-1, -1.0))[0])/len(I)
+
+    #joint probability of a Topological phase and Positive Correlation of > 90% 
+    cnd = (prot_dat.astype(bool) * I.astype(bool)).astype(int)    
+    PpcorpI = len(np.where(np.isclose(cnd, 1))[0])/len(cnd)
+
+    #joint probability of positive correlation > 90% and trivial phase
+    cnd = (prot_dat.astype(bool) * ~I.astype(bool)).astype(int)    
+    PpcornI = len(np.where(np.isclose(cnd, 1))[0])/len(cnd)
+
+    #conditional probability of a trivial phase, given that the correlation is positive
+    PnIgcor = PpcornI/Ppcor if Ppcor > 0 else np.nan
+
+    #conditional probability of a topologival phase, given that the correlation is positive
+    PIgcor = PpcorpI/Ppcor if Ppcor > 0 else np.nan
+
     # 5. Confusion matrix counts
+    A_bool = I == 1.0
+    B_bool = prot_dat == 1.0
     tp = np.sum(A_bool & B_bool)
     fp = np.sum(~A_bool & B_bool)
     fn = np.sum(A_bool & ~B_bool)
     tn = np.sum(~A_bool & ~B_bool)
     
     return {
-        'pdi_binary': pdi_binary,
-        'conductance_map': conductance_map,
-        'conductance_binary': conductance_binary,
-        'p_a_given_b': p_a_given_b,
-        'p_b_given_a': p_b_given_a,
-        'p_not_a_given_b': p_not_a_given_b,
+        'pdi_binary': I,
+        'conductance_map': prot_dat,
+        'conductance_binary': prot_dat,
+        'p_a_given_b': PIgcor,
+        'p_b_given_a': np.nan,
+        'p_not_a_given_b': PnIgcor,
         'tp': int(tp),
         'fp': int(fp),
         'fn': int(fn),
@@ -210,13 +220,13 @@ def plot_histogram(values, title, xlabel, savepath, bins=15):
     print(f"  Saved plot: {savepath}")
 
 
-def main(input_dir, width_thresh=0.015, height_thresh=0.0, pdi_thresh=0.8, output_dir=None):
+def main(input_dir, width_thresh, height_thresh, pdi_thresh, corr_thresh, peaks_diff_tol, output_dir=None):
     input_path = Path(input_dir)
     if not input_path.exists() or not input_path.is_dir():
         raise FileNotFoundError(f"Input directory does not exist or is not a directory: {input_dir}")
         
     if output_dir is None:
-        output_path = input_path / "post_process_results"
+        output_path = input_path / 'post_process_results'
     else:
         output_path = Path(output_dir)
         
@@ -272,7 +282,9 @@ def main(input_dir, width_thresh=0.015, height_thresh=0.0, pdi_thresh=0.8, outpu
             data,
             width_thresh=width_thresh,
             height_thresh=height_thresh,
-            pdi_thresh=pdi_thresh
+            pdi_thresh=pdi_thresh,
+            corr_thresh=corr_thresh,
+            peaks_diff_tol=peaks_diff_tol
         )
         
         all_pdi_maps.append(res['pdi_binary'])
@@ -387,7 +399,7 @@ def main(input_dir, width_thresh=0.015, height_thresh=0.0, pdi_thresh=0.8, outpu
         f"Output directory:                 {output_path}",
         f"Realizations processed:           {num_realizations}",
         f"Grid points per realization:      {len(avg_pdi) if len(all_pdi_maps) > 0 else 0}",
-        f"Thresholds:                       PDI={pdi_thresh}, Width={width_thresh}, Height={height_thresh}",
+        f"Thresholds:                       PDI={pdi_thresh}, Width={width_thresh}, Height={height_thresh}, Peaks Diff Tol={peaks_diff_tol}",
         "",
         "--- Conditional Probabilities (Mean ± Std Across Realizations) ---",
         f"  P(A|B) = P(Topological | Protocol Positive):   {np.mean(p_a_given_b_clean):.4f} ± {np.std(p_a_given_b_clean):.4f}" if len(p_a_given_b_clean) > 0 else "  P(A|B): N/A",
@@ -430,19 +442,35 @@ if __name__ == '__main__':
         '--width_thresh',
         type=float,
         default=0.01,
-        help="Peak energy width threshold (default: 0.015)"
+        help="Peak energy width threshold (default: 0.005)"
     )
+    # Use a custom action to allow parsing None properly if needed, 
+    # but by default argparse won't easily parse 'None' to Python's None type for float.
+    # A simple approach: use string and convert. 
+    # For now we'll accept float and assume None is default if not specified.
     parser.add_argument(
         '--height_thresh',
         type=float,
-        default=0.0,
-        help="Peak height threshold (default: 0.0)"
+        default=0.5,
+        help="Peak height threshold (default: None)"
     )
     parser.add_argument(
         '--pdi_thresh',
         type=float,
-        default=0.98,
-        help="PDI binarization threshold (default: 0.8)"
+        default=0.9,
+        help="PDI binarization threshold (default: 0.99)"
+    )
+    parser.add_argument(
+        '--corr_thresh',
+        type=float,
+        default=0.9,
+        help="Correlation threshold (default: 0.9)"
+    )
+    parser.add_argument(
+        '--peaks_diff_tol',
+        type=float,
+        default=0.1,
+        help="Peaks difference tolerance (default: 0.1)"
     )
     parser.add_argument(
         '--output_dir',
@@ -458,5 +486,7 @@ if __name__ == '__main__':
         width_thresh=args.width_thresh,
         height_thresh=args.height_thresh,
         pdi_thresh=args.pdi_thresh,
+        corr_thresh=args.corr_thresh,
+        peaks_diff_tol=args.peaks_diff_tol,
         output_dir=args.output_dir
     )

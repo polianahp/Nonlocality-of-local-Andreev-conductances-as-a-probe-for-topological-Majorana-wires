@@ -1217,3 +1217,49 @@ def get_psiM_density_excited(evals, evecs, offset=1):
     rho_M2 = np.sum(np.abs(g2_reshaped)**2, axis=1)
 
     return rho_M1, rho_M2, evals
+
+
+
+def calc_protocol(corr_map, peak_dat_left, peak_dat_right, Wnumber, 
+                  width_thresh=None, height_thresh=None, corr_thresh = None, peaks_diff_tol = None):
+    
+    Wnumber = np.asarray([1 if w > 0.9 else 0 for w in Wnumber])
+    
+    
+    
+    corr_map = np.asarray([1.0 if corr > 1 else corr for corr in corr_map])
+    corr_map = np.asarray([0.0 if corr < 0.0 else corr for corr in corr_map])
+    
+    if corr_thresh is not None:
+        corr_map = np.asarray([0.0 if corr < corr_thresh else corr for corr in corr_map])
+        corr_map = np.asarray([1.0 if corr > corr_thresh else corr for corr in corr_map])
+        
+        
+        
+    l_peaks, l_widths, l_heights = peak_dat_left[:, 0], peak_dat_left[:, 1], peak_dat_left[:, 2]
+    r_peaks, r_widths, r_heights = peak_dat_right[:, 0], peak_dat_right[:, 1], peak_dat_right[:, 2]
+    
+    combined_filter = np.ones_like(l_peaks)
+    
+    if width_thresh is not None:
+        combined_filter *= (l_widths <= width_thresh) & (r_widths <= width_thresh)
+    if height_thresh is not None:
+        combined_filter *= (l_heights >= height_thresh) & (r_heights >= height_thresh)
+    
+    if peaks_diff_tol is not None:
+        combined_filter *= np.isclose(l_widths, r_widths, rtol=peaks_diff_tol)
+        
+    
+    return corr_map * combined_filter
+        
+        
+        
+    
+    
+
+        
+        
+    
+    
+
+    

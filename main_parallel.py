@@ -161,7 +161,7 @@ def worker_simulation_step(iter_data, static_params):
             
         r_Gll, r_GRR = b_right_cond_left, b_right_cond_right #varying left barrier and getting local conductances
         
-        rG_corr = hp.calc_correlation(r_Gll, r_GRR)
+        rG_corr = hp.calc_invariant_metric(r_Gll, r_GRR)
     
     
     results = {
@@ -206,8 +206,8 @@ def worker_pdi_step(iter_data, static_params):
     Delta0 = static_params['Delta0']
 
     # Apply Renormalization Factor Z to align with Kwant physics
-    Z = Delta0 / (Delta0 + gamma)
-    #Z = 1
+    #Z = Delta0 / (Delta0 + gamma)
+    Z = 1
     ts *= Z
     alphas *= Z
     gamma *= Z
