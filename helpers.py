@@ -1479,6 +1479,7 @@ def calc_protocol_new(corr_map, peak_dat_left, peak_dat_right,
                       peak_diff_tol=0.01, width_thresh=None,
                       height_thresh=None, params_list=None,
                       stability_radius=None, stability_frac=None):
+    
     """Evaluate Protocol v2.0 conditions on simulation data.
 
     Applies conditions in sequence (AND logic):

@@ -153,13 +153,17 @@ def process_single_realization(data, width_thresh, height_thresh, pdi_thresh,
     fn = np.sum(A_bool & ~B_bool)
     tn = np.sum(~A_bool & ~B_bool)
     
+    p_b_given_a = tp / (tp + fn) if (tp + fn) > 0 else np.nan
+    p_not_b_given_a = fn / (tp + fn) if (tp + fn) > 0 else np.nan
+    
     return {
         'pdi_binary': I,
         'conductance_map': prot_dat,
         'conductance_binary': prot_dat,
         'p_a_given_b': PIgcor,
-        'p_b_given_a': np.nan,
+        'p_b_given_a': p_b_given_a,
         'p_not_a_given_b': PnIgcor,
+        'p_not_b_given_a': p_not_b_given_a,
         'tp': int(tp),
         'fp': int(fp),
         'fn': int(fn),
@@ -272,6 +276,7 @@ def main(input_dir, width_thresh, height_thresh, pdi_thresh, corr_thresh, symmet
     all_p_a_given_b = []
     all_p_b_given_a = []
     all_p_not_a_given_b = []
+    all_p_not_b_given_a = []
     
     total_tp = 0
     total_fp = 0
@@ -307,6 +312,7 @@ def main(input_dir, width_thresh, height_thresh, pdi_thresh, corr_thresh, symmet
         all_p_a_given_b.append(res['p_a_given_b'])
         all_p_b_given_a.append(res['p_b_given_a'])
         all_p_not_a_given_b.append(res['p_not_a_given_b'])
+        all_p_not_b_given_a.append(res['p_not_b_given_a'])
         
         total_tp += res['tp']
         total_fp += res['fp']
@@ -335,6 +341,7 @@ def main(input_dir, width_thresh, height_thresh, pdi_thresh, corr_thresh, symmet
     np.save(output_path / 'p_a_given_b_values.npy', np.array(all_p_a_given_b))
     np.save(output_path / 'p_b_given_a_values.npy', np.array(all_p_b_given_a))
     np.save(output_path / 'p_not_a_given_b_values.npy', np.array(all_p_not_a_given_b))
+    np.save(output_path / 'p_not_b_given_a_values.npy', np.array(all_p_not_b_given_a))
     if params_grid is not None:
         np.save(output_path / 'params_grid.npy', params_grid)
         
@@ -400,10 +407,14 @@ def main(input_dir, width_thresh, height_thresh, pdi_thresh, corr_thresh, symmet
         plot_histogram(all_p_b_given_a, 'P(Protocol Positive | Topological)',
                        'P(B|A)', plot_path / 'p_b_given_a_histogram.png')
                        
+        plot_histogram(all_p_not_b_given_a, 'P(Protocol Not Positive | Topological)',
+                       'P(~B|A)', plot_path / 'p_not_b_given_a_histogram.png')
+                       
     # 8. Print and save summary
     p_a_given_b_clean = np.array(all_p_a_given_b)[~np.isnan(all_p_a_given_b)]
     p_b_given_a_clean = np.array(all_p_b_given_a)[~np.isnan(all_p_b_given_a)]
     p_not_a_given_b_clean = np.array(all_p_not_a_given_b)[~np.isnan(all_p_not_a_given_b)]
+    p_not_b_given_a_clean = np.array(all_p_not_b_given_a)[~np.isnan(all_p_not_b_given_a)]
     
     summary_lines = [
         "=" * 60,
@@ -419,6 +430,7 @@ def main(input_dir, width_thresh, height_thresh, pdi_thresh, corr_thresh, symmet
         f"  P(A|B) = P(Topological | Protocol Positive):   {np.mean(p_a_given_b_clean):.4f} ± {np.std(p_a_given_b_clean):.4f}" if len(p_a_given_b_clean) > 0 else "  P(A|B): N/A",
         f"  P(~A|B) = P(Trivial | Protocol Positive):       {np.mean(p_not_a_given_b_clean):.4f} ± {np.std(p_not_a_given_b_clean):.4f}" if len(p_not_a_given_b_clean) > 0 else "  P(~A|B): N/A",
         f"  P(B|A) = P(Protocol Positive | Topological):   {np.mean(p_b_given_a_clean):.4f} ± {np.std(p_b_given_a_clean):.4f}" if len(p_b_given_a_clean) > 0 else "  P(B|A): N/A",
+        f"  P(~B|A) = P(Protocol Not Positive | Topological): {np.mean(p_not_b_given_a_clean):.4f} ± {np.std(p_not_b_given_a_clean):.4f}" if len(p_not_b_given_a_clean) > 0 else "  P(~B|A): N/A",
         "",
         "--- Pooled Confusion Matrix (% of Total Grid Points) ---",
         f"  TP: {tp_pct:>7.2f}%   FP: {fp_pct:>7.2f}%",
@@ -449,7 +461,7 @@ if __name__ == '__main__':
         'input_dir',
         type=str,
         nargs='?',
-        default='/home/pseudonym/code/Nonlocal_Conductance/Nonlocality-of-local-Andreev-conductances-as-a-probe-for-topological-Majorana-wires/Data/Disorder_Realizations',
+        default='/home/pseudonym/code/Nonlocal_Conductance/Nonlocality-of-local-Andreev-conductances-as-a-probe-for-topological-Majorana-wires/Data/Protocol_V2',
         help="Path to directory containing realization subdirectories."
     )
     parser.add_argument(
@@ -483,25 +495,25 @@ if __name__ == '__main__':
     parser.add_argument(
         '--symmetry_tol',
         type=float,
-        default=0.005,
+        default=0.0,
         help="Peak symmetry tolerance in meV (Condition 1)"
     )
     parser.add_argument(
         '--peak_diff_tol',
         type=float,
-        default=0.01,
+        default=0.0001,
         help="Left-right peak agreement tolerance in meV (Condition 2)"
     )
     parser.add_argument(
         '--stability_radius',
         type=int,
-        default=None,
+        default=2,
         help="Chebyshev neighborhood radius for mode stability (Condition 3)"
     )
     parser.add_argument(
         '--stability_frac',
         type=float,
-        default=None,
+        default=None, #0.5,
         help="Fraction threshold for mode stability (Condition 3)"
     )
     parser.add_argument(
