@@ -93,7 +93,7 @@ def load_realization(subdir_path):
 
 def process_single_realization(data, width_thresh, height_thresh, pdi_thresh,
                                corr_thresh, symmetry_tol,
-                               peak_diff_tol, stability_radius, stability_frac):
+                               peak_diff_tol, stability_radius, stability_frac, stability_samples):
     """
     Processes the data of a single realization to calculate:
     - Binarized PDI map
@@ -123,7 +123,8 @@ def process_single_realization(data, width_thresh, height_thresh, pdi_thresh,
         height_thresh=height_thresh,
         params_list=data['params_list'],
         stability_radius=stability_radius,
-        stability_frac=stability_frac
+        stability_frac=stability_frac,
+        stability_samples=stability_samples
     )
     
     Ppcor = len(np.where(np.isclose(prot_dat, 1.0))[0])/len(prot_dat)
@@ -235,7 +236,8 @@ def plot_histogram(values, title, xlabel, savepath, bins=15):
     print(f"  Saved plot: {savepath}")
 
 
-def main(input_dir, width_thresh, height_thresh, pdi_thresh, corr_thresh, symmetry_tol, peak_diff_tol, stability_radius, stability_frac, output_dir=None):
+def main(input_dir, width_thresh, height_thresh, pdi_thresh, corr_thresh,
+         symmetry_tol, peak_diff_tol, stability_radius, stability_frac, stability_samples, output_dir=None):
     input_path = Path(input_dir)
     if not input_path.exists() or not input_path.is_dir():
         raise FileNotFoundError(f"Input directory does not exist or is not a directory: {input_dir}")
@@ -303,7 +305,8 @@ def main(input_dir, width_thresh, height_thresh, pdi_thresh, corr_thresh, symmet
             symmetry_tol=symmetry_tol,
             peak_diff_tol=peak_diff_tol,
             stability_radius=stability_radius,
-            stability_frac=stability_frac
+            stability_frac=stability_frac,
+            stability_samples=stability_samples
         )
         
         all_pdi_maps.append(res['pdi_binary'])
@@ -424,7 +427,7 @@ def main(input_dir, width_thresh, height_thresh, pdi_thresh, corr_thresh, symmet
         f"Output directory:                 {output_path}",
         f"Realizations processed:           {num_realizations}",
         f"Grid points per realization:      {len(avg_pdi) if len(all_pdi_maps) > 0 else 0}",
-        f"Thresholds:                       PDI={pdi_thresh}, Width={width_thresh}, Height={height_thresh}, Corr={corr_thresh}, SymmetryTol={symmetry_tol}, PeakDiffTol={peak_diff_tol}, StabilityR={stability_radius}, StabilityFrac={stability_frac}",
+        f"Thresholds:                       PDI={pdi_thresh}, Width={width_thresh}, Height={height_thresh}, Corr={corr_thresh}, SymmetryTol={symmetry_tol}, PeakDiffTol={peak_diff_tol}, StabilityR={stability_radius}, StabilityFrac={stability_frac}, StabilitySamples={stability_samples}",
         "",
         "--- Conditional Probabilities (Mean ± Std Across Realizations) ---",
         f"  P(A|B) = P(Topological | Protocol Positive):   {np.mean(p_a_given_b_clean):.4f} ± {np.std(p_a_given_b_clean):.4f}" if len(p_a_given_b_clean) > 0 else "  P(A|B): N/A",
@@ -461,7 +464,7 @@ if __name__ == '__main__':
         'input_dir',
         type=str,
         nargs='?',
-        default='/home/pseudonym/code/Nonlocal_Conductance/Nonlocality-of-local-Andreev-conductances-as-a-probe-for-topological-Majorana-wires/Data/Protocol_V2',
+        default='/home/pseudonym/code/Nonlocal_Conductance/Nonlocality-of-local-Andreev-conductances-as-a-probe-for-topological-Majorana-wires/Data/one_disorder',
         help="Path to directory containing realization subdirectories."
     )
     parser.add_argument(
@@ -507,14 +510,20 @@ if __name__ == '__main__':
     parser.add_argument(
         '--stability_radius',
         type=int,
-        default=2,
+        default=3,
         help="Chebyshev neighborhood radius for mode stability (Condition 3)"
     )
     parser.add_argument(
         '--stability_frac',
         type=float,
-        default=None, #0.5,
+        default=0.6, #0.5,
         help="Fraction threshold for mode stability (Condition 3)"
+    )
+    parser.add_argument(
+        '--stability_samples',
+        type=int,
+        default=5,
+        help="Number of points to sample evenly on the perimeter of the Chebyshev radius (Condition 3). If None, tests all points."
     )
     parser.add_argument(
         '--output_dir',
@@ -535,5 +544,6 @@ if __name__ == '__main__':
         peak_diff_tol=args.peak_diff_tol,
         stability_radius=args.stability_radius,
         stability_frac=args.stability_frac,
+        stability_samples=args.stability_samples,
         output_dir=args.output_dir
     )

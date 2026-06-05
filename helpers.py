@@ -504,7 +504,7 @@ def check_peak_position_agreement(peak_dat_left, peak_dat_right, peak_diff_tol):
     return result.astype(float)
 
 
-def check_mode_stability(protocol_map, params_list, stability_radius, stability_frac):
+def check_mode_stability(protocol_map, params_list, stability_radius, stability_frac, stability_samples=None):
     """Check that protocol-positive points have stable neighborhoods.
 
     For each grid point, examines all neighbors within a Chebyshev distance
@@ -527,6 +527,9 @@ def check_mode_stability(protocol_map, params_list, stability_radius, stability_
         Chebyshev neighborhood radius in grid steps.
     stability_frac : float
         Minimum fraction of neighbors that must be protocol-positive (0.0 to 1.0).
+    stability_samples : int, optional
+        If provided, tests exactly this many points evenly spaced along the perimeter
+        of the Chebyshev bounding box, rather than the entire dense region.
 
     Returns
     -------
@@ -550,22 +553,57 @@ def check_mode_stability(protocol_map, params_list, stability_radius, stability_
         
     out_grid = np.zeros_like(grid)
     
+    relative_perimeter = []
+    if stability_samples is not None:
+        R = stability_radius
+        if R > 0:
+            for c in range(-R, R): relative_perimeter.append((-R, c))
+            for r in range(-R, R): relative_perimeter.append((r, R))
+            for c in range(R, -R, -1): relative_perimeter.append((R, c))
+            for r in range(R, -R, -1): relative_perimeter.append((r, -R))
+            
+            if stability_samples >= len(relative_perimeter):
+                sampled_offsets = relative_perimeter
+            else:
+                indices = np.round(np.linspace(0, len(relative_perimeter), stability_samples, endpoint=False)).astype(int)
+                sampled_offsets = [relative_perimeter[idx] for idx in indices]
+        else:
+            sampled_offsets = []
+    
     for i in range(grid.shape[0]):
         for j in range(grid.shape[1]):
             if grid[i, j] == 1.0:
-                i_start = max(0, i - stability_radius)
-                i_end = min(grid.shape[0] - 1, i + stability_radius)
-                j_start = max(0, j - stability_radius)
-                j_end = min(grid.shape[1] - 1, j + stability_radius)
-                
-                neighborhood = grid[i_start:i_end+1, j_start:j_end+1]
-                
-                count_positive = np.sum(neighborhood) - 1.0
-                total_neighbors = neighborhood.size - 1
-                
-                if total_neighbors > 0:
-                    if (count_positive / total_neighbors) >= stability_frac:
+                if stability_samples is not None:
+                    if stability_radius == 0 or len(sampled_offsets) == 0:
                         out_grid[i, j] = 1.0
+                        continue
+                        
+                    count_positive = 0
+                    total_neighbors = 0
+                    for dr, dc in sampled_offsets:
+                        r, c = i + dr, j + dc
+                        if 0 <= r < grid.shape[0] and 0 <= c < grid.shape[1]:
+                            total_neighbors += 1
+                            if grid[r, c] == 1.0:
+                                count_positive += 1
+                                
+                    if total_neighbors > 0:
+                        if (count_positive / total_neighbors) >= stability_frac:
+                            out_grid[i, j] = 1.0
+                else:
+                    i_start = max(0, i - stability_radius)
+                    i_end = min(grid.shape[0] - 1, i + stability_radius)
+                    j_start = max(0, j - stability_radius)
+                    j_end = min(grid.shape[1] - 1, j + stability_radius)
+                    
+                    neighborhood = grid[i_start:i_end+1, j_start:j_end+1]
+                    
+                    count_positive = np.sum(neighborhood) - 1.0
+                    total_neighbors = neighborhood.size - 1
+                    
+                    if total_neighbors > 0:
+                        if (count_positive / total_neighbors) >= stability_frac:
+                            out_grid[i, j] = 1.0
                         
     if len(params_list) > 1 and params_list[1, 1] != params_list[0, 1] and params_list[1, 2] == params_list[0, 2]:
         return out_grid.T.flatten()
@@ -1478,7 +1516,8 @@ def calc_protocol_new(corr_map, peak_dat_left, peak_dat_right,
                       corr_thresh=0.9, symmetry_tol=0.005,
                       peak_diff_tol=0.01, width_thresh=None,
                       height_thresh=None, params_list=None,
-                      stability_radius=None, stability_frac=None):
+                      stability_radius=None, stability_frac=None,
+                      stability_samples=None):
     
     """Evaluate Protocol v2.0 conditions on simulation data.
 
@@ -1516,6 +1555,9 @@ def calc_protocol_new(corr_map, peak_dat_left, peak_dat_right,
         Chebyshev radius for Condition 3. If None, skip Condition 3.
     stability_frac : float or None
         Fraction threshold for Condition 3. If None, skip Condition 3.
+    stability_samples : int or None
+        Number of points to sample evenly on the perimeter of the Chebyshev radius.
+        If None, tests the entire dense region.
 
     Returns
     -------
@@ -1559,6 +1601,6 @@ def calc_protocol_new(corr_map, peak_dat_left, peak_dat_right,
     
     # 6. Condition 3 (Mode Stability)
     if params_list is not None and stability_radius is not None and stability_frac is not None:
-        result = check_mode_stability(result, params_list, stability_radius, stability_frac)
+        result = check_mode_stability(result, params_list, stability_radius, stability_frac, stability_samples)
         
     return result

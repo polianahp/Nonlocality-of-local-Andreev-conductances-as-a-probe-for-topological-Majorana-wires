@@ -277,5 +277,26 @@ def test_protocol_new_with_stability():
     res_stab = hp.calc_protocol_new(corr, left, right, params_list=params, stability_radius=1, stability_frac=0.5)
     assert res_stab[12] == 0.0
 
+def test_stability_samples():
+    params = make_params_grid(5, 5)
+    pmap = np.zeros((5, 5))
+    # center
+    pmap[2, 2] = 1.0
+    # corners of R=1
+    pmap[1, 1] = 1.0
+    pmap[3, 3] = 1.0
+    
+    # sample 4 points (the 4 corners)
+    # out of 4 samples, 2 are positive -> frac = 0.5
+    res = hp.check_mode_stability(pmap.flatten(), params, stability_radius=1, stability_frac=0.5, stability_samples=4)
+    res = res.reshape(5, 5)
+    assert res[2, 2] == 1.0
+    
+    # sample 8 points (the whole perimeter)
+    # out of 8 samples, 2 are positive -> frac = 0.25
+    res2 = hp.check_mode_stability(pmap.flatten(), params, stability_radius=1, stability_frac=0.5, stability_samples=8)
+    res2 = res2.reshape(5, 5)
+    assert res2[2, 2] == 0.0
+
 if __name__ == "__main__":
     pytest.main([__file__])
