@@ -1514,10 +1514,10 @@ def calc_protocol(corr_map, peak_dat_left, peak_dat_right, Wnumber,
 
 def calc_protocol_new(corr_map, peak_dat_left, peak_dat_right,
                       corr_thresh=0.9, symmetry_tol=0.005,
-                      peak_diff_tol=0.01, width_thresh=None,
+                      peak_diff_tol=None, width_thresh=None,
                       height_thresh=None, params_list=None,
                       stability_radius=None, stability_frac=None,
-                      stability_samples=None):
+                      stability_samples=None, mono_pass=None):
     
     """Evaluate Protocol v2.0 conditions on simulation data.
 
@@ -1526,13 +1526,14 @@ def calc_protocol_new(corr_map, peak_dat_left, peak_dat_right,
     2. Condition 1 (Peak Symmetry): |V+| approx |V-| on each wire end
     3. Condition 2 (Peak Position Agreement): peaks match between left and right wire ends
     4. Condition 3 (Mode Stability): neighborhood check (optional, requires params_list)
+    5. Monotonicity check: conductance decreases monotonically with right barrier
 
     Additionally applies optional peak width and height filters if thresholds are provided.
 
     Parameters
     ----------
     corr_map : np.ndarray, shape (N,)
-        Raw correlation metric values from calc_invariant_metric.
+        Precomputed barrier-sweep correlation map.
     peak_dat_left : np.ndarray, shape (N, 6)
         Peak data for left wire end (new 6-column format from detect_peaks_v2).
     peak_dat_right : np.ndarray, shape (N, 6)
@@ -1558,6 +1559,8 @@ def calc_protocol_new(corr_map, peak_dat_left, peak_dat_right,
     stability_samples : int or None
         Number of points to sample evenly on the perimeter of the Chebyshev radius.
         If None, tests the entire dense region.
+    mono_pass : np.ndarray, shape (N,) or None
+        Precomputed monotonicity check binary array. If None, it is ignored (assumed all pass).
 
     Returns
     -------
@@ -1596,11 +1599,149 @@ def calc_protocol_new(corr_map, peak_dat_left, peak_dat_right,
     # 5. Condition 2 (Peak Position Agreement)
     agreement_pass = check_peak_position_agreement(peak_dat_left, peak_dat_right, peak_diff_tol)
     
+    # 6. Monotonicity filter
+    if mono_pass is None:
+        mono_pass = np.ones(N)
+        
     # Combine pre-stability
-    result = corr_binary * width_pass * height_pass * symmetry_pass * agreement_pass
+    result = corr_binary * width_pass * height_pass * symmetry_pass * agreement_pass * mono_pass
     
-    # 6. Condition 3 (Mode Stability)
+    # 7. Condition 3 (Mode Stability)
     if params_list is not None and stability_radius is not None and stability_frac is not None:
         result = check_mode_stability(result, params_list, stability_radius, stability_frac, stability_samples)
         
     return result
+
+
+
+def filter_pdi(pdis, thresh = 0.8):
+    for i in range(len(pdis)):
+        pdi = pdis[i]
+        if pdi > 1.0:
+            pdis[i] = 1.00
+        elif pdi < 0.0:
+            pdis[i] = 0
+        
+        if thresh:
+            if pdi > thresh:
+                pdis[i] =  1
+            else:
+                pdis[i] =  0
+                
+                
+    return pdis
+
+
+def check_monotonic_decreasing(conductance_1, conductance_2=None):
+    """Check if the conductance array(s) are monotonic decreasing along the last axis.
+
+    Parameters
+    ----------
+    conductance_1 : np.ndarray
+        First conductance array, shape (N, M) or (M,).
+    conductance_2 : np.ndarray, optional
+        Second conductance array, shape (N, M) or (M,). If provided, checks that BOTH
+        arrays are monotonic decreasing.
+
+    Returns
+    -------
+    np.ndarray or float
+        An array of 1.0 where the condition is met, 0.0 otherwise.
+        For 1D inputs, returns a float (1.0 or 0.0).
+    """
+    if np.ndim(conductance_1) == 1:
+        mono_1 = np.all(np.diff(conductance_1) <= 0)
+        if conductance_2 is not None:
+            mono_2 = np.all(np.diff(conductance_2) <= 0)
+            return 1.0 if (mono_1 and mono_2) else 0.0
+        return 1.0 if mono_1 else 0.0
+    else:
+        mono_1 = np.all(np.diff(conductance_1, axis=-1) <= 0, axis=-1)
+        if conductance_2 is not None:
+            mono_2 = np.all(np.diff(conductance_2, axis=-1) <= 0, axis=-1)
+            return (mono_1 & mono_2).astype(float)
+        return mono_1.astype(float)
+
+def get_inside_points_function(pdi_arr):
+    from scipy.spatial import KDTree
+    mu = pdi_arr[:, 0]   
+    V_z = pdi_arr[:, 1] 
+    points = np.column_stack((V_z, mu))
+    tree = KDTree(points)
+
+    def get_inside_points(center, r):
+        inside = tree.query_ball_point(center, r)
+        return inside
+    return get_inside_points
+
+def check_island_stability_v3(protocol_map, pdi_arr, radius=0.05, frac=1.0):
+    get_inside_pts = get_inside_points_function(pdi_arr)
+    mu = pdi_arr[:, 0]
+    V_z = pdi_arr[:, 1]
+    points = np.column_stack((V_z, mu))
+    
+    stable_map = np.zeros_like(protocol_map)
+    for i in range(len(protocol_map)):
+        if protocol_map[i] > 0:
+            neighbors = get_inside_pts(points[i], radius)
+            if len(neighbors) > 0:
+                correlated_neighbors = sum(1 for n in neighbors if protocol_map[n] > 0)
+                if (correlated_neighbors / len(neighbors)) >= frac:
+                    stable_map[i] = 1.0
+            else:
+                stable_map[i] = 1.0
+    return stable_map
+
+def calc_protocol_v3(corr_map, peaks_left, peaks_right, mono_pass, pdi_arr, params):
+    """
+    Vectorized implementation of the protocol from protocol.ipynb.
+    
+    params must be a dictionary with keys matching the notebook.
+    """
+    N = len(corr_map)
+    prot_dat = np.ones(N)
+    
+    if params.get('check_correlation', False):
+        thresh = params.get('corr_thresh', 0.5)
+        opt_corr = np.clip(corr_map, 0.0, 1.0)
+        opt_corr = np.where(opt_corr < thresh, 0.0, opt_corr)
+        opt_corr = np.where(opt_corr >= thresh, 1.0, opt_corr)
+        prot_dat *= opt_corr
+        
+    if params.get('check_resonance_peak', False):
+        opt_left = np.sum(peaks_left, axis=1) > 0
+        opt_right = np.sum(peaks_right, axis=1) > 0
+        opt_has_peak = (opt_left & opt_right).astype(float)
+        prot_dat *= (1.0 - opt_has_peak)
+        
+    if params.get('check_negative_peaks', False):
+        opt_left = peaks_left[:, 4] < 0.0
+        opt_right = peaks_right[:, 4] < 0.0
+        opt_neg = (opt_left | opt_right).astype(float)
+        prot_dat *= (1.0 - opt_neg)
+        
+    if params.get('check_monotonic', False):
+        if mono_pass is not None:
+            prot_dat *= mono_pass
+            
+    if params.get('check_peak_symmetry', False):
+        symm_tol = params.get('symmetry_tol', 1e-8) # default to exact match
+        opt_sym_left = np.isclose(np.abs(peaks_left[:, 2]), np.abs(peaks_left[:, 4]), atol=symm_tol)
+        opt_sym_right = np.isclose(np.abs(peaks_right[:, 2]), np.abs(peaks_right[:, 4]), atol=symm_tol)
+        opt_symm = (opt_sym_left & opt_sym_right).astype(float)
+        prot_dat *= opt_symm
+        
+    if params.get('check_peak_window', False):
+        win = params.get('window', 0.035)
+        opt_win_left = (np.abs(peaks_left[:, 2]) <= win) & (np.abs(peaks_left[:, 4]) <= win)
+        opt_win_right = (np.abs(peaks_right[:, 2]) <= win) & (np.abs(peaks_right[:, 4]) <= win)
+        opt_window = (opt_win_left & opt_win_right).astype(float)
+        prot_dat *= opt_window
+        
+    if params.get('check_island_stability', False):
+        radius = params.get('stability_radius', 0.027)
+        frac = params.get('stability_frac', 0.8)
+        stable_map = check_island_stability_v3(prot_dat, pdi_arr, radius=radius, frac=frac)
+        prot_dat *= stable_map
+        
+    return prot_dat
