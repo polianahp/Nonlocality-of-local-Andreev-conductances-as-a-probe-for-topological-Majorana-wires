@@ -2,17 +2,14 @@
 """
 optimize_protocol.py
 
-Bayesian hyperparameter optimization of Protocol V2 using Optuna.
+Grid Search hyperparameter optimization of Protocol V3.
 
-Optimizes protocol hyperparameters to minimize a weighted cost function
-combining two conditional probability errors:
+Runs an exhaustive search over the `search_space` dictionary defined below.
+Evaluates conditional probabilities:
     P(~A|B) = P(Trivial | Protocol Positive)    — false discovery rate
     P(~B|A) = P(Protocol Negative | Topological) — false negative rate
 
-The cost function is:
-    cost = w * P(~A|B) + (1 - w) * P(~B|A)
-
-where w=0.8 by default (prioritize minimizing false discoveries).
+Results are saved to a structured .npz file for later plotting.
 """
 
 import os
@@ -21,6 +18,31 @@ from pathlib import Path
 import numpy as np
 import optuna
 import helpers as hp
+
+# ==========================================
+# DEFINE YOUR GRID SEARCH SPACE HERE
+# ==========================================
+# Lists define values to sweep. 
+# A single-element list means the parameter is fixed.
+search_space = {
+    "corr_thresh": np.linspace(0.4,0.98,5),
+    "window": [0.05],#np.linspace(0.001,0.05,10),
+    "symmetry_tol": [1e-8],
+    "stability_radius":np.linspace(0.02,0.05,5),
+    "stability_frac":  [1] #np.linspace(0.3,1,10)
+}
+
+# Base parameters toggling the checks
+base_params = {
+    "check_correlation": True,
+    "check_resonance_peak": False,
+    "check_negative_peaks": False,
+    "check_monotonic": False,
+    "check_peak_symmetry": False,
+    "check_peak_window": False,
+    "check_island_stability": True,
+}
+# ==========================================
 
 def load_all_realizations(input_dir):
     input_path = Path(input_dir)
@@ -86,16 +108,7 @@ def precompute_pdi_ground_truth(all_data, pdi_thresh=0.9):
         data['pdi_binary'] = pdi_binary
     print("  Done.")
 
-def generate_cost_function(weight_false_discovery=0.8):
-    w = weight_false_discovery
-    def cost_fn(p_not_a_given_b, p_not_b_given_a):
-        if np.isnan(p_not_a_given_b) and np.isnan(p_not_b_given_a): return 1.0
-        if np.isnan(p_not_a_given_b): p_not_a_given_b = 0.0
-        if np.isnan(p_not_b_given_a): p_not_b_given_a = 0.0
-        return w * p_not_a_given_b + (1 - w) * p_not_b_given_a
-    return cost_fn
-
-def evaluate_protocol_on_realization(data, params_list, base_params, trial_params):
+def evaluate_protocol_on_realization(data, params_list, trial_params):
     params = base_params.copy()
     params.update(trial_params)
     
@@ -122,76 +135,82 @@ def evaluate_protocol_on_realization(data, params_list, base_params, trial_param
     p_not_b_given_a = fn / (tp + fn) if (tp + fn) > 0 else np.nan
     return p_not_a_given_b, p_not_b_given_a
 
-def objective(trial, all_data, cost_fn, base_params):
+def objective(trial, all_data):
     trial_params = {}
     if base_params.get("check_correlation", False):
-        trial_params["corr_thresh"] = trial.suggest_float("corr_thresh", 0.5, 0.99)
+        trial_params["corr_thresh"] = trial.suggest_categorical("corr_thresh", search_space["corr_thresh"])
     if base_params.get("check_peak_window", False):
-        trial_params["window"] = trial.suggest_float("window", 0.001, 0.1, log=True)
+        trial_params["window"] = trial.suggest_categorical("window", search_space["window"])
     if base_params.get("check_peak_symmetry", False):
-        trial_params["symmetry_tol"] = trial.suggest_float("symmetry_tol", 0.0, 0.05)
+        trial_params["symmetry_tol"] = trial.suggest_categorical("symmetry_tol", search_space["symmetry_tol"])
     if base_params.get("check_island_stability", False):
-        trial_params["stability_radius"] = trial.suggest_float("stability_radius", 0.01, 0.1)
-        trial_params["stability_frac"] = trial.suggest_float("stability_frac", 0.3, 0.99)
+        trial_params["stability_radius"] = trial.suggest_categorical("stability_radius", search_space["stability_radius"])
+        trial_params["stability_frac"] = trial.suggest_categorical("stability_frac", search_space["stability_frac"])
 
-    costs = []
+    nab_list = []
+    nba_list = []
     for name, realization in all_data.items():
         p_nab, p_nba = evaluate_protocol_on_realization(
-            realization['data'], realization['parameters'], base_params, trial_params
+            realization['data'], realization['parameters'], trial_params
         )
-        costs.append(cost_fn(p_nab, p_nba))
-    return np.mean(costs)
+        nab_list.append(p_nab)
+        nba_list.append(p_nba)
+        
+    avg_nab = np.nanmean(nab_list)
+    avg_nba = np.nanmean(nba_list)
+    
+    # We save these custom attributes to the trial so we can extract them later
+    trial.set_user_attr("p_not_a_given_b", avg_nab)
+    trial.set_user_attr("p_not_b_given_a", avg_nba)
+    
+    # Return a combined cost just for optuna's sorting, but grid search explores everything anyway
+    w = 0.8
+    cost = w * avg_nab + (1 - w) * avg_nba
+    return cost
 
 def main():
-    parser = argparse.ArgumentParser(description="Optimize Protocol V3 hyperparameters.")
+    parser = argparse.ArgumentParser(description="Grid Search Protocol V3 hyperparameters.")
     parser.add_argument('--data-dir', type=str, default='/home/pseudonym/code/Nonlocal_Conductance/Nonlocality-of-local-Andreev-conductances-as-a-probe-for-topological-Majorana-wires/Data/Protocol_V2')
-    parser.add_argument('--n-trials', type=int, default=200)
-    parser.add_argument('--weight', type=float, default=0.6)
     parser.add_argument('--pdi-thresh', type=float, default=0.9)
-    parser.add_argument('--study-name', type=str, default='protocol_v3_opt')
-    parser.add_argument('--journal-path', type=str, default=None)
-    
-    # Boolean toggles matching the notebook
-    parser.add_argument('--check-correlation', action='store_true', default=True)
-    parser.add_argument('--check-resonance-peak', action='store_true')
-    parser.add_argument('--check-negative-peaks', action='store_true')
-    parser.add_argument('--check-monotonic', action='store_true')
-    parser.add_argument('--check-peak-symmetry', action='store_true')
-    parser.add_argument('--check-peak-window', action='store_true')
-    parser.add_argument('--check-island-stability', action='store_true', default=True)
+    parser.add_argument('--study-name', type=str, default='protocol_v3_grid')
+    parser.add_argument('--output', type=str, default='grid_search_results.npz')
+    parser.add_argument('--n-jobs', type=int, default=10, help='Number of parallel jobs for Optuna (-1 for all cores)')
     
     args = parser.parse_args()
 
-    base_params = {
-        "check_correlation": args.check_correlation,
-        "check_resonance_peak": args.check_resonance_peak,
-        "check_negative_peaks": args.check_negative_peaks,
-        "check_monotonic": args.check_monotonic,
-        "check_peak_symmetry": args.check_peak_symmetry,
-        "check_peak_window": args.check_peak_window,
-        "check_island_stability": args.check_island_stability,
-    }
-
     all_data = load_all_realizations(args.data_dir)
     precompute_correlations(all_data)
-    if args.check_monotonic: precompute_monotonicity(all_data)
+    if base_params.get("check_monotonic", False): 
+        precompute_monotonicity(all_data)
     precompute_pdi_ground_truth(all_data, pdi_thresh=args.pdi_thresh)
 
-    cost_fn = generate_cost_function(weight_false_discovery=args.weight)
-    
-    if args.journal_path:
-        from optuna.storages import JournalStorage, JournalFileBackend
-        storage = JournalStorage(JournalFileBackend(args.journal_path))
-        study = optuna.create_study(study_name=args.study_name, storage=storage, load_if_exists=True, direction="minimize")
-    else:
-        study = optuna.create_study(study_name=args.study_name, direction="minimize")
+    # Set up Optuna Grid Search
+    sampler = optuna.samplers.GridSampler(search_space)
+    study = optuna.create_study(study_name=args.study_name, sampler=sampler, direction="minimize")
 
-    study.optimize(lambda trial: objective(trial, all_data, cost_fn, base_params), n_trials=args.n_trials, show_progress_bar=True)
+    # n_jobs > 1 runs trials in parallel using multithreading.
+    study.optimize(lambda trial: objective(trial, all_data), n_jobs=args.n_jobs, show_progress_bar=True)
 
-    print("\nOPTIMIZATION COMPLETE")
+    print("\nGRID SEARCH COMPLETE")
     print(f"Best cost: {study.best_trial.value:.6f}")
-    for key, val in study.best_trial.params.items():
-        print(f"  {key} = {val}")
+    print("Best params:", study.best_trial.params)
+    
+    # Extract data into structured arrays for .npz
+    trials = study.trials
+    results_dict = {}
+    
+    # Store parameter lists
+    for key in search_space.keys():
+        results_dict[key] = np.array([t.params.get(key, np.nan) for t in trials if t.state == optuna.trial.TrialState.COMPLETE])
+        
+    # Store probability outcomes
+    results_dict['p_not_a_given_b'] = np.array([t.user_attrs.get("p_not_a_given_b", np.nan) for t in trials if t.state == optuna.trial.TrialState.COMPLETE])
+    results_dict['p_not_b_given_a'] = np.array([t.user_attrs.get("p_not_b_given_a", np.nan) for t in trials if t.state == optuna.trial.TrialState.COMPLETE])
+    results_dict['cost'] = np.array([t.value for t in trials if t.state == optuna.trial.TrialState.COMPLETE])
+    
+    out_path = Path(args.data_dir) / args.output
+    np.savez(out_path, **results_dict)
+    print(f"\nSaved grid search results and conditional probabilities to: {out_path}")
 
 if __name__ == "__main__":
     main()

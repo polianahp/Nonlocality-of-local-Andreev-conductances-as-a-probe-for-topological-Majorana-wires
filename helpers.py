@@ -219,32 +219,19 @@ def calc_dIdV(syst, energies, solver_type='cpu'):
     ldos = np.zeros(shape = (num_engs, num_orbitals))
     dIdV_left = np.zeros_like(energies)
     dIdV_right = np.zeros_like(energies)
+    dIdV_LR = np.zeros_like(energies)
+    dIdV_RL = np.zeros_like(energies)
     
     for k, eng in tqdm(enumerate(energies), total=num_engs, desc="Calculating dI/dV"):
-        #print(f"running energy {k}/{num_engs}")
-        eng = energies[k]
-        if solver_type == 'gpu':
-            smatrix = get_gpu_smatrix(syst, eng)
-        else:
-            smatrix = kwant.smatrix(syst, eng)
-        R = 0
-        A = 0
-        for i in range(2):
-            for j in range(2):
-                R = R + smatrix.transmission((0, j), (0, i))
-                A = A + smatrix.transmission((0, j+2), (0, i))
-        dIdV_left[k] = 2 - R + A
-        R = 0
-        A = 0
-        for i in range(2):
-            for j in range(2):
-                R = R + smatrix.transmission((1, j), (1, i))
-                A = A + smatrix.transmission((1, j+2), (1, i))
-        dIdV_right[k] = 2 - R + A
+        Gmat = calc_conductance_matrix(syst, eng, solver_type=solver_type)
+        dIdV_left[k] = Gmat[0, 0]
+        dIdV_right[k] = Gmat[1, 1]
+        dIdV_RL[k] = Gmat[1, 0]  # Current at Right due to Left
+        dIdV_LR[k] = Gmat[0, 1]  # Current at Left due to Right
         
         ldos[k,:] = kwant.ldos(syst, eng)
         
-    return dIdV_left, dIdV_right, ldos 
+    return dIdV_left, dIdV_right, dIdV_LR, dIdV_RL, ldos 
 
 
 def detect_peaks_oldoldold(conductance_arr, energy_mesh, prominence=0.01):

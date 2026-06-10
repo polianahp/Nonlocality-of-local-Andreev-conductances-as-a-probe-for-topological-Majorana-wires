@@ -65,10 +65,13 @@ def worker_simulation_step(iter_data, static_params):
     # Pre-allocate local arrays
     b_right_cond_left = np.zeros(points)
     b_right_cond_right = np.zeros(points)
+    b_right_GLR = np.zeros(points)
+    b_right_GRL = np.zeros(points)
     b_left_cond_left = np.zeros(points)
     b_left_cond_right = np.zeros(points)
     
     dIdVl, dIdVr, ldos = 0,0,0
+    dIdV_LR, dIdV_RL = 0,0
     Vdisx = Vdisx * V0
     barrier_tot = barrier0 #+ mu
     gamma_sq = 0
@@ -81,6 +84,7 @@ def worker_simulation_step(iter_data, static_params):
     weight_localization = 1.0
     overlap_integral = 0.0
     mzm_separation = 0
+    topological_gap = 0.0
 
     # --- 1. Build Symmetric System & Calculate Spectral Properties ---
 
@@ -97,6 +101,11 @@ def worker_simulation_step(iter_data, static_params):
             mzm_separation = hp.calc_MZM_separation(rho_M1, rho_M2)
         if static_params['spectra_flag']:
             spectrum = hp.sort_spectrum(evals, evecs)
+            pos_evals = np.sort(evals[evals >= 0])
+            if len(pos_evals) > 1:
+                topological_gap = pos_evals[1]
+            else:
+                topological_gap = np.nan
             #gamma_sq = hp.calculate_gamma_squared(evals, evecs)
             #M_profile, energy_0 = hp.calculate_local_mp(evals, evecs)
     
@@ -118,7 +127,7 @@ def worker_simulation_step(iter_data, static_params):
                            Ls=Ls, mu_leads=mu_leads,
                            barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
     
-        dIdVl, dIdVr, ldos = hp.calc_dIdV(syst, energies, solver_type=solver_type)
+        dIdVl, dIdVr, dIdV_LR, dIdV_RL, ldos = hp.calc_dIdV(syst, energies, solver_type=solver_type)
         Gmat = hp.calc_conductance_matrix(syst, 0.0, solver_type=solver_type)
         for k, eng in enumerate(eng_window):
             cL, cR = hp.calc_conductance(syst, energy=eng, solver_type=solver_type)
@@ -157,9 +166,11 @@ def worker_simulation_step(iter_data, static_params):
                                     Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
                                     barrier_r=barrier_var_tot, Vdisx=Vdisx)
             
-            cL, cR = hp.calc_conductance(syst_UR, energy=0.0, solver_type=solver_type)
-            b_right_cond_left[k] = cL
-            b_right_cond_right[k] = cR
+            Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0, solver_type=solver_type)
+            b_right_cond_left[k] = Gmat_UR[0, 0]
+            b_right_cond_right[k] = Gmat_UR[1, 1]
+            b_right_GRL[k] = Gmat_UR[1, 0]
+            b_right_GLR[k] = Gmat_UR[0, 1]
             
             
         r_Gll, r_GRR = b_right_cond_left, b_right_cond_right #varying left barrier and getting local conductances
@@ -171,13 +182,18 @@ def worker_simulation_step(iter_data, static_params):
         'i':i,
         'dIdVl': dIdVl,
         'dIdVr': dIdVr,
+        'dIdV_LR': dIdV_LR,
+        'dIdV_RL': dIdV_RL,
         'ldos': ldos,
         'Gmat': Gmat,
         'gamma_sq': gamma_sq,
         'energy_0': energy_0,
+        'topological_gap': topological_gap,
         'M_profile': M_profile,
         'b_right_cond_left': b_right_cond_left,
         'b_right_cond_right': b_right_cond_right,
+        'b_right_GLR': b_right_GLR,
+        'b_right_GRL': b_right_GRL,
         'b_left_cond_left': b_left_cond_left,
         'b_left_cond_right': b_left_cond_right,
         'rG_corr':rG_corr,
@@ -219,18 +235,21 @@ def worker_pdi_step(iter_data, static_params):
     vz *= Z
 
     NL_val = qn
-
-    # Pass the already-renormalized parameters
-    Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, NL_val)        
-    if 0.05 < abs(Q_nu - int(Q_nu)) < 0.95:
-        Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 2 * NL_val)
-
-        if 0.1 < abs(Q_nu - int(Q_nu)) < 0.9:
-            Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 5 * NL_val)
+    
+    pdi_value = 0
+    if False:
+        # Pass the already-renormalized parameters
+        Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, NL_val)        
+        if 0.05 < abs(Q_nu - int(Q_nu)) < 0.95:
+            Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 2 * NL_val)
 
             if 0.1 < abs(Q_nu - int(Q_nu)) < 0.9:
-                Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 10 * NL_val)    # round the converged invariant to the nearest integer
-    pdi_value = int(np.round(Q_nu))
+                Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 5 * NL_val)
+
+                if 0.1 < abs(Q_nu - int(Q_nu)) < 0.9:
+                    Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 10 * NL_val)    # round the converged invariant to the nearest integer
+    
+        pdi_value = int(np.round(Q_nu))
     
     result = [mu_pm, vz, pdi_value]
     
@@ -319,9 +338,13 @@ if __name__ == "__main__":
     
     dIdVs_left_arr = np.zeros(shape = (len(params_list), len(energies)))
     dIdVs_right_arr = np.zeros(shape = (len(params_list), len(energies)))
+    dIdVs_LR_arr = np.zeros(shape = (len(params_list), len(energies)))
+    dIdVs_RL_arr = np.zeros(shape = (len(params_list), len(energies)))
 
     barrier_right_conductance_left_arr  = np.zeros(shape=(len(params_list), config.Upoints))
     barrier_right_conductance_right_arr = np.zeros_like(barrier_right_conductance_left_arr)
+    barrier_right_GLR_arr = np.zeros_like(barrier_right_conductance_left_arr)
+    barrier_right_GRL_arr = np.zeros_like(barrier_right_conductance_left_arr)
     barrier_left_conductance_left_arr   = np.zeros_like(barrier_right_conductance_left_arr)
     barrier_left_conductance_right_arr  = np.zeros_like(barrier_right_conductance_left_arr)
     rG_corr_arr = np.zeros(shape = (len(params_list)))
@@ -339,6 +362,7 @@ if __name__ == "__main__":
     lenw = config.Ls #+ 2*(Lb + Ln)
     mp_arr = np.zeros(shape= (len(params_list), lenw))
     Conductance_matrix = np.zeros(shape=(len(params_list),2, 2))
+    topological_gap_arr = np.zeros(shape=(len(params_list)))
     
     results = []
     if config.acceleration_type == 'gpu':
@@ -363,14 +387,19 @@ if __name__ == "__main__":
         
         dIdVs_left_arr[idx, :] = res['dIdVl']
         dIdVs_right_arr[idx, :] = res['dIdVr']
+        dIdVs_LR_arr[idx, :] = res['dIdV_LR']
+        dIdVs_RL_arr[idx, :] = res['dIdV_RL']
         #ldos_arr[idx, :, :] = res['ldos']
         Conductance_matrix[idx, :, :] = res['Gmat']
         gamma_sq_arr[idx] = res['gamma_sq']
         mp_eng_arr[idx] = res['energy_0']
+        topological_gap_arr[idx] = res['topological_gap']
         mp_arr[idx, :] = res['M_profile']
         
         barrier_right_conductance_left_arr[idx, :] = res['b_right_cond_left']
         barrier_right_conductance_right_arr[idx, :] = res['b_right_cond_right']
+        barrier_right_GLR_arr[idx, :] = res['b_right_GLR']
+        barrier_right_GRL_arr[idx, :] = res['b_right_GRL']
         barrier_left_conductance_left_arr[idx, :] = res['b_left_cond_left']
         barrier_left_conductance_right_arr[idx, :] = res['b_left_cond_right']
         spectrum_arr[idx, :] = res['spectrum']
@@ -423,8 +452,14 @@ if __name__ == "__main__":
     hp.np_save_wrapped(energies, "energies", dirname)
     hp.np_save_wrapped(dIdVs_left_arr, "dIdVs_left_arr", dirname)
     hp.np_save_wrapped(dIdVs_right_arr, "dIdVs_right_arr", dirname)
+    hp.np_save_wrapped(dIdVs_LR_arr, "dIdVs_LR", dirname)
+    hp.np_save_wrapped(dIdVs_RL_arr, "dIdVs_RL", dirname)
     #hp.np_save_wrapped(ldos_arr, "LDOS", dirname)
     hp.np_save_wrapped(barrier_right_conductance_left_arr, "barrier_right_conductance_left_arr", dirname)
+    hp.np_save_wrapped(barrier_right_conductance_right_arr, "barrier_right_conductance_right_arr", dirname)
+    hp.np_save_wrapped(barrier_right_GLR_arr, "barrier_right_GLR", dirname)
+    hp.np_save_wrapped(barrier_right_GRL_arr, "barrier_right_GRL", dirname)
+    hp.np_save_wrapped(topological_gap_arr, "topological_gap", dirname)
     hp.np_save_wrapped(barrier_right_conductance_right_arr, "barrier_right_conductance_right_arr", dirname)    
     hp.np_save_wrapped(barrier_left_conductance_left_arr, "barrier_left_conductance_left_arr", dirname)    
     hp.np_save_wrapped(barrier_left_conductance_right_arr, "barrier_left_conductance_right_arr", dirname)
