@@ -2,7 +2,7 @@
 # Configuration for system with dynamically generated disorder realization 3.
 
 # Disorder Management
-dirname: "Tdis_pfaff2"
+dirname: "Tdis_pfaff3"
 fname: "Tdis.npz"
 
 # Sweep Ranges
@@ -15,7 +15,7 @@ Vz_min: 0.0
 Vz_dist: 0.02
 
 # Simulation Resolution
-Upoints: 10
+Upoints: 30
 num_engs: 51
 acceleration_type: "parallel"
 weight_threshold: 0.8
