@@ -129,8 +129,9 @@ def main():
     print(f"Sampled {actual_N} points along the path.")
 
     # Step 2: Physics Calculation
-    print(f"Calculating closed system spectra for {actual_N} points (kvals={args.kvals})...")
+    print(f"Calculating closed system spectra and Pfaffian invariants for {actual_N} points...")
     evals = np.zeros(shape=(actual_N, args.kvals))
+    pf_invariants = np.zeros(actual_N)
 
     for i in range(actual_N):
         mu_val, vz_val = pts[i]
@@ -138,10 +139,36 @@ def main():
         scl = hp.build_system_closed(t, mu_val, gamma, Delta0, vz_val, alpha, Ls, Vdisx, a=1)
         # Calculate spectrum
         evals[i, :] = hp.calc_spectrum(scl, k=args.kvals)
+        # Calculate Pfaffian invariant
+        pf_invariants[i] = hp.cal_pfaffian_invariant(
+            ts=t,
+            alphas=alpha,
+            gamma=gamma,
+            delta0=Delta0,
+            Nx=Ls,
+            Vdisx=Vdisx,
+            V0=1.0,
+            gm=vz_val,
+            mu=mu_val
+        )
 
     # Step 3: Dual X-Axis Visualization
     print("Visualizing results...")
     fig, ax = plt.subplots(figsize=(10, 6), dpi=150)
+
+    # Highlight topological regions (non-zero Pfaffian invariant) in light grey
+    topological_added_to_legend = False
+    for i in range(actual_N):
+        if np.abs(pf_invariants[i]) > 1e-5:
+            # Span from i-0.5 to i+0.5
+            if not topological_added_to_legend:
+                ax.axvspan(i - 0.5, i + 0.5, color='lightgrey', alpha=0.5, zorder=0, label="Topological Region")
+                topological_added_to_legend = True
+            else:
+                ax.axvspan(i - 0.5, i + 0.5, color='lightgrey', alpha=0.5, zorder=0)
+
+    # Ensure limits align with the span coloring
+    ax.set_xlim(-0.5, actual_N - 0.5)
 
     # Plot the eigenvalues
     mid_idx = args.kvals // 2
@@ -149,29 +176,29 @@ def main():
     # Plot bulk states in standard blue
     # States below E=0 (indices 0 to mid_idx-2)
     for j in range(mid_idx - 1):
-        ax.plot(range(actual_N), evals[:, j], 'o-', color='royalblue', alpha=0.7, linewidth=1.5, markersize=4)
+        ax.plot(range(actual_N), evals[:, j], 'o-', color='royalblue', alpha=0.7, linewidth=1.5, markersize=4, zorder=2)
     # States above E=0 (indices mid_idx+1 to kvals-1)
     for j in range(mid_idx + 1, args.kvals):
-        ax.plot(range(actual_N), evals[:, j], 'o-', color='royalblue', alpha=0.7, linewidth=1.5, markersize=4)
+        ax.plot(range(actual_N), evals[:, j], 'o-', color='royalblue', alpha=0.7, linewidth=1.5, markersize=4, zorder=2)
 
     # Plot the two states closest to E=0 (indices mid_idx-1 and mid_idx) in red with a thicker line width
-    ax.plot(range(actual_N), evals[:, mid_idx - 1], 'o-', color='red', alpha=0.9, linewidth=2.5, markersize=6)
-    ax.plot(range(actual_N), evals[:, mid_idx], 'o-', color='red', alpha=0.9, linewidth=2.5, markersize=6)
+    ax.plot(range(actual_N), evals[:, mid_idx - 1], 'o-', color='red', alpha=0.9, linewidth=2.5, markersize=6, zorder=3)
+    ax.plot(range(actual_N), evals[:, mid_idx], 'o-', color='red', alpha=0.9, linewidth=2.5, markersize=6, zorder=3)
 
     # Add reference lines
-    ax.axhline(0, color='black', linestyle='--', linewidth=1.2, alpha=0.6)
+    ax.axhline(0, color='black', linestyle='--', linewidth=1.2, alpha=0.6, zorder=1)
 
     # Find the index closest to target_vz
     vz_values = pts[:, 1]
     closest_vz_idx = np.argmin(np.abs(vz_values - args.target_vz))
     target_mu_val = pts[closest_vz_idx, 0]
-    ax.axvline(closest_vz_idx, color='black', linestyle='-', linewidth=1.5,
-               label=f"$V_z = {vz_values[closest_vz_idx]:.4f}$ ($\mu = {target_mu_val:.4f}$)")
+    ax.axvline(closest_vz_idx, color='black', linestyle='-', linewidth=1.5, zorder=1,
+               label=rf"Target $V_z = {vz_values[closest_vz_idx]:.4f}$ ($\mu = {target_mu_val:.4f}$)")
 
     # Set labels and formatting
     ax.set_ylabel("Energy (meV)", fontsize=12)
     ax.set_title(f"Low Energy Spectra along Cut", fontsize=13)
-    ax.grid(True, linestyle=':', alpha=0.5)
+    ax.grid(True, linestyle=':', alpha=0.5, zorder=1)
 
     # Primary X-Axis (mu)
     ax.set_xticks(range(actual_N))
