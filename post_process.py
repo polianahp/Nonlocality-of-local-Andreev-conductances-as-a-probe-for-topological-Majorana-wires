@@ -194,8 +194,18 @@ def main():
     )
 
     # ==========================================
-    # STAGE 1: Plot 2D Overlay Map (Matplotlib)
+    # STAGE 1: Generate Path and Plot 2D Overlay Map (Matplotlib)
     # ==========================================
+    print(f"Generating point path along the cut: mu=({args.mu_start} -> {args.mu_end}), Vz=({args.vz_start} -> {args.vz_end})...")
+    pts, sampled_indices = generate_point_path(pdi_data, args.N, args.resl, args.mu_start, args.mu_end, args.vz_start, args.vz_end)
+
+    if len(pts) == 0:
+        print("Error: No points generated.")
+        sys.exit(1)
+
+    actual_N = len(pts)
+    print(f"Sampled {actual_N} points along the path.")
+
     print("Generating 2D overlay plot...")
     unique_mu = np.unique(mu)
     unique_vz = np.unique(V_z)
@@ -239,6 +249,11 @@ def main():
     fig_overlay, ax_overlay = plt.subplots(figsize=(6, 8), dpi=150)
     ax_overlay.imshow(rgba, origin='lower', extent=[unique_vz[0], unique_vz[-1], unique_mu[0], unique_mu[-1]], aspect='auto')
 
+    # Draw the exact cut path taken
+    ax_overlay.plot([args.vz_start, args.vz_end], [args.mu_start, args.mu_end], color='black', linestyle='-', linewidth=2, zorder=4)
+    # Draw the sampled points along the path
+    ax_overlay.scatter(pts[:, 1], pts[:, 0], color='black', edgecolor='white', s=25, zorder=5)
+
     ax_overlay.set_title('Topological Region vs Protocol Positive Overlay', fontsize=12, pad=15)
     ax_overlay.set_xlabel(r'Zeeman Field $V_z$', fontsize=11)
     ax_overlay.set_ylabel(r'Chemical Potential $\mu$', fontsize=11)
@@ -251,8 +266,11 @@ def main():
     blue_patch = mpatches.Patch(color=(0.5, 0.5, 1.0), label='Topological (I = 1)')
     purple_patch = mpatches.Patch(color=(0.6, 0.25, 0.6), label='Overlap (Both = 1)')
     
-    ax_overlay.legend(handles=[red_patch, blue_patch, purple_patch], bbox_to_anchor=(0.5, -0.15),
-                      loc='upper center', ncol=3, fontsize=9, frameon=True)
+    import matplotlib.lines as mlines
+    cut_line_handle = mlines.Line2D([], [], color='black', marker='o', markerfacecolor='black', markeredgecolor='white', markersize=6, linestyle='-', label='1D Cut Path')
+    
+    ax_overlay.legend(handles=[red_patch, blue_patch, purple_patch, cut_line_handle], bbox_to_anchor=(0.5, -0.15),
+                      loc='upper center', ncol=2, fontsize=9, frameon=True)
 
     overlay_out = Path(args.overlap_output)
     if not overlay_out.is_absolute():
@@ -260,23 +278,14 @@ def main():
     overlay_out.parent.mkdir(parents=True, exist_ok=True)
 
     fig_overlay.tight_layout()
-    fig_overlay.subplots_adjust(bottom=0.2)
+    fig_overlay.subplots_adjust(bottom=0.22)
     fig_overlay.savefig(overlay_out, dpi=300, bbox_inches='tight')
     plt.close(fig_overlay)
     print(f"Saved 2D overlay plot to: {overlay_out}")
 
     # ==========================================
-    # STAGE 2: Parameter Cut Paths Generation (1D)
+    # STAGE 2: Slice Path-Specific Data (1D)
     # ==========================================
-    print(f"Generating point path along the cut: mu=({args.mu_start} -> {args.mu_end}), Vz=({args.vz_start} -> {args.vz_end})...")
-    pts, sampled_indices = generate_point_path(pdi_data, args.N, args.resl, args.mu_start, args.mu_end, args.vz_start, args.vz_end)
-
-    if len(pts) == 0:
-        print("Error: No points generated.")
-        sys.exit(1)
-
-    actual_N = len(pts)
-    print(f"Sampled {actual_N} points along the path.")
 
     # Slice path-specific data
     gap = gap_all[sampled_indices]
