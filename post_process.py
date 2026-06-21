@@ -5,6 +5,7 @@ import argparse
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 
 # Ensure local imports work
 sys.path.append(str(Path(__file__).parent.resolve()))
@@ -79,27 +80,30 @@ def generate_point_path(pdi_data, N, resl, mu_start, mu_end, Vz_start, Vz_end):
     return sampled_points, sampled_indices
 
 def main():
-    parser = argparse.ArgumentParser(description="Calculate and plot energy spectra and observables along a cut.")
-    parser.add_argument("--dirname", type=str, default="Data/Tdis_pfaff3",
-                        help="Directory name containing the simulation parameters and pdi data.")
-    parser.add_argument("-N", type=int, default=50, help="Number of points to sample along the cut.")
+    parser = argparse.ArgumentParser(description="Run full post-processing pipeline (2D overlays and 1D parameter cuts).")
 
-    
+    indir = "Data/dis_realizations/disorder_realization_6_results"
+    #indir = "Data/Tdis_pfaff3"
+
+    parser.add_argument("--dirname", type=str, default=indir, help="Directory name containing the simulation parameters and results.")
+    parser.add_argument("-N", type=int, default=20, help="Number of points to sample along the cut.")
     parser.add_argument("--resl", type=float, default=0.02, help="Resolution/tolerance for matching points.")
-
-
-    parser.add_argument("--mu-start", type=float, default=1.908482, help="Start Chemical Potential (mu) for the cut.")
-    parser.add_argument("--mu-end", type=float, default=2.852679, help="End Chemical Potential (mu) for the cut.")
-    parser.add_argument("--vz-start", type=float, default=0.02028986, help="Start Zeeman Field (V_z) for the cut.")
-    parser.add_argument("--vz-end", type=float, default=1.176821, help="End Zeeman Field (V_z) for the cut.")
-
-
+    parser.add_argument("--mu-start", type=float, default=1.607143, help="Start Chemical Potential (mu) for the cut.")
+    parser.add_argument("--mu-end", type=float, default=2.430804, help="End Chemical Potential (mu) for the cut.")
+    parser.add_argument("--vz-start", type=float, default=0.3855072, help="Start Zeeman Field (V_z) for the cut.")
+    parser.add_argument("--vz-end", type=float, default=1.187101, help="End Zeeman Field (V_z) for the cut.")
     parser.add_argument("--target-vz", type=float, default=1.0, help="Predefined target V_z to draw a vertical reference line.")
     parser.add_argument("--kvals", type=int, default=12, help="Number of lowest eigenvalues to solve for.")
+    parser.add_argument("--pdi-thresh", type=float, default=0.9, help="PDI filtering threshold.")
+    parser.add_argument("--corr-thresh", type=float, default=0.7, help="Correlation threshold.")
+    parser.add_argument("--window", type=float, default=0.03, help="Peak window threshold.")
+    parser.add_argument("--stability-radius", type=float, default=0.025, help="Stability radius.")
+    parser.add_argument("--stability-frac", type=float, default=1.0, help="Stability fraction.")
     parser.add_argument("--output", type=str, default="Plots/spectra_cut.png", help="Path to save the spectra plot.")
     parser.add_argument("--corr-output", type=str, default="Plots/correlation_cut.png", help="Path to save the correlation plot.")
     parser.add_argument("--gap-output", type=str, default="Plots/gap_nonlocal_cut.png", help="Path to save the gap and nonlocal conductance plot.")
     parser.add_argument("--peaks-output", type=str, default="Plots/peaks_cut.png", help="Path to save the peak width and height plot.")
+    parser.add_argument("--overlap-output", type=str, default="Plots/overlap_plot.png", help="Path to save the 2D overlay plot.")
     args = parser.parse_args()
 
     # Resolve input directory
@@ -114,33 +118,156 @@ def main():
 
     params_path = dirname / "all_params.npz"
     pdi_data_path = dirname / "pdi_data.npy"
+    params_list_path = dirname / "params_list.npy"
+    peaks_left_path = dirname / "peaks_left.npy"
+    peaks_right_path = dirname / "peaks_right.npy"
+    brcl_path = dirname / "barrier_right_conductance_left_arr.npy"
+    brcr_path = dirname / "barrier_right_conductance_right_arr.npy"
+    glr_path = dirname / "barrier_right_GLR.npy"
+    grl_path = dirname / "barrier_right_GRL.npy"
+    gap_path = dirname / "topological_gap.npy"
 
-    if not params_path.exists() or not pdi_data_path.exists():
-        print(f"Error: Missing params or pdi_data in {dirname}")
-        sys.exit(1)
+    for filepath in [params_path, pdi_data_path, params_list_path, peaks_left_path, peaks_right_path,
+                     brcl_path, brcr_path, glr_path, grl_path, gap_path]:
+        if not filepath.exists():
+            print(f"Error: Missing required file {filepath}")
+            sys.exit(1)
 
-    params = np.load(params_path, allow_pickle=True)
+    params_config = np.load(params_path, allow_pickle=True)
     pdi_data = np.load(pdi_data_path, allow_pickle=True)
+    params_list = np.load(params_list_path, allow_pickle=True)
+    peaks_left = np.load(peaks_left_path, allow_pickle=True)
+    peaks_right = np.load(peaks_right_path, allow_pickle=True)
+    brcl_all = np.load(brcl_path, allow_pickle=True)
+    brcr_all = np.load(brcr_path, allow_pickle=True)
+    glr_all = np.load(glr_path, allow_pickle=True)
+    grl_all = np.load(grl_path, allow_pickle=True)
+    gap_all = np.load(gap_path, allow_pickle=True)
 
-    # Load additional datasets for the extra plots
-    brcl_all = np.load(dirname / "barrier_right_conductance_left_arr.npy")
-    brcr_all = np.load(dirname / "barrier_right_conductance_right_arr.npy")
-    glr_all = np.load(dirname / "barrier_right_GLR.npy")
-    grl_all = np.load(dirname / "barrier_right_GRL.npy")
-    gap_all = np.load(dirname / "topological_gap.npy")
-    pl_all = np.load(dirname / "peaks_left.npy")
-    pr_all = np.load(dirname / "peaks_right.npy")
+    # Extract required parameters from config params
+    t = float(params_config['t'])
+    Delta0 = float(params_config['Delta0'])
+    gamma = float(params_config['gamma'])
+    alpha = float(params_config['alpha'])
+    Ls = int(params_config['Ls'])
+    V0 = float(params_config['V0'])
+    Vdisx = params_config['Vdisx'] * V0
 
-    # Extract required parameters from params
-    t = float(params['t'])
-    Delta0 = float(params['Delta0'])
-    gamma = float(params['gamma'])
-    alpha = float(params['alpha'])
-    Ls = int(params['Ls'])
-    V0 = float(params['V0'])
-    Vdisx = params['Vdisx'] * V0
+    mu = params_list[:, 1]
+    V_z = params_list[:, 2]
 
-    # Step 1: Parameter Path Generation
+    # Calculate I (Topological Winding Number)
+    if pdi_data.shape[1] > 3:
+        pdi_winding = pdi_data[:, 3]
+    else:
+        pdi_winding = pdi_data[:, 2]
+    I = hp.filter_pdi(pdi_winding, thresh=args.pdi_thresh)
+
+    # Calculate full correlations
+    print("Computing correlations...")
+    corrs = np.array([hp.calc_correlation(brcl_all[i], brcr_all[i]) for i in range(brcl_all.shape[0])])
+
+    # Calculate decision map prot_dat
+    print("Calculating protocol decision map (prot_dat)...")
+    params = {
+        "check_correlation"      : True,
+        "check_resonance_peak"   : False,
+        "check_negative_peaks"   : False,
+        "check_monotonic"        : False,
+        "check_peak_symmetry"    : False, 
+        "check_peak_window"      : True,
+        "check_island_stability" : True,
+        
+        "corr_thresh"     : 0.7,
+        "window"          : 0.03,
+        "stability_radius" : 0.025,
+        "stability_frac"  : 1.0
+    }
+
+    prot_dat = hp.calc_protocol_v3(
+        corrs,
+        peaks_left,
+        peaks_right,
+        None,
+        pdi_data,
+        params
+    )
+
+    # ==========================================
+    # STAGE 1: Plot 2D Overlay Map (Matplotlib)
+    # ==========================================
+    print("Generating 2D overlay plot...")
+    unique_mu = np.unique(mu)
+    unique_vz = np.unique(V_z)
+    Nmu = len(unique_mu)
+    Nvz = len(unique_vz)
+
+    I_grid = np.zeros((Nmu, Nvz))
+    prot_grid = np.zeros((Nmu, Nvz))
+
+    mu_to_idx = {val: idx for idx, val in enumerate(unique_mu)}
+    vz_to_idx = {val: idx for idx, val in enumerate(unique_vz)}
+
+    for idx in range(len(mu)):
+        mu_val = mu[idx]
+        vz_val = V_z[idx]
+        mu_i = mu_to_idx.get(mu_val, -1)
+        vz_j = vz_to_idx.get(vz_val, -1)
+        if mu_i != -1 and vz_j != -1:
+            I_grid[mu_i, vz_j] = I[idx]
+            prot_grid[mu_i, vz_j] = prot_dat[idx]
+
+    # Reconstruct RGBA Image Matrix directly to prevent blending artifacts
+    rgba = np.ones((Nmu, Nvz, 4))
+    for i in range(Nmu):
+        for j in range(Nvz):
+            val_I = I_grid[i, j]
+            val_P = prot_grid[i, j]
+            if val_I == 1.0 and val_P == 1.0:
+                # Overlap: Purple
+                rgba[i, j] = [0.6, 0.25, 0.6, 1.0]
+            elif val_I == 1.0:
+                # Topological only: Light Blue
+                rgba[i, j] = [0.5, 0.5, 1.0, 1.0]
+            elif val_P == 1.0:
+                # Protocol only: Coral Red
+                rgba[i, j] = [1.0, 0.5, 0.5, 1.0]
+            else:
+                # Neither: White
+                rgba[i, j] = [1.0, 1.0, 1.0, 1.0]
+
+    fig_overlay, ax_overlay = plt.subplots(figsize=(6, 8), dpi=150)
+    ax_overlay.imshow(rgba, origin='lower', extent=[unique_vz[0], unique_vz[-1], unique_mu[0], unique_mu[-1]], aspect='auto')
+
+    ax_overlay.set_title('Topological Region vs Protocol Positive Overlay', fontsize=12, pad=15)
+    ax_overlay.set_xlabel(r'Zeeman Field $V_z$', fontsize=11)
+    ax_overlay.set_ylabel(r'Chemical Potential $\mu$', fontsize=11)
+    ax_overlay.set_xlim(0.0, 1.2)
+    ax_overlay.set_ylim(0.0, 4.5)
+    ax_overlay.spines['top'].set_visible(False)
+    ax_overlay.spines['right'].set_visible(False)
+
+    red_patch = mpatches.Patch(color=(1.0, 0.5, 0.5), label='Protocol Positive (prot_dat = 1)')
+    blue_patch = mpatches.Patch(color=(0.5, 0.5, 1.0), label='Topological (I = 1)')
+    purple_patch = mpatches.Patch(color=(0.6, 0.25, 0.6), label='Overlap (Both = 1)')
+    
+    ax_overlay.legend(handles=[red_patch, blue_patch, purple_patch], bbox_to_anchor=(0.5, -0.15),
+                      loc='upper center', ncol=3, fontsize=9, frameon=True)
+
+    overlay_out = Path(args.overlap_output)
+    if not overlay_out.is_absolute():
+        overlay_out = Path(PathConfigs.ROOT) / overlay_out
+    overlay_out.parent.mkdir(parents=True, exist_ok=True)
+
+    fig_overlay.tight_layout()
+    fig_overlay.subplots_adjust(bottom=0.2)
+    fig_overlay.savefig(overlay_out, dpi=300, bbox_inches='tight')
+    plt.close(fig_overlay)
+    print(f"Saved 2D overlay plot to: {overlay_out}")
+
+    # ==========================================
+    # STAGE 2: Parameter Cut Paths Generation (1D)
+    # ==========================================
     print(f"Generating point path along the cut: mu=({args.mu_start} -> {args.mu_end}), Vz=({args.vz_start} -> {args.vz_end})...")
     pts, sampled_indices = generate_point_path(pdi_data, args.N, args.resl, args.mu_start, args.mu_end, args.vz_start, args.vz_end)
 
@@ -152,41 +279,31 @@ def main():
     print(f"Sampled {actual_N} points along the path.")
 
     # Slice path-specific data
+    gap = gap_all[sampled_indices]
+    pl = peaks_left[sampled_indices]
+    pr = peaks_right[sampled_indices]
     brcl = brcl_all[sampled_indices]
     brcr = brcr_all[sampled_indices]
     glr_sym = glr_all[sampled_indices, 0]
     grl_sym = grl_all[sampled_indices, 0]
     glr_path_data = glr_all[sampled_indices]
     grl_path_data = grl_all[sampled_indices]
-    gap = gap_all[sampled_indices]
-    pl = pl_all[sampled_indices]
-    pr = pr_all[sampled_indices]
 
-    # Step 2: Physics Calculation for Spectrum and Pfaffian Invariants
+
+    # Physics Calculation for Spectrum and Pfaffian Invariants
     print(f"Calculating closed system spectra and Pfaffian invariants for {actual_N} points...")
     evals = np.zeros(shape=(actual_N, args.kvals))
     pf_invariants = np.zeros(actual_N)
 
     for i in range(actual_N):
         mu_val, vz_val = pts[i]
-        # Build closed system
         scl = hp.build_system_closed(t, mu_val, gamma, Delta0, vz_val, alpha, Ls, Vdisx, a=1)
-        # Calculate spectrum
         evals[i, :] = hp.calc_spectrum(scl, k=args.kvals)
-        # Calculate Pfaffian invariant
         pf_invariants[i] = hp.cal_pfaffian_invariant(
-            ts=t,
-            alphas=alpha,
-            gamma=gamma,
-            delta0=Delta0,
-            Nx=Ls,
-            Vdisx=Vdisx,
-            V0=1.0,
-            gm=vz_val,
-            mu=mu_val
+            ts=t, alphas=alpha, gamma=gamma, delta0=Delta0, Nx=Ls, Vdisx=Vdisx, V0=1.0, gm=vz_val, mu=mu_val
         )
 
-    # Compute correlation and peaks details
+    # Compute correlation and peaks details along the cut
     corr_vals = np.zeros(actual_N)
     corr_nonlocal_vals = np.zeros(actual_N)
     for i in range(actual_N):
@@ -203,25 +320,35 @@ def main():
     width_R = np.where(has_both_R == 1.0, pr[:, 2] - pr[:, 4], np.nan)
     height_R = pr[:, 3]
 
-    # Step 3: Visualization (4 individual files)
-    print("Visualizing results...")
-    
-    # Shared variables for layout/spans
+    # Visualization of the cuts
+    print("Visualizing parameter cut results...")
     vz_values = pts[:, 1]
     closest_vz_idx = np.argmin(np.abs(vz_values - args.target_vz))
     target_mu_val = pts[closest_vz_idx, 0]
 
     def add_common_elements(ax):
-        """Adds grid, topological region background, target Vz line, and dual x-axes."""
-        # Highlight topological regions
-        topological_added_to_legend = False
+        """Adds grid, target Vz line, dual x-axes, and overlay background shading."""
+        # Background overlays (Topological / Protocol / Overlap)
+        topo_added = False
+        prot_added = False
+        overlap_added = False
+
         for idx in range(actual_N):
-            if np.abs(pf_invariants[idx]) > 1e-5:
-                if not topological_added_to_legend:
-                    ax.axvspan(idx - 0.5, idx + 0.5, color='lightgrey', alpha=0.5, zorder=0, label="Topological Region")
-                    topological_added_to_legend = True
-                else:
-                    ax.axvspan(idx - 0.5, idx + 0.5, color='lightgrey', alpha=0.5, zorder=0)
+            is_topo = (np.abs(pf_invariants[idx]) > 1e-5)
+            is_prot = (prot_dat[sampled_indices[idx]] == 1.0)
+            
+            if is_topo and is_prot:
+                ax.axvspan(idx - 0.5, idx + 0.5, color='forestgreen', alpha=0.25, zorder=0,
+                           label="Pfaffian & Protocol" if not overlap_added else "")
+                overlap_added = True
+            elif is_topo:
+                ax.axvspan(idx - 0.5, idx + 0.5, color='gold', alpha=0.25, zorder=0,
+                           label="Pfaffian Only" if not topo_added else "")
+                topo_added = True
+            elif is_prot:
+                ax.axvspan(idx - 0.5, idx + 0.5, color='deepskyblue', alpha=0.2, zorder=0,
+                           label="Protocol Only" if not prot_added else "")
+                prot_added = True
 
         # Vertical line for target Vz
         ax.axvline(closest_vz_idx, color='black', linestyle='-', linewidth=1.5, zorder=1,
@@ -231,7 +358,7 @@ def main():
         ax.set_xlim(-0.5, actual_N - 0.5)
 
         # Select evenly spaced ticks to keep spacing uniform and reduce density
-        num_ticks = min(10, actual_N)
+        num_ticks = min(6, actual_N)
         tick_indices = np.round(np.linspace(0, actual_N - 1, num_ticks)).astype(int)
         tick_indices = np.unique(tick_indices)
 
@@ -265,13 +392,11 @@ def main():
     add_common_elements(ax_spec)
     
     mid_idx = args.kvals // 2
-    # Plot bulk states in standard blue
     for j in range(mid_idx - 1):
         ax_spec.plot(range(actual_N), evals[:, j], 'o-', color='royalblue', alpha=0.7, linewidth=1.5, markersize=4, zorder=2)
     for j in range(mid_idx + 1, args.kvals):
         ax_spec.plot(range(actual_N), evals[:, j], 'o-', color='royalblue', alpha=0.7, linewidth=1.5, markersize=4, zorder=2)
 
-    # Plot the two closest to E=0 in red
     ax_spec.plot(range(actual_N), evals[:, mid_idx - 1], 'o-', color='red', alpha=0.9, linewidth=2.5, markersize=6, zorder=3)
     ax_spec.plot(range(actual_N), evals[:, mid_idx], 'o-', color='red', alpha=0.9, linewidth=2.5, markersize=6, zorder=3)
     ax_spec.axhline(0, color='black', linestyle='--', linewidth=1.2, alpha=0.6, zorder=1)
@@ -283,7 +408,7 @@ def main():
     by_label = dict(zip(labels, handles))
     ax_spec.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(0.5, -0.45), loc='upper center', ncol=3, fontsize=10)
 
-    # --- Plot 2: Local Conductance Correlation ---
+    # --- Plot 2: Local & Nonlocal Conductance Correlation ---
     fig_corr, ax_corr = plt.subplots(figsize=(10, 7.5), dpi=150)
     add_common_elements(ax_corr)
     
@@ -301,28 +426,23 @@ def main():
     ax2_gap = add_common_elements(ax_gap)
     ax_nonlocal = ax_gap.twinx()
     
-    # Hide the default duplicate right spine of ax2_gap
     ax2_gap.spines['right'].set_visible(False)
     
-    # Plot Gap (left y-axis)
     ax_gap.plot(range(actual_N), gap, 'o-', color='darkorange', linewidth=2.5, label="Topological Gap", zorder=3)
     ax_gap.set_ylabel("Gap (meV)", color='darkorange', fontsize=12)
     ax_gap.tick_params(axis='y', labelcolor='darkorange')
 
-    # Plot Nonlocal Conductances (right y-axis)
     ax_nonlocal.plot(range(actual_N), glr_sym, 's--', color='purple', linewidth=1.5, alpha=0.8, label=r"$G_{LR}$ (Symmetric)", zorder=3)
     ax_nonlocal.plot(range(actual_N), grl_sym, 'd--', color='crimson', linewidth=1.5, alpha=0.8, label=r"$G_{RL}$ (Symmetric)", zorder=3)
     ax_nonlocal.set_ylabel(r"Nonlocal Conductance ($e^2/h$)", color='purple', fontsize=12)
     ax_nonlocal.tick_params(axis='y', labelcolor='purple')
     
-    # Clean up twin axes spines
     ax_nonlocal.spines['top'].set_visible(False)
     ax_nonlocal.spines['left'].set_visible(False)
     ax_nonlocal.spines['right'].set_visible(True)
     
     ax_gap.set_title("Topological Gap & Symmetric Nonlocal Conductance along Cut", fontsize=13)
     
-    # Combined legend
     handles_gap, labels_gap = ax_gap.get_legend_handles_labels()
     handles_nl, labels_nl = ax_nonlocal.get_legend_handles_labels()
     by_label = dict(zip(labels_gap + labels_nl, handles_gap + handles_nl))
@@ -333,29 +453,24 @@ def main():
     ax2_peaks = add_common_elements(ax_width)
     ax_height = ax_width.twinx()
     
-    # Hide the default duplicate right spine of ax2_peaks
     ax2_peaks.spines['right'].set_visible(False)
 
-    # Plot Widths (left y-axis)
-    ax_width.plot(range(actual_N), width_L, 'o-', color='teal', linewidth=2.5, label="Left Peak Width", zorder=3)
-    ax_width.plot(range(actual_N), width_R, 'o--', color='cadetblue', linewidth=2.5, label="Right Peak Width", zorder=3)
-    ax_width.set_ylabel("Peak Width (meV)", color='teal', fontsize=12)
-    ax_width.tick_params(axis='y', labelcolor='teal')
+    ax_width.plot(range(actual_N), width_L, 'o-', color='navy', linewidth=2.5, label="Left Peak Width", zorder=3)
+    ax_width.plot(range(actual_N), width_R, 'o--', color='royalblue', linewidth=2.5, label="Right Peak Width", zorder=3)
+    ax_width.set_ylabel("Peak Width (meV)", color='navy', fontsize=12)
+    ax_width.tick_params(axis='y', labelcolor='navy')
 
-    # Plot Heights (right y-axis)
-    ax_height.plot(range(actual_N), height_L, 's-', color='orchid', linewidth=1.5, alpha=0.8, label="Left Peak Height", zorder=3)
-    ax_height.plot(range(actual_N), height_R, 's--', color='plum', linewidth=1.5, alpha=0.8, label="Right Peak Height", zorder=3)
-    ax_height.set_ylabel(r"Peak Height ($e^2/h$)", color='orchid', fontsize=12)
-    ax_height.tick_params(axis='y', labelcolor='orchid')
+    ax_height.plot(range(actual_N), height_L, 's-', color='darkred', linewidth=1.5, alpha=0.8, label="Left Peak Height", zorder=3)
+    ax_height.plot(range(actual_N), height_R, 's--', color='crimson', linewidth=1.5, alpha=0.8, label="Right Peak Height", zorder=3)
+    ax_height.set_ylabel(r"Peak Height ($e^2/h$)", color='darkred', fontsize=12)
+    ax_height.tick_params(axis='y', labelcolor='darkred')
 
-    # Clean up twin axes spines
     ax_height.spines['top'].set_visible(False)
     ax_height.spines['left'].set_visible(False)
     ax_height.spines['right'].set_visible(True)
 
     ax_width.set_title("Peak Width & Height along Cut", fontsize=13)
 
-    # Combined legend
     handles_w, labels_w = ax_width.get_legend_handles_labels()
     handles_h, labels_h = ax_height.get_legend_handles_labels()
     by_label = dict(zip(labels_w + labels_h, handles_w + handles_h))
