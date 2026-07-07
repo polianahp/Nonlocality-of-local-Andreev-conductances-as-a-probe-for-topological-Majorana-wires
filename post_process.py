@@ -82,17 +82,17 @@ def generate_point_path(pdi_data, N, resl, mu_start, mu_end, Vz_start, Vz_end):
 def main():
     parser = argparse.ArgumentParser(description="Run full post-processing pipeline (2D overlays and 1D parameter cuts).")
 
-    indir = "Data/dis_realizations/disorder_realization_6_results"
-    #indir = "Data/Tdis_pfaff3"
+    #indir = "Data/dis_realizations/disorder_realization_6_results"
+    indir = "Data/Tdis_pfaff3"
 
     parser.add_argument("--dirname", type=str, default=indir, help="Directory name containing the simulation parameters and results.")
-    parser.add_argument("-N", type=int, default=20, help="Number of points to sample along the cut.")
+    parser.add_argument("-N", type=int, default=100, help="Number of points to sample along the cut.")
     parser.add_argument("--resl", type=float, default=0.02, help="Resolution/tolerance for matching points.")
-    parser.add_argument("--mu-start", type=float, default=1.607143, help="Start Chemical Potential (mu) for the cut.")
-    parser.add_argument("--mu-end", type=float, default=2.430804, help="End Chemical Potential (mu) for the cut.")
-    parser.add_argument("--vz-start", type=float, default=0.3855072, help="Start Zeeman Field (V_z) for the cut.")
-    parser.add_argument("--vz-end", type=float, default=1.187101, help="End Zeeman Field (V_z) for the cut.")
-    parser.add_argument("--target-vz", type=float, default=1.0, help="Predefined target V_z to draw a vertical reference line.")
+    parser.add_argument("--mu-start", type=float, default=3.133929, help="Start Chemical Potential (mu) for the cut.")
+    parser.add_argument("--mu-end", type=float, default=3.133929, help="End Chemical Potential (mu) for the cut.")
+    parser.add_argument("--vz-start", type=float, default=0.0, help="Start Zeeman Field (V_z) for the cut.")
+    parser.add_argument("--vz-end", type=float, default=1.4, help="End Zeeman Field (V_z) for the cut.")
+    parser.add_argument("--target-vz", type=float, default=0.9140625, help="Predefined target V_z to draw a vertical reference line.")
     parser.add_argument("--kvals", type=int, default=12, help="Number of lowest eigenvalues to solve for.")
     parser.add_argument("--pdi-thresh", type=float, default=0.9, help="PDI filtering threshold.")
     parser.add_argument("--corr-thresh", type=float, default=0.7, help="Correlation threshold.")
@@ -206,6 +206,11 @@ def main():
     actual_N = len(pts)
     print(f"Sampled {actual_N} points along the path.")
 
+    # Calculate target point along the cut
+    vz_values = pts[:, 1]
+    closest_vz_idx = int(np.argmin(np.abs(vz_values - args.target_vz)))
+    target_mu_val = pts[closest_vz_idx, 0]
+
     print("Generating 2D overlay plot...")
     unique_mu = np.unique(mu)
     unique_vz = np.unique(V_z)
@@ -251,8 +256,10 @@ def main():
 
     # Draw the exact cut path taken
     ax_overlay.plot([args.vz_start, args.vz_end], [args.mu_start, args.mu_end], color='black', linestyle='-', linewidth=2, zorder=4)
-    # Draw the sampled points along the path
-    ax_overlay.scatter(pts[:, 1], pts[:, 0], color='black', edgecolor='white', s=25, zorder=5)
+    # Draw the single point at the target Vz along the cut path
+    target_vz_pt = vz_values[closest_vz_idx]
+    target_mu_pt = target_mu_val
+    ax_overlay.scatter(target_vz_pt, target_mu_pt, color='black', edgecolor='white', s=40, zorder=5)
 
     ax_overlay.set_title('Topological Region vs Protocol Positive Overlay', fontsize=12, pad=15)
     ax_overlay.set_xlabel(r'Zeeman Field $V_z$', fontsize=11)
@@ -267,9 +274,10 @@ def main():
     purple_patch = mpatches.Patch(color=(0.6, 0.25, 0.6), label='Overlap (Both = 1)')
     
     import matplotlib.lines as mlines
-    cut_line_handle = mlines.Line2D([], [], color='black', marker='o', markerfacecolor='black', markeredgecolor='white', markersize=6, linestyle='-', label='1D Cut Path')
+    cut_line_handle = mlines.Line2D([], [], color='black', linestyle='-', label='1D Cut Path')
+    target_pt_handle = mlines.Line2D([], [], color='black', marker='o', markerfacecolor='black', markeredgecolor='white', markersize=6, linestyle='None', label=rf'Target $V_z = {target_vz_pt:.4f}$')
     
-    ax_overlay.legend(handles=[red_patch, blue_patch, purple_patch, cut_line_handle], bbox_to_anchor=(0.5, -0.15),
+    ax_overlay.legend(handles=[red_patch, blue_patch, purple_patch, cut_line_handle, target_pt_handle], bbox_to_anchor=(0.5, -0.15),
                       loc='upper center', ncol=2, fontsize=9, frameon=True)
 
     overlay_out = Path(args.overlap_output)
@@ -331,9 +339,6 @@ def main():
 
     # Visualization of the cuts
     print("Visualizing parameter cut results...")
-    vz_values = pts[:, 1]
-    closest_vz_idx = np.argmin(np.abs(vz_values - args.target_vz))
-    target_mu_val = pts[closest_vz_idx, 0]
 
     def add_common_elements(ax):
         """Adds grid, target Vz line, dual x-axes, and overlay background shading."""
@@ -402,12 +407,12 @@ def main():
     
     mid_idx = args.kvals // 2
     for j in range(mid_idx - 1):
-        ax_spec.plot(range(actual_N), evals[:, j], 'o-', color='royalblue', alpha=0.7, linewidth=1.5, markersize=4, zorder=2)
+        ax_spec.plot(range(actual_N), evals[:, j], '-', color='royalblue', alpha=0.7, linewidth=1.5, zorder=2)
     for j in range(mid_idx + 1, args.kvals):
-        ax_spec.plot(range(actual_N), evals[:, j], 'o-', color='royalblue', alpha=0.7, linewidth=1.5, markersize=4, zorder=2)
+        ax_spec.plot(range(actual_N), evals[:, j], '-', color='royalblue', alpha=0.7, linewidth=1.5, zorder=2)
 
-    ax_spec.plot(range(actual_N), evals[:, mid_idx - 1], 'o-', color='red', alpha=0.9, linewidth=2.5, markersize=6, zorder=3)
-    ax_spec.plot(range(actual_N), evals[:, mid_idx], 'o-', color='red', alpha=0.9, linewidth=2.5, markersize=6, zorder=3)
+    ax_spec.plot(range(actual_N), evals[:, mid_idx - 1], '-', color='red', alpha=0.9, linewidth=2.5, zorder=3)
+    ax_spec.plot(range(actual_N), evals[:, mid_idx], '-', color='red', alpha=0.9, linewidth=2.5, zorder=3)
     ax_spec.axhline(0, color='black', linestyle='--', linewidth=1.2, alpha=0.6, zorder=1)
 
     ax_spec.set_ylabel("Energy (meV)", fontsize=12)
@@ -421,8 +426,8 @@ def main():
     fig_corr, ax_corr = plt.subplots(figsize=(10, 7.5), dpi=150)
     add_common_elements(ax_corr)
     
-    ax_corr.plot(range(actual_N), corr_vals, 'o-', color='forestgreen', linewidth=2.5, label="Local Conductance Correlation", zorder=3)
-    ax_corr.plot(range(actual_N), corr_nonlocal_vals, 's--', color='darkorchid', linewidth=2.0, label="Nonlocal Conductance Correlation", zorder=3)
+    ax_corr.plot(range(actual_N), corr_vals, '-', color='forestgreen', linewidth=2.5, label="Local Conductance Correlation", zorder=3)
+    ax_corr.plot(range(actual_N), corr_nonlocal_vals, '--', color='darkorchid', linewidth=2.0, label="Nonlocal Conductance Correlation", zorder=3)
     ax_corr.set_ylabel("Correlation", fontsize=12)
     ax_corr.set_title("Conductance Correlation along Cut", fontsize=13)
     
@@ -437,12 +442,12 @@ def main():
     
     ax2_gap.spines['right'].set_visible(False)
     
-    ax_gap.plot(range(actual_N), gap, 'o-', color='darkorange', linewidth=2.5, label="Topological Gap", zorder=3)
+    ax_gap.plot(range(actual_N), gap, '-', color='darkorange', linewidth=2.5, label="Topological Gap", zorder=3)
     ax_gap.set_ylabel("Gap (meV)", color='darkorange', fontsize=12)
     ax_gap.tick_params(axis='y', labelcolor='darkorange')
 
-    ax_nonlocal.plot(range(actual_N), glr_sym, 's--', color='purple', linewidth=1.5, alpha=0.8, label=r"$G_{LR}$ (Symmetric)", zorder=3)
-    ax_nonlocal.plot(range(actual_N), grl_sym, 'd--', color='crimson', linewidth=1.5, alpha=0.8, label=r"$G_{RL}$ (Symmetric)", zorder=3)
+    ax_nonlocal.plot(range(actual_N), glr_sym, '--', color='purple', linewidth=1.5, alpha=0.8, label=r"$G_{LR}$ (Symmetric)", zorder=3)
+    ax_nonlocal.plot(range(actual_N), grl_sym, '--', color='crimson', linewidth=1.5, alpha=0.8, label=r"$G_{RL}$ (Symmetric)", zorder=3)
     ax_nonlocal.set_ylabel(r"Nonlocal Conductance ($e^2/h$)", color='purple', fontsize=12)
     ax_nonlocal.tick_params(axis='y', labelcolor='purple')
     
@@ -464,13 +469,13 @@ def main():
     
     ax2_peaks.spines['right'].set_visible(False)
 
-    ax_width.plot(range(actual_N), width_L, 'o-', color='navy', linewidth=2.5, label="Left Peak Width", zorder=3)
-    ax_width.plot(range(actual_N), width_R, 'o--', color='royalblue', linewidth=2.5, label="Right Peak Width", zorder=3)
+    ax_width.plot(range(actual_N), width_L, '-', color='navy', linewidth=2.5, label="Left Peak Width", zorder=3)
+    ax_width.plot(range(actual_N), width_R, '--', color='royalblue', linewidth=2.5, label="Right Peak Width", zorder=3)
     ax_width.set_ylabel("Peak Width (meV)", color='navy', fontsize=12)
     ax_width.tick_params(axis='y', labelcolor='navy')
 
-    ax_height.plot(range(actual_N), height_L, 's-', color='darkred', linewidth=1.5, alpha=0.8, label="Left Peak Height", zorder=3)
-    ax_height.plot(range(actual_N), height_R, 's--', color='crimson', linewidth=1.5, alpha=0.8, label="Right Peak Height", zorder=3)
+    ax_height.plot(range(actual_N), height_L, '-', color='darkred', linewidth=1.5, alpha=0.8, label="Left Peak Height", zorder=3)
+    ax_height.plot(range(actual_N), height_R, '--', color='crimson', linewidth=1.5, alpha=0.8, label="Right Peak Height", zorder=3)
     ax_height.set_ylabel(r"Peak Height ($e^2/h$)", color='darkred', fontsize=12)
     ax_height.tick_params(axis='y', labelcolor='darkred')
 
