@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 import os
 import sys
+import ast
 import argparse
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
 
 # Ensure local imports work
 sys.path.append(str(Path(__file__).parent.resolve()))
@@ -79,6 +81,42 @@ def generate_point_path(pdi_data, N, resl, mu_start, mu_end, Vz_start, Vz_end):
 
     return sampled_points, sampled_indices
 
+def create_overlay_rgba(mu, V_z, I, prot_dat):
+    unique_mu = np.unique(mu)
+    unique_vz = np.unique(V_z)
+    Nmu = len(unique_mu)
+    Nvz = len(unique_vz)
+
+    I_grid = np.zeros((Nmu, Nvz))
+    prot_grid = np.zeros((Nmu, Nvz))
+
+    mu_to_idx = {val: idx for idx, val in enumerate(unique_mu)}
+    vz_to_idx = {val: idx for idx, val in enumerate(unique_vz)}
+
+    for idx in range(len(mu)):
+        mu_val = mu[idx]
+        vz_val = V_z[idx]
+        mu_i = mu_to_idx.get(mu_val, -1)
+        vz_j = vz_to_idx.get(vz_val, -1)
+        if mu_i != -1 and vz_j != -1:
+            I_grid[mu_i, vz_j] = I[idx]
+            prot_grid[mu_i, vz_j] = prot_dat[idx]
+
+    rgba = np.ones((Nmu, Nvz, 4))
+    for i in range(Nmu):
+        for j in range(Nvz):
+            val_I = I_grid[i, j]
+            val_P = prot_grid[i, j]
+            if val_I == 1.0 and val_P == 1.0:
+                rgba[i, j] = [0.6, 0.25, 0.6, 1.0]
+            elif val_I == 1.0:
+                rgba[i, j] = [0.5, 0.5, 1.0, 1.0]
+            elif val_P == 1.0:
+                rgba[i, j] = [1.0, 0.5, 0.5, 1.0]
+            else:
+                rgba[i, j] = [1.0, 1.0, 1.0, 1.0]
+    return unique_mu, unique_vz, rgba
+
 def main():
     parser = argparse.ArgumentParser(description="Run full post-processing pipeline (2D overlays and 1D parameter cuts).")
 
@@ -104,7 +142,16 @@ def main():
     parser.add_argument("--gap-output", type=str, default="Plots/gap_nonlocal_cut.png", help="Path to save the gap and nonlocal conductance plot.")
     parser.add_argument("--peaks-output", type=str, default="Plots/peaks_cut.png", help="Path to save the peak width and height plot.")
     parser.add_argument("--overlap-output", type=str, default="Plots/overlap_plot.png", help="Path to save the 2D overlay plot.")
+    parser.add_argument("--single-points", type=str, default="[]", help="List of (V_z, mu) tuples for single point plotting, e.g. '[(0.45323, 3.4564)]'")
     args = parser.parse_args()
+
+    try:
+        single_points = ast.literal_eval(args.single_points)
+        if not isinstance(single_points, list):
+            single_points = []
+    except Exception as e:
+        print(f"Warning: Could not parse --single-points ({e}). Defaulting to empty list.")
+        single_points = []
 
     # Resolve input directory
     if os.path.isabs(args.dirname):
@@ -212,44 +259,7 @@ def main():
     target_mu_val = pts[closest_vz_idx, 0]
 
     print("Generating 2D overlay plot...")
-    unique_mu = np.unique(mu)
-    unique_vz = np.unique(V_z)
-    Nmu = len(unique_mu)
-    Nvz = len(unique_vz)
-
-    I_grid = np.zeros((Nmu, Nvz))
-    prot_grid = np.zeros((Nmu, Nvz))
-
-    mu_to_idx = {val: idx for idx, val in enumerate(unique_mu)}
-    vz_to_idx = {val: idx for idx, val in enumerate(unique_vz)}
-
-    for idx in range(len(mu)):
-        mu_val = mu[idx]
-        vz_val = V_z[idx]
-        mu_i = mu_to_idx.get(mu_val, -1)
-        vz_j = vz_to_idx.get(vz_val, -1)
-        if mu_i != -1 and vz_j != -1:
-            I_grid[mu_i, vz_j] = I[idx]
-            prot_grid[mu_i, vz_j] = prot_dat[idx]
-
-    # Reconstruct RGBA Image Matrix directly to prevent blending artifacts
-    rgba = np.ones((Nmu, Nvz, 4))
-    for i in range(Nmu):
-        for j in range(Nvz):
-            val_I = I_grid[i, j]
-            val_P = prot_grid[i, j]
-            if val_I == 1.0 and val_P == 1.0:
-                # Overlap: Purple
-                rgba[i, j] = [0.6, 0.25, 0.6, 1.0]
-            elif val_I == 1.0:
-                # Topological only: Light Blue
-                rgba[i, j] = [0.5, 0.5, 1.0, 1.0]
-            elif val_P == 1.0:
-                # Protocol only: Coral Red
-                rgba[i, j] = [1.0, 0.5, 0.5, 1.0]
-            else:
-                # Neither: White
-                rgba[i, j] = [1.0, 1.0, 1.0, 1.0]
+    unique_mu, unique_vz, rgba = create_overlay_rgba(mu, V_z, I, prot_dat)
 
     fig_overlay, ax_overlay = plt.subplots(figsize=(6, 8), dpi=150)
     ax_overlay.imshow(rgba, origin='lower', extent=[unique_vz[0], unique_vz[-1], unique_mu[0], unique_mu[-1]], aspect='auto')
@@ -273,7 +283,6 @@ def main():
     blue_patch = mpatches.Patch(color=(0.5, 0.5, 1.0), label='Topological (I = 1)')
     purple_patch = mpatches.Patch(color=(0.6, 0.25, 0.6), label='Overlap (Both = 1)')
     
-    import matplotlib.lines as mlines
     cut_line_handle = mlines.Line2D([], [], color='black', linestyle='-', label='1D Cut Path')
     target_pt_handle = mlines.Line2D([], [], color='black', marker='o', markerfacecolor='black', markeredgecolor='white', markersize=6, linestyle='None', label=rf'Target $V_z = {target_vz_pt:.4f}$')
     
@@ -507,6 +516,176 @@ def main():
         figure.savefig(output_path, dpi=300, bbox_inches='tight')
         plt.close(figure)
         print(f"Saved plot to: {output_path}")
+
+    # ==========================================
+    # STAGE 3: Single Points Plotting & Point Map
+    # ==========================================
+    if len(single_points) > 0:
+        print(f"Processing {len(single_points)} single points for detailed plotting...")
+        single_points_dir = dirname / "Plots" / "Single_Points"
+        single_points_dir.mkdir(parents=True, exist_ok=True)
+
+        mu_n = float(params_config['mu_n'])
+        mu_leads = float(params_config['mu_leads'])
+        Ln = int(params_config['Ln'])
+        Lb = int(params_config['Lb'])
+        try:
+            barrier_l = float(params_config['barrier0'])
+        except Exception:
+            try:
+                barrier_l = float(params_config['barrier_l'])
+            except Exception:
+                barrier_l = 2.0
+
+        num_sweep_points = 100
+        barrier_sweep = np.linspace(-20 * barrier_l, 40 * barrier_l, num_sweep_points)
+        energies = np.linspace(-0.5, 0.5, 101)
+
+        for pt_idx, pt in enumerate(single_points):
+            vz_val, mu_val = float(pt[0]), float(pt[1])
+            folder_name = f"Vz{vz_val:.3f}".replace('.', '') + "_" + f"mu{mu_val:.3f}".replace('.', '')
+            pt_dir = single_points_dir / folder_name
+            pt_dir.mkdir(parents=True, exist_ok=True)
+            print(f"[{pt_idx+1}/{len(single_points)}] Generating plots for Vz={vz_val}, mu={mu_val} -> {pt_dir}")
+
+            # 1. Right Barrier Sweep (varying UR, holding UL=barrier_l)
+            cond_left_R = np.zeros(num_sweep_points)
+            cond_right_R = np.zeros(num_sweep_points)
+            for k in range(num_sweep_points):
+                syst_R = hp.build_system(
+                    t=t, mu=mu_val, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz_val,
+                    alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
+                    barrier_l=barrier_l, barrier_r=barrier_sweep[k], Vdisx=Vdisx, a=1
+                )
+                cL, cR = hp.calc_conductance(syst_R, energy=0.0, return_smatrix=False)
+                cond_left_R[k] = cL
+                cond_right_R[k] = cR
+
+            # 2. Left Barrier Sweep (varying UL, holding UR=barrier_l)
+            cond_left_L = np.zeros(num_sweep_points)
+            cond_right_L = np.zeros(num_sweep_points)
+            for k in range(num_sweep_points):
+                syst_L = hp.build_system(
+                    t=t, mu=mu_val, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz_val,
+                    alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
+                    barrier_l=barrier_sweep[k], barrier_r=barrier_l, Vdisx=Vdisx, a=1
+                )
+                cL, cR = hp.calc_conductance(syst_L, energy=0.0, return_smatrix=False)
+                cond_left_L[k] = cL
+                cond_right_L[k] = cR
+
+            x_data = barrier_sweep / (barrier_l if barrier_l != 0 else 1.0)
+            lw = 3.0
+
+            # Save Right Sweep Left Conductance
+            fig, ax = plt.subplots(figsize=(6, 4.5), dpi=150)
+            normed_GL_R = cond_left_R / (cond_left_R[0] if cond_left_R[0] != 0 else 1.0)
+            ax.plot(x_data, normed_GL_R, color="green", linewidth=lw)
+            ax.set_xlabel(r"$U_{R}/U_{L}$", fontsize=14)
+            ax.set_ylabel(r"$G_{LL}/G_{LL, sym}$", fontsize=14)
+            ax.set_title(rf"Right Sweep $G_{{LL}}$ ($V_z={vz_val:.3f}, \mu={mu_val:.3f}$)")
+            fig.tight_layout()
+            fig.savefig(pt_dir / "Conductances_Left_RightSweep.png", dpi=300, bbox_inches='tight')
+            plt.close(fig)
+
+            # Save Right Sweep Right Conductance
+            fig, ax = plt.subplots(figsize=(6, 4.5), dpi=150)
+            normed_GR_R = cond_right_R / (cond_right_R[0] if cond_right_R[0] != 0 else 1.0)
+            ax.plot(x_data, normed_GR_R, color="green", linewidth=lw)
+            ax.set_xlabel(r"$U_{R}/U_{L}$", fontsize=14)
+            ax.set_ylabel(r"$G_{RR}/G_{RR, sym}$", fontsize=14)
+            ax.set_title(rf"Right Sweep $G_{{RR}}$ ($V_z={vz_val:.3f}, \mu={mu_val:.3f}$)")
+            fig.tight_layout()
+            fig.savefig(pt_dir / "Conductances_Right_RightSweep.png", dpi=300, bbox_inches='tight')
+            plt.close(fig)
+
+            # Save Left Sweep Left Conductance
+            fig, ax = plt.subplots(figsize=(6, 4.5), dpi=150)
+            normed_GL_L = cond_left_L / (cond_left_L[0] if cond_left_L[0] != 0 else 1.0)
+            ax.plot(x_data, normed_GL_L, color="green", linewidth=lw)
+            ax.set_xlabel(r"$U_{L}/U_{R}$", fontsize=14)
+            ax.set_ylabel(r"$G_{LL}/G_{LL, sym}$", fontsize=14)
+            ax.set_title(rf"Left Sweep $G_{{LL}}$ ($V_z={vz_val:.3f}, \mu={mu_val:.3f}$)")
+            fig.tight_layout()
+            fig.savefig(pt_dir / "Conductances_Left_LeftSweep.png", dpi=300, bbox_inches='tight')
+            plt.close(fig)
+
+            # Save Left Sweep Right Conductance
+            fig, ax = plt.subplots(figsize=(6, 4.5), dpi=150)
+            normed_GR_L = cond_right_L / (cond_right_L[0] if cond_right_L[0] != 0 else 1.0)
+            ax.plot(x_data, normed_GR_L, color="green", linewidth=lw)
+            ax.set_xlabel(r"$U_{L}/U_{R}$", fontsize=14)
+            ax.set_ylabel(r"$G_{RR}/G_{RR, sym}$", fontsize=14)
+            ax.set_title(rf"Left Sweep $G_{{RR}}$ ($V_z={vz_val:.3f}, \mu={mu_val:.3f}$)")
+            fig.tight_layout()
+            fig.savefig(pt_dir / "Conductances_Right_LeftSweep.png", dpi=300, bbox_inches='tight')
+            plt.close(fig)
+
+            # 3. dIdV Spectrum at Nominal Barrier
+            syst_nom = hp.build_system(
+                t=t, mu=mu_val, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz_val,
+                alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
+                barrier_l=barrier_l, barrier_r=barrier_l, Vdisx=Vdisx, a=1
+            )
+            dIdV_left, dIdV_right, _, _, _ = hp.calc_dIdV(syst_nom, energies)
+            fig, ax = plt.subplots(figsize=(7, 5), dpi=150)
+            ax.plot(energies, dIdV_left, color='royalblue', linewidth=2.0, label='Left dI/dV')
+            ax.plot(energies, dIdV_right, color='darkorange', linewidth=2.0, label='Right dI/dV')
+            ax.set_xlabel("Energy (meV)", fontsize=13)
+            ax.set_ylabel("Differential Conductance (dI/dV)", fontsize=13)
+            ax.set_title(rf"dI/dV Spectrum ($V_z={vz_val:.3f}, \mu={mu_val:.3f}$)")
+            ax.legend(fontsize=11)
+            ax.grid(True, linestyle=':', alpha=0.5)
+            fig.tight_layout()
+            fig.savefig(pt_dir / "dIdV.png", dpi=300, bbox_inches='tight')
+            plt.close(fig)
+
+            # 4. MZM Wavefunction
+            scl = hp.build_system_closed(t, mu_val, gamma, Delta0, vz_val, alpha, Ls, Vdisx, a=1)
+            evals_cl, evecs_cl = hp.solve_ham(scl, k=2)
+            rho_M1, rho_M2, _ = hp.get_psiM_density(evals_cl, evecs_cl)
+            fig, ax = plt.subplots(figsize=(8, 5), dpi=150)
+            ax.plot(rho_M1, label='Majorana Left (M1)', color='cyan', linewidth=2.0)
+            ax.plot(rho_M2, label='Majorana Right (M2)', color='orange', linewidth=2.0)
+            ax.set_xlabel("Site Index", fontsize=13)
+            ax.set_ylabel("Probability Density", fontsize=13)
+            ax.set_title(rf"Majorana Modes ($V_z={vz_val:.3f}, \mu={mu_val:.3f}$)")
+            ax.legend(fontsize=11)
+            ax.grid(True, linestyle=':', alpha=0.5)
+            fig.tight_layout()
+            fig.savefig(pt_dir / "wavefunction.png", dpi=300, bbox_inches='tight')
+            plt.close(fig)
+
+        # 5. Generate point_map.png
+        print("Generating 2D single point map (point_map.png)...")
+        fig_map, ax_map = plt.subplots(figsize=(6, 8), dpi=150)
+        ax_map.imshow(rgba, origin='lower', extent=[unique_vz[0], unique_vz[-1], unique_mu[0], unique_mu[-1]], aspect='auto')
+
+        pts_array = np.array(single_points, dtype=float)
+        ax_map.scatter(pts_array[:, 0], pts_array[:, 1], color='black', edgecolor='white', s=50, zorder=5)
+
+        ax_map.set_title('Topological Region vs Protocol Overlay (Single Points)', fontsize=12, pad=15)
+        ax_map.set_xlabel(r'Zeeman Field $V_z$', fontsize=11)
+        ax_map.set_ylabel(r'Chemical Potential $\mu$', fontsize=11)
+        ax_map.set_xlim(0.0, 1.2)
+        ax_map.set_ylim(0.0, 4.5)
+        ax_map.spines['top'].set_visible(False)
+        ax_map.spines['right'].set_visible(False)
+
+        red_patch = mpatches.Patch(color=(1.0, 0.5, 0.5), label='Protocol Positive (prot_dat = 1)')
+        blue_patch = mpatches.Patch(color=(0.5, 0.5, 1.0), label='Topological (I = 1)')
+        purple_patch = mpatches.Patch(color=(0.6, 0.25, 0.6), label='Overlap (Both = 1)')
+        pts_handle = mlines.Line2D([], [], color='black', marker='o', markerfacecolor='black', markeredgecolor='white', markersize=7, linestyle='None', label='Single Points')
+
+        ax_map.legend(handles=[red_patch, blue_patch, purple_patch, pts_handle], bbox_to_anchor=(0.5, -0.15),
+                      loc='upper center', ncol=2, fontsize=9, frameon=True)
+
+        fig_map.tight_layout()
+        fig_map.subplots_adjust(bottom=0.22)
+        map_out = single_points_dir / "point_map.png"
+        fig_map.savefig(map_out, dpi=300, bbox_inches='tight')
+        plt.close(fig_map)
+        print(f"Saved point map to: {map_out}")
 
 if __name__ == "__main__":
     main()

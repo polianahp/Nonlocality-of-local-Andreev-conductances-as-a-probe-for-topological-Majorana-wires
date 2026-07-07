@@ -1,8 +1,6 @@
-# disorder_realization_3.yaml
-# Configuration for system with dynamically generated disorder realization 3.
 
 # Disorder Management
-dirname: "Tdis_pfaff3"
+dirname: "Tdis_pfaff4"
 fname: "Tdis.npz"
 
 # Sweep Ranges

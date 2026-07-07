@@ -908,8 +908,8 @@ axes.set_ylabel(r"$G_{LL}/G_{LL, sym}$", fontsize=22)
 axes.yaxis.set_label_coords(-0.01, 0.5)
 
 fig.tight_layout()
-fig.savefig(Path(save_dir / "Conductances_Left.png"))
-plt.savefig(Path(dirname, 'Plots', f"Conductances_Left_mu{mu_str}_vz{Vz_str}.png"))
+fig.savefig(Path(save_dir / "L_Conductances_Left.png"))
+plt.savefig(Path(dirname, 'Plots', f"L_Conductances_Left_mu{mu_str}_vz{Vz_str}.png"))
 
 fig, axes = plt.subplots(1,1, figsize=(5,3.5))
 fig.subplots_adjust(0,0,1,1)
@@ -923,8 +923,8 @@ axes.set_ylabel(r"$G_{RR}/G_{RR, sym}$", fontsize=22)
 axes.yaxis.set_label_coords(-0.01, 0.5)
 
 fig.tight_layout()
-plt.savefig(Path(dirname, 'Plots', f"Conductances_Right_mu{mu_str}_vz{Vz_str}.png"))
-fig.savefig(Path(save_dir / "Conductances_Right.png"))
+plt.savefig(Path(dirname, 'Plots', f"L_Conductances_Right_mu{mu_str}_vz{Vz_str}.png"))
+fig.savefig(Path(save_dir / "L_Conductances_Right.png"))
 
 
 # %%

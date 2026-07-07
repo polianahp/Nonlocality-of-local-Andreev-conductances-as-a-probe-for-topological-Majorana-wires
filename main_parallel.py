@@ -101,6 +101,9 @@ def worker_simulation_step(iter_data, static_params):
             mzm_separation = hp.calc_MZM_separation(rho_M1, rho_M2)
         if static_params['spectra_flag']:
             spectrum = hp.sort_spectrum(evals, evecs)
+            if len(spectrum) >= 4:
+                idx_closest = np.argsort(np.abs(spectrum))[:4]
+                spectrum = np.sort(spectrum[idx_closest])
             pos_evals = np.sort(evals[evals >= 0])
             if len(pos_evals) > 1:
                 topological_gap = pos_evals[1]
@@ -349,7 +352,7 @@ if __name__ == "__main__":
     barrier_left_conductance_right_arr  = np.zeros_like(barrier_right_conductance_left_arr)
     rG_corr_arr = np.zeros(shape = (len(params_list)))
     lG_corr_arr = np.zeros(shape = (len(params_list)))
-    spectrum_arr = np.zeros(shape=(len(params_list), config.num_eigenvalues))
+    spectrum_arr = np.zeros(shape=(len(params_list), 4))
     peaks_left = np.zeros(shape=(len(params_list), 6))
     peaks_right = np.zeros_like(peaks_left)
 
@@ -402,7 +405,8 @@ if __name__ == "__main__":
         barrier_right_GRL_arr[idx, :] = res['b_right_GRL']
         barrier_left_conductance_left_arr[idx, :] = res['b_left_cond_left']
         barrier_left_conductance_right_arr[idx, :] = res['b_left_cond_right']
-        spectrum_arr[idx, :] = res['spectrum']
+        if res['spectrum'] is not None:
+            spectrum_arr[idx, :] = res['spectrum']
         
         rG_corr_arr[idx]= res['rG_corr']
         lG_corr_arr[idx]= res['lG_corr']
@@ -471,7 +475,7 @@ if __name__ == "__main__":
     hp.np_save_wrapped(mp_arr, "mp_arr", dirname)
     hp.np_save_wrapped(params_list, "params_list", dirname) 
     
-    #hp.np_save_wrapped(spectrum_arr,"spectrum_arr", dirname)
+    hp.np_save_wrapped(spectrum_arr,"spectrum_arr", dirname)
     
     hp.np_save_wrapped(rG_corr_arr,"rG_corr", dirname)
     hp.np_save_wrapped(lG_corr_arr,"lG_corr", dirname)
