@@ -538,7 +538,7 @@ def main():
                 barrier_l = 2.0
 
         num_sweep_points = 100
-        barrier_sweep = np.linspace(-20 * barrier_l, 40 * barrier_l, num_sweep_points)
+        barrier_sweep = np.linspace(-70 * barrier_l, 70 * barrier_l, num_sweep_points)
         energies = np.linspace(-0.5, 0.5, 101)
 
         for pt_idx, pt in enumerate(single_points):
@@ -575,11 +575,12 @@ def main():
                 cond_right_L[k] = cR
 
             x_data = barrier_sweep / (barrier_l if barrier_l != 0 else 1.0)
+            idx_sym = np.argmin(np.abs(barrier_sweep - barrier_l))
             lw = 3.0
 
             # Save Right Sweep Left Conductance
             fig, ax = plt.subplots(figsize=(6, 4.5), dpi=150)
-            normed_GL_R = cond_left_R / (cond_left_R[0] if cond_left_R[0] != 0 else 1.0)
+            normed_GL_R = cond_left_R / (cond_left_R[idx_sym] if cond_left_R[idx_sym] != 0 else 1.0)
             ax.plot(x_data, normed_GL_R, color="green", linewidth=lw)
             ax.set_xlabel(r"$U_{R}/U_{L}$", fontsize=14)
             ax.set_ylabel(r"$G_{LL}/G_{LL, sym}$", fontsize=14)
@@ -590,7 +591,7 @@ def main():
 
             # Save Right Sweep Right Conductance
             fig, ax = plt.subplots(figsize=(6, 4.5), dpi=150)
-            normed_GR_R = cond_right_R / (cond_right_R[0] if cond_right_R[0] != 0 else 1.0)
+            normed_GR_R = cond_right_R / (cond_right_R[idx_sym] if cond_right_R[idx_sym] != 0 else 1.0)
             ax.plot(x_data, normed_GR_R, color="green", linewidth=lw)
             ax.set_xlabel(r"$U_{R}/U_{L}$", fontsize=14)
             ax.set_ylabel(r"$G_{RR}/G_{RR, sym}$", fontsize=14)
@@ -601,7 +602,7 @@ def main():
 
             # Save Left Sweep Left Conductance
             fig, ax = plt.subplots(figsize=(6, 4.5), dpi=150)
-            normed_GL_L = cond_left_L / (cond_left_L[0] if cond_left_L[0] != 0 else 1.0)
+            normed_GL_L = cond_left_L / (cond_left_L[idx_sym] if cond_left_L[idx_sym] != 0 else 1.0)
             ax.plot(x_data, normed_GL_L, color="green", linewidth=lw)
             ax.set_xlabel(r"$U_{L}/U_{R}$", fontsize=14)
             ax.set_ylabel(r"$G_{LL}/G_{LL, sym}$", fontsize=14)
@@ -612,7 +613,7 @@ def main():
 
             # Save Left Sweep Right Conductance
             fig, ax = plt.subplots(figsize=(6, 4.5), dpi=150)
-            normed_GR_L = cond_right_L / (cond_right_L[0] if cond_right_L[0] != 0 else 1.0)
+            normed_GR_L = cond_right_L / (cond_right_L[idx_sym] if cond_right_L[idx_sym] != 0 else 1.0)
             ax.plot(x_data, normed_GR_L, color="green", linewidth=lw)
             ax.set_xlabel(r"$U_{L}/U_{R}$", fontsize=14)
             ax.set_ylabel(r"$G_{RR}/G_{RR, sym}$", fontsize=14)

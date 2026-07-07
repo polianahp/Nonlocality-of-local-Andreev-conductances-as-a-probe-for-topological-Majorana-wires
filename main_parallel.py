@@ -176,6 +176,14 @@ def worker_simulation_step(iter_data, static_params):
             b_right_GLR[k] = Gmat_UR[0, 1]
             
             
+        idx_sym = np.argmin(np.abs(barrier_arr - barrier_tot))
+        b_right_cond_left = b_right_cond_left / (b_right_cond_left[idx_sym] if b_right_cond_left[idx_sym] != 0 else 1.0)
+        b_right_cond_right = b_right_cond_right / (b_right_cond_right[idx_sym] if b_right_cond_right[idx_sym] != 0 else 1.0)
+        if len(b_left_cond_left) > 0 and b_left_cond_left[idx_sym] != 0:
+            b_left_cond_left = b_left_cond_left / b_left_cond_left[idx_sym]
+        if len(b_left_cond_right) > 0 and b_left_cond_right[idx_sym] != 0:
+            b_left_cond_right = b_left_cond_right / b_left_cond_right[idx_sym]
+
         r_Gll, r_GRR = b_right_cond_left, b_right_cond_right #varying left barrier and getting local conductances
         
         rG_corr = hp.calc_invariant_metric(r_Gll, r_GRR)
