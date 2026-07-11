@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 import helpers as hp
-import reference_protocol as ref
+import test_notebooks_scripts.reference_protocol as ref
 from pathlib import Path
 
 # Load data once for all tests

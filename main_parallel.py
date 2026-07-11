@@ -175,18 +175,28 @@ def worker_simulation_step(iter_data, static_params):
             b_right_GRL[k] = Gmat_UR[1, 0]
             b_right_GLR[k] = Gmat_UR[0, 1]
             
+            # Varying Left Barrier (UL)
+            syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma,
+                                    V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
+                                    Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot,
+                                    barrier_r=barrier_tot, Vdisx=Vdisx)
+            
+            Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0, solver_type=solver_type)
+            b_left_cond_left[k] = Gmat_UL[0, 0]
+            b_left_cond_right[k] = Gmat_UL[1, 1]
+            
             
         idx_sym = np.argmin(np.abs(barrier_arr - barrier_tot))
         b_right_cond_left = b_right_cond_left / (b_right_cond_left[idx_sym] if b_right_cond_left[idx_sym] != 0 else 1.0)
         b_right_cond_right = b_right_cond_right / (b_right_cond_right[idx_sym] if b_right_cond_right[idx_sym] != 0 else 1.0)
-        if len(b_left_cond_left) > 0 and b_left_cond_left[idx_sym] != 0:
-            b_left_cond_left = b_left_cond_left / b_left_cond_left[idx_sym]
-        if len(b_left_cond_right) > 0 and b_left_cond_right[idx_sym] != 0:
-            b_left_cond_right = b_left_cond_right / b_left_cond_right[idx_sym]
+        b_left_cond_left = b_left_cond_left / (b_left_cond_left[idx_sym] if b_left_cond_left[idx_sym] != 0 else 1.0)
+        b_left_cond_right = b_left_cond_right / (b_left_cond_right[idx_sym] if b_left_cond_right[idx_sym] != 0 else 1.0)
 
-        r_Gll, r_GRR = b_right_cond_left, b_right_cond_right #varying left barrier and getting local conductances
+        r_Gll, r_GRR = b_right_cond_left, b_right_cond_right
+        l_Gll, l_GRR = b_left_cond_left, b_left_cond_right
         
         rG_corr = hp.calc_invariant_metric(r_Gll, r_GRR)
+        lG_corr = hp.calc_invariant_metric(l_Gll, l_GRR)
     
     
     results = {
@@ -208,7 +218,7 @@ def worker_simulation_step(iter_data, static_params):
         'b_left_cond_left': b_left_cond_left,
         'b_left_cond_right': b_left_cond_right,
         'rG_corr':rG_corr,
-        'lG_corr':0,
+        'lG_corr':lG_corr,
         'spectrum':spectrum,
         'peak_right':pk_r,
         'peak_left':pk_l,
