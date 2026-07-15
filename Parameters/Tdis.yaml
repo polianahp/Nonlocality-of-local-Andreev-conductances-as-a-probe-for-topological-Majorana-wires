@@ -13,7 +13,7 @@ Vz_min: 0.0
 Vz_dist: 0.02
 
 # Simulation Resolution
-Upoints: 30
+Upoints: 101
 num_engs: 51
 acceleration_type: "parallel"
 weight_threshold: 0.8

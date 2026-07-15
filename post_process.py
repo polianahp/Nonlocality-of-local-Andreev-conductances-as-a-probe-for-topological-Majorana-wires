@@ -5,6 +5,7 @@ import ast
 import argparse
 from pathlib import Path
 import numpy as np
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
@@ -137,11 +138,11 @@ def main():
     parser.add_argument("--window", type=float, default=0.03, help="Peak window threshold.")
     parser.add_argument("--stability-radius", type=float, default=0.025, help="Stability radius.")
     parser.add_argument("--stability-frac", type=float, default=1.0, help="Stability fraction.")
-    parser.add_argument("--output", type=str, default="Plots/spectra_cut.png", help="Path to save the spectra plot.")
-    parser.add_argument("--corr-output", type=str, default="Plots/correlation_cut.png", help="Path to save the correlation plot.")
-    parser.add_argument("--gap-output", type=str, default="Plots/gap_nonlocal_cut.png", help="Path to save the gap and nonlocal conductance plot.")
-    parser.add_argument("--peaks-output", type=str, default="Plots/peaks_cut.png", help="Path to save the peak width and height plot.")
-    parser.add_argument("--overlap-output", type=str, default="Plots/overlap_plot.png", help="Path to save the 2D overlay plot.")
+    parser.add_argument("--output", type=str, default="Plots/Tdis_pfaff4/spectra_cut.png", help="Path to save the spectra plot.")
+    parser.add_argument("--corr-output", type=str, default="Plots/Tdis_pfaff4/correlation_cut.png", help="Path to save the correlation plot.")
+    parser.add_argument("--gap-output", type=str, default="Plots/Tdis_pfaff4/gap_nonlocal_cut.png", help="Path to save the gap and nonlocal conductance plot.")
+    parser.add_argument("--peaks-output", type=str, default="Plots/Tdis_pfaff4/peaks_cut.png", help="Path to save the peak width and height plot.")
+    parser.add_argument("--overlap-output", type=str, default="Plots/Tdis_pfaff4/overlap_plot.png", help="Path to save the 2D overlay plot.")
     parser.add_argument("--single-points", type=str, default="[]", help="List of (V_z, mu) tuples for single point plotting, e.g. '[(0.45323, 3.4564)]'")
     args = parser.parse_args()
 
@@ -170,12 +171,14 @@ def main():
     peaks_right_path = dirname / "peaks_right.npy"
     brcl_path = dirname / "barrier_right_conductance_left_arr.npy"
     brcr_path = dirname / "barrier_right_conductance_right_arr.npy"
+    blcl_path = dirname / "barrier_left_conductance_left_arr.npy"
+    blcr_path = dirname / "barrier_left_conductance_right_arr.npy"
     glr_path = dirname / "barrier_right_GLR.npy"
     grl_path = dirname / "barrier_right_GRL.npy"
     gap_path = dirname / "topological_gap.npy"
 
     for filepath in [params_path, pdi_data_path, params_list_path, peaks_left_path, peaks_right_path,
-                     brcl_path, brcr_path, glr_path, grl_path, gap_path]:
+                     brcl_path, brcr_path, blcl_path, blcr_path, glr_path, grl_path, gap_path]:
         if not filepath.exists():
             print(f"Error: Missing required file {filepath}")
             sys.exit(1)
@@ -187,6 +190,8 @@ def main():
     peaks_right = np.load(peaks_right_path, allow_pickle=True)
     brcl_all = np.load(brcl_path, allow_pickle=True)
     brcr_all = np.load(brcr_path, allow_pickle=True)
+    blcl_all = np.load(blcl_path, allow_pickle=True)
+    blcr_all = np.load(blcr_path, allow_pickle=True)
     glr_all = np.load(glr_path, allow_pickle=True)
     grl_all = np.load(grl_path, allow_pickle=True)
     gap_all = np.load(gap_path, allow_pickle=True)
@@ -210,12 +215,13 @@ def main():
         pdi_winding = pdi_data[:, 2]
     I = hp.filter_pdi(pdi_winding, thresh=args.pdi_thresh)
 
-    # Calculate full correlations
-    print("Computing correlations...")
-    corrs = np.array([hp.calc_correlation(brcl_all[i], brcr_all[i]) for i in range(brcl_all.shape[0])])
+    # Calculate full correlations for Right and Left sweeps
+    print("Computing correlations for Right and Left barrier sweeps...")
+    corrs_R = np.array([hp.calc_correlation(brcl_all[i], brcr_all[i]) for i in range(brcl_all.shape[0])])
+    corrs_L = np.array([hp.calc_correlation(blcl_all[i], blcr_all[i]) for i in range(blcl_all.shape[0])])
 
-    # Calculate decision map prot_dat
-    print("Calculating protocol decision map (prot_dat)...")
+    # Calculate decision map prot_dat for Right and Left sweeps
+    print("Calculating protocol decision maps (prot_dat)...")
     params = {
         "check_correlation"      : True,
         "check_resonance_peak"   : False,
@@ -225,23 +231,20 @@ def main():
         "check_peak_window"      : True,
         "check_island_stability" : True,
         
-        "corr_thresh"     : 0.7,
-        "window"          : 0.03,
-        "stability_radius" : 0.025,
-        "stability_frac"  : 1.0
+        "corr_thresh"     : args.corr_thresh,
+        "window"          : args.window,
+        "stability_radius" : args.stability_radius,
+        "stability_frac"  : args.stability_frac
     }
 
-    prot_dat = hp.calc_protocol_v3(
-        corrs,
-        peaks_left,
-        peaks_right,
-        None,
-        pdi_data,
-        params
-    )
+    prot_dat_R = hp.calc_protocol_v3(corrs_R, peaks_left, peaks_right, None, pdi_data, params)
+    prot_dat_L = hp.calc_protocol_v3(corrs_L, peaks_left, peaks_right, None, pdi_data, params)
+
+    both_corr_above = ((corrs_L > args.corr_thresh) & (corrs_R > args.corr_thresh)).astype(float)
+    both_prot_dat = ((prot_dat_L == 1.0) & (prot_dat_R == 1.0)).astype(float)
 
     # ==========================================
-    # STAGE 1: Generate Path and Plot 2D Overlay Map (Matplotlib)
+    # STAGE 1: Generate Path and Plot 2D Overlay Maps (Matplotlib)
     # ==========================================
     print(f"Generating point path along the cut: mu=({args.mu_start} -> {args.mu_end}), Vz=({args.vz_start} -> {args.vz_end})...")
     pts, sampled_indices = generate_point_path(pdi_data, args.N, args.resl, args.mu_start, args.mu_end, args.vz_start, args.vz_end)
@@ -257,48 +260,68 @@ def main():
     vz_values = pts[:, 1]
     closest_vz_idx = int(np.argmin(np.abs(vz_values - args.target_vz)))
     target_mu_val = pts[closest_vz_idx, 0]
-
-    print("Generating 2D overlay plot...")
-    unique_mu, unique_vz, rgba = create_overlay_rgba(mu, V_z, I, prot_dat)
-
-    fig_overlay, ax_overlay = plt.subplots(figsize=(6, 8), dpi=150)
-    ax_overlay.imshow(rgba, origin='lower', extent=[unique_vz[0], unique_vz[-1], unique_mu[0], unique_mu[-1]], aspect='auto')
-
-    # Draw the exact cut path taken
-    ax_overlay.plot([args.vz_start, args.vz_end], [args.mu_start, args.mu_end], color='black', linestyle='-', linewidth=2, zorder=4)
-    # Draw the single point at the target Vz along the cut path
     target_vz_pt = vz_values[closest_vz_idx]
     target_mu_pt = target_mu_val
-    ax_overlay.scatter(target_vz_pt, target_mu_pt, color='black', edgecolor='white', s=40, zorder=5)
 
-    ax_overlay.set_title('Topological Region vs Protocol Positive Overlay', fontsize=12, pad=15)
-    ax_overlay.set_xlabel(r'Zeeman Field $V_z$', fontsize=11)
-    ax_overlay.set_ylabel(r'Chemical Potential $\mu$', fontsize=11)
-    ax_overlay.set_xlim(0.0, 1.2)
-    ax_overlay.set_ylim(0.0, 4.5)
-    ax_overlay.spines['top'].set_visible(False)
-    ax_overlay.spines['right'].set_visible(False)
+    def save_2d_overlay_plot(indicator_dat, label_positive, out_path, title_text):
+        unique_mu, unique_vz, rgba = create_overlay_rgba(mu, V_z, I, indicator_dat)
+        fig_overlay, ax_overlay = plt.subplots(figsize=(6, 8), dpi=150)
+        ax_overlay.imshow(rgba, origin='lower', extent=[unique_vz[0], unique_vz[-1], unique_mu[0], unique_mu[-1]], aspect='auto')
 
-    red_patch = mpatches.Patch(color=(1.0, 0.5, 0.5), label='Protocol Positive (prot_dat = 1)')
-    blue_patch = mpatches.Patch(color=(0.5, 0.5, 1.0), label='Topological (I = 1)')
-    purple_patch = mpatches.Patch(color=(0.6, 0.25, 0.6), label='Overlap (Both = 1)')
-    
-    cut_line_handle = mlines.Line2D([], [], color='black', linestyle='-', label='1D Cut Path')
-    target_pt_handle = mlines.Line2D([], [], color='black', marker='o', markerfacecolor='black', markeredgecolor='white', markersize=6, linestyle='None', label=rf'Target $V_z = {target_vz_pt:.4f}$')
-    
-    ax_overlay.legend(handles=[red_patch, blue_patch, purple_patch, cut_line_handle, target_pt_handle], bbox_to_anchor=(0.5, -0.15),
-                      loc='upper center', ncol=2, fontsize=9, frameon=True)
+        ax_overlay.plot([args.vz_start, args.vz_end], [args.mu_start, args.mu_end], color='black', linestyle='-', linewidth=2, zorder=4)
+        ax_overlay.scatter(target_vz_pt, target_mu_pt, color='black', edgecolor='white', s=40, zorder=5)
 
-    overlay_out = Path(args.overlap_output)
-    if not overlay_out.is_absolute():
-        overlay_out = Path(PathConfigs.ROOT) / overlay_out
-    overlay_out.parent.mkdir(parents=True, exist_ok=True)
+        ax_overlay.set_title(title_text, fontsize=12, pad=15)
+        ax_overlay.set_xlabel(r'Zeeman Field $V_z$', fontsize=11)
+        ax_overlay.set_ylabel(r'Chemical Potential $\mu$', fontsize=11)
+        ax_overlay.set_xlim(0.0, 1.2)
+        ax_overlay.set_ylim(0.0, 4.5)
+        ax_overlay.spines['top'].set_visible(False)
+        ax_overlay.spines['right'].set_visible(False)
 
-    fig_overlay.tight_layout()
-    fig_overlay.subplots_adjust(bottom=0.22)
-    fig_overlay.savefig(overlay_out, dpi=300, bbox_inches='tight')
-    plt.close(fig_overlay)
-    print(f"Saved 2D overlay plot to: {overlay_out}")
+        red_patch = mpatches.Patch(color=(1.0, 0.5, 0.5), label=label_positive)
+        blue_patch = mpatches.Patch(color=(0.5, 0.5, 1.0), label='Topological (I = 1)')
+        purple_patch = mpatches.Patch(color=(0.6, 0.25, 0.6), label='Overlap (Both = 1)')
+        
+        cut_line_handle = mlines.Line2D([], [], color='black', linestyle='-', label='1D Cut Path')
+        target_pt_handle = mlines.Line2D([], [], color='black', marker='o', markerfacecolor='black', markeredgecolor='white', markersize=6, linestyle='None', label=rf'Target $V_z = {target_vz_pt:.4f}$')
+        
+        ax_overlay.legend(handles=[red_patch, blue_patch, purple_patch, cut_line_handle, target_pt_handle], bbox_to_anchor=(0.5, -0.15),
+                          loc='upper center', ncol=2, fontsize=9, frameon=True)
+
+        overlay_out = Path(out_path)
+        if not overlay_out.is_absolute():
+            overlay_out = Path(PathConfigs.ROOT) / overlay_out
+        overlay_out.parent.mkdir(parents=True, exist_ok=True)
+
+        fig_overlay.tight_layout()
+        fig_overlay.subplots_adjust(bottom=0.22)
+        fig_overlay.savefig(overlay_out, dpi=300, bbox_inches='tight')
+        plt.close(fig_overlay)
+        print(f"Saved 2D overlay plot to: {overlay_out}")
+        return unique_mu, unique_vz, rgba
+
+    print("Generating 2D overlay plots for Right, Left, and Both sweeps...")
+    unique_mu, unique_vz, rgba = save_2d_overlay_plot(
+        prot_dat_R, 'Protocol Positive (prot_dat = 1)', args.overlap_output,
+        'Topological Region vs Right Sweep Protocol Overlay'
+    )
+    overlap_dir = Path(args.overlap_output).parent
+    save_2d_overlay_plot(
+        prot_dat_L, 'Left Sweep Protocol Positive', overlap_dir / "overlap_plot_L.png",
+        'Topological Region vs Left Sweep Protocol Overlay'
+    )
+    save_2d_overlay_plot(
+        both_corr_above, f'Both Sweeps Corr > {args.corr_thresh}', overlap_dir / "overlap_both_corr.png",
+        'Topological Region vs Both Barrier Sweeps Corr > Threshold'
+    )
+    save_2d_overlay_plot(
+        both_prot_dat, 'Both Sweeps Protocol Positive', overlap_dir / "overlap_both_prot.png",
+        'Topological Region vs Both Sweeps Protocol Overlay'
+    )
+
+    # Keep prot_dat as prot_dat_R for consistent 1D cut background shading
+    prot_dat = prot_dat_R
 
     # ==========================================
     # STAGE 2: Slice Path-Specific Data (1D)
@@ -310,6 +333,8 @@ def main():
     pr = peaks_right[sampled_indices]
     brcl = brcl_all[sampled_indices]
     brcr = brcr_all[sampled_indices]
+    blcl = blcl_all[sampled_indices]
+    blcr = blcr_all[sampled_indices]
     glr_sym = glr_all[sampled_indices, 0]
     grl_sym = grl_all[sampled_indices, 0]
     glr_path_data = glr_all[sampled_indices]
@@ -330,10 +355,12 @@ def main():
         )
 
     # Compute correlation and peaks details along the cut
-    corr_vals = np.zeros(actual_N)
+    corr_vals_R = np.zeros(actual_N)
+    corr_vals_L = np.zeros(actual_N)
     corr_nonlocal_vals = np.zeros(actual_N)
     for i in range(actual_N):
-        corr_vals[i] = hp.calc_correlation(brcl[i], brcr[i])
+        corr_vals_R[i] = hp.calc_correlation(brcl[i], brcr[i])
+        corr_vals_L[i] = hp.calc_correlation(blcl[i], blcr[i])
         corr_nonlocal_vals[i] = hp.calc_correlation(glr_path_data[i], grl_path_data[i])
 
     # Left peak widths and heights
@@ -431,18 +458,51 @@ def main():
     by_label = dict(zip(labels, handles))
     ax_spec.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(0.5, -0.45), loc='upper center', ncol=3, fontsize=10)
 
-    # --- Plot 2: Local & Nonlocal Conductance Correlation ---
-    fig_corr, ax_corr = plt.subplots(figsize=(10, 7.5), dpi=150)
-    add_common_elements(ax_corr)
-    
-    ax_corr.plot(range(actual_N), corr_vals, '-', color='forestgreen', linewidth=2.5, label="Local Conductance Correlation", zorder=3)
-    ax_corr.plot(range(actual_N), corr_nonlocal_vals, '--', color='darkorchid', linewidth=2.0, label="Nonlocal Conductance Correlation", zorder=3)
-    ax_corr.set_ylabel("Correlation", fontsize=12)
-    ax_corr.set_title("Conductance Correlation along Cut", fontsize=13)
-    
-    handles, labels = ax_corr.get_legend_handles_labels()
+    # --- Plot 2A: Right Sweep Local & Nonlocal Conductance Correlation ---
+    fig_corr_R, ax_corr_R = plt.subplots(figsize=(10, 7.5), dpi=150)
+    add_common_elements(ax_corr_R)
+    ax_corr_R.plot(range(actual_N), corr_vals_R, '-', color='forestgreen', linewidth=2.5, label="Right Sweep Conductance Correlation", zorder=3)
+    ax_corr_R.plot(range(actual_N), corr_nonlocal_vals, '--', color='darkorchid', linewidth=2.0, label="Nonlocal Conductance Correlation", zorder=3)
+    ax_corr_R.axhline(args.corr_thresh, color='black', linestyle=':', linewidth=1.5, label=f"Threshold ({args.corr_thresh})", zorder=2)
+    ax_corr_R.set_ylabel("Correlation", fontsize=12)
+    ax_corr_R.set_title("Right Barrier Sweep Conductance Correlation along Cut", fontsize=13)
+    handles, labels = ax_corr_R.get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
-    ax_corr.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(0.5, -0.45), loc='upper center', ncol=3, fontsize=10)
+    ax_corr_R.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(0.5, -0.45), loc='upper center', ncol=3, fontsize=10)
+
+    # --- Plot 2B: Left Sweep Local & Nonlocal Conductance Correlation ---
+    fig_corr_L, ax_corr_L = plt.subplots(figsize=(10, 7.5), dpi=150)
+    add_common_elements(ax_corr_L)
+    ax_corr_L.plot(range(actual_N), corr_vals_L, '-', color='dodgerblue', linewidth=2.5, label="Left Sweep Conductance Correlation", zorder=3)
+    ax_corr_L.plot(range(actual_N), corr_nonlocal_vals, '--', color='darkorchid', linewidth=2.0, label="Nonlocal Conductance Correlation", zorder=3)
+    ax_corr_L.axhline(args.corr_thresh, color='black', linestyle=':', linewidth=1.5, label=f"Threshold ({args.corr_thresh})", zorder=2)
+    ax_corr_L.set_ylabel("Correlation", fontsize=12)
+    ax_corr_L.set_title("Left Barrier Sweep Conductance Correlation along Cut", fontsize=13)
+    handles, labels = ax_corr_L.get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    ax_corr_L.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(0.5, -0.45), loc='upper center', ncol=3, fontsize=10)
+
+    # --- Plot 2C: Combined Both Sweeps Conductance Correlation ---
+    fig_corr_both, ax_corr_both = plt.subplots(figsize=(10, 7.5), dpi=150)
+    add_common_elements(ax_corr_both)
+    ax_corr_both.plot(range(actual_N), corr_vals_R, '-', color='forestgreen', linewidth=2.5, label="Right Sweep Conductance Correlation", zorder=3)
+    ax_corr_both.plot(range(actual_N), corr_vals_L, '-', color='dodgerblue', linewidth=2.0, label="Left Sweep Conductance Correlation", zorder=3)
+    ax_corr_both.plot(range(actual_N), corr_nonlocal_vals, '--', color='darkorchid', linewidth=2.0, label="Nonlocal Conductance Correlation", zorder=3)
+    ax_corr_both.axhline(args.corr_thresh, color='red', linestyle='--', linewidth=1.5, label=f"Threshold ({args.corr_thresh})", zorder=3)
+    
+    both_above_cut = (corr_vals_R > args.corr_thresh) & (corr_vals_L > args.corr_thresh)
+    span_added = False
+    for idx in range(actual_N):
+        if both_above_cut[idx]:
+            ax_corr_both.axvspan(idx - 0.5, idx + 0.5, color='coral', alpha=0.35, zorder=1,
+                                 label="Both Sweeps > Threshold" if not span_added else "")
+            span_added = True
+
+    ax_corr_both.set_ylabel("Correlation", fontsize=12)
+    ax_corr_both.set_title("Both Barrier Sweeps Conductance Correlation along Cut", fontsize=13)
+    handles, labels = ax_corr_both.get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    ax_corr_both.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(0.5, -0.45), loc='upper center', ncol=3, fontsize=10)
 
     # --- Plot 3: Topological Gap and Nonlocal Conductance (twin-y) ---
     fig_gap, ax_gap = plt.subplots(figsize=(10, 7.5), dpi=150)
@@ -499,14 +559,17 @@ def main():
     by_label = dict(zip(labels_w + labels_h, handles_w + handles_h))
     ax_width.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(0.5, -0.45), loc='upper center', ncol=3, fontsize=10)
 
-    # Save all 4 plots
-    for output_name, figure in [
-        (args.output, fig_spectra),
-        (args.corr_output, fig_corr),
-        (args.gap_output, fig_gap),
-        (args.peaks_output, fig_peaks)
+    # Save all plots
+    plots_dir = Path(args.output).parent
+    for output_path, figure in [
+        (Path(args.output), fig_spectra),
+        (Path(args.corr_output), fig_corr_R),
+        (plots_dir / "correlation_cut_R.png", fig_corr_R),
+        (plots_dir / "correlation_cut_L.png", fig_corr_L),
+        (plots_dir / "correlation_cut_both.png", fig_corr_both),
+        (Path(args.gap_output), fig_gap),
+        (Path(args.peaks_output), fig_peaks)
     ]:
-        output_path = Path(output_name)
         if not output_path.is_absolute():
             output_path = Path(PathConfigs.ROOT) / output_path
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -546,12 +609,13 @@ def main():
             folder_name = f"Vz{vz_val:.3f}".replace('.', '') + "_" + f"mu{mu_val:.3f}".replace('.', '')
             pt_dir = single_points_dir / folder_name
             pt_dir.mkdir(parents=True, exist_ok=True)
-            print(f"[{pt_idx+1}/{len(single_points)}] Generating plots for Vz={vz_val}, mu={mu_val} -> {pt_dir}")
+            print(f"[{pt_idx+1}/{len(single_points)}] Generating plots for Vz={vz_val}, pmu={mu_val} -> {pt_dir}")
+            print(f"  Holding Left barrier constant at non-zero UL={barrier_l:.3f} meV while sweeping Right barrier UR...")
 
             # 1. Right Barrier Sweep (varying UR, holding UL=barrier_l)
             cond_left_R = np.zeros(num_sweep_points)
             cond_right_R = np.zeros(num_sweep_points)
-            for k in range(num_sweep_points):
+            for k in tqdm(range(num_sweep_points), desc=f"Right Sweep (UL={barrier_l:.2f})"):
                 syst_R = hp.build_system(
                     t=t, mu=mu_val, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz_val,
                     alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
@@ -561,10 +625,14 @@ def main():
                 cond_left_R[k] = cL
                 cond_right_R[k] = cR
 
+            np.save(pt_dir / "cond_left_RightSweep.npy", cond_left_R)
+            np.save(pt_dir / "cond_right_RightSweep.npy", cond_right_R)
+
+            print(f"  Holding Right barrier constant at non-zero UR={barrier_l:.3f} meV while sweeping Left barrier UL...")
             # 2. Left Barrier Sweep (varying UL, holding UR=barrier_l)
             cond_left_L = np.zeros(num_sweep_points)
             cond_right_L = np.zeros(num_sweep_points)
-            for k in range(num_sweep_points):
+            for k in tqdm(range(num_sweep_points), desc=f"Left Sweep (UR={barrier_l:.2f})"):
                 syst_L = hp.build_system(
                     t=t, mu=mu_val, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz_val,
                     alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
@@ -573,6 +641,9 @@ def main():
                 cL, cR = hp.calc_conductance(syst_L, energy=0.0, return_smatrix=False)
                 cond_left_L[k] = cL
                 cond_right_L[k] = cR
+
+            np.save(pt_dir / "cond_left_LeftSweep.npy", cond_left_L)
+            np.save(pt_dir / "cond_right_LeftSweep.npy", cond_right_L)
 
             x_data = barrier_sweep / (barrier_l if barrier_l != 0 else 1.0)
             idx_sym = np.argmin(np.abs(barrier_sweep - barrier_l))
@@ -657,36 +728,43 @@ def main():
             fig.savefig(pt_dir / "wavefunction.png", dpi=300, bbox_inches='tight')
             plt.close(fig)
 
-        # 5. Generate point_map.png
-        print("Generating 2D single point map (point_map.png)...")
-        fig_map, ax_map = plt.subplots(figsize=(6, 8), dpi=150)
-        ax_map.imshow(rgba, origin='lower', extent=[unique_vz[0], unique_vz[-1], unique_mu[0], unique_mu[-1]], aspect='auto')
-
+        # 5. Generate point_map_R.png, point_map_L.png, and point_map_both.png
+        print("Generating 2D single point maps (point_map_R.png, point_map_L.png, point_map_both.png)...")
         pts_array = np.array(single_points, dtype=float)
-        ax_map.scatter(pts_array[:, 0], pts_array[:, 1], color='black', edgecolor='white', s=50, zorder=5)
 
-        ax_map.set_title('Topological Region vs Protocol Overlay (Single Points)', fontsize=12, pad=15)
-        ax_map.set_xlabel(r'Zeeman Field $V_z$', fontsize=11)
-        ax_map.set_ylabel(r'Chemical Potential $\mu$', fontsize=11)
-        ax_map.set_xlim(0.0, 1.2)
-        ax_map.set_ylim(0.0, 4.5)
-        ax_map.spines['top'].set_visible(False)
-        ax_map.spines['right'].set_visible(False)
+        def save_single_points_map(prot_indicator, title_str, filename_str, label_pos):
+            unique_mu_grid, unique_vz_grid, rgba_map = create_overlay_rgba(mu, V_z, I, prot_indicator)
+            fig_map, ax_map = plt.subplots(figsize=(6, 8), dpi=150)
+            ax_map.imshow(rgba_map, origin='lower', extent=[unique_vz_grid[0], unique_vz_grid[-1], unique_mu_grid[0], unique_mu_grid[-1]], aspect='auto')
+            ax_map.scatter(pts_array[:, 0], pts_array[:, 1], color='black', edgecolor='white', s=50, zorder=5)
 
-        red_patch = mpatches.Patch(color=(1.0, 0.5, 0.5), label='Protocol Positive (prot_dat = 1)')
-        blue_patch = mpatches.Patch(color=(0.5, 0.5, 1.0), label='Topological (I = 1)')
-        purple_patch = mpatches.Patch(color=(0.6, 0.25, 0.6), label='Overlap (Both = 1)')
-        pts_handle = mlines.Line2D([], [], color='black', marker='o', markerfacecolor='black', markeredgecolor='white', markersize=7, linestyle='None', label='Single Points')
+            ax_map.set_title(title_str, fontsize=12, pad=15)
+            ax_map.set_xlabel(r'Zeeman Field $V_z$', fontsize=11)
+            ax_map.set_ylabel(r'Chemical Potential $\mu$', fontsize=11)
+            ax_map.set_xlim(0.0, 1.2)
+            ax_map.set_ylim(0.0, 4.5)
+            ax_map.spines['top'].set_visible(False)
+            ax_map.spines['right'].set_visible(False)
 
-        ax_map.legend(handles=[red_patch, blue_patch, purple_patch, pts_handle], bbox_to_anchor=(0.5, -0.15),
-                      loc='upper center', ncol=2, fontsize=9, frameon=True)
+            red_patch = mpatches.Patch(color=(1.0, 0.5, 0.5), label=label_pos)
+            blue_patch = mpatches.Patch(color=(0.5, 0.5, 1.0), label='Topological (I = 1)')
+            purple_patch = mpatches.Patch(color=(0.6, 0.25, 0.6), label='Overlap (Both = 1)')
+            pts_handle = mlines.Line2D([], [], color='black', marker='o', markerfacecolor='black', markeredgecolor='white', markersize=7, linestyle='None', label='Single Points')
 
-        fig_map.tight_layout()
-        fig_map.subplots_adjust(bottom=0.22)
-        map_out = single_points_dir / "point_map.png"
-        fig_map.savefig(map_out, dpi=300, bbox_inches='tight')
-        plt.close(fig_map)
-        print(f"Saved point map to: {map_out}")
+            ax_map.legend(handles=[red_patch, blue_patch, purple_patch, pts_handle], bbox_to_anchor=(0.5, -0.15),
+                          loc='upper center', ncol=2, fontsize=9, frameon=True)
+
+            fig_map.tight_layout()
+            fig_map.subplots_adjust(bottom=0.22)
+            map_out = single_points_dir / filename_str
+            fig_map.savefig(map_out, dpi=300, bbox_inches='tight')
+            plt.close(fig_map)
+            print(f"Saved point map to: {map_out}")
+
+        save_single_points_map(prot_dat_R, 'Topological Region vs Right Sweep Protocol (Single Points)', 'point_map_R.png', 'Right Protocol Positive')
+        save_single_points_map(prot_dat_L, 'Topological Region vs Left Sweep Protocol (Single Points)', 'point_map_L.png', 'Left Protocol Positive')
+        save_single_points_map(both_prot_dat, 'Topological Region vs Both Sweeps Protocol (Single Points)', 'point_map_both.png', 'Both Protocol Positive')
+        save_single_points_map(prot_dat_R, 'Topological Region vs Protocol Overlay (Single Points)', 'point_map.png', 'Protocol Positive')
 
 if __name__ == "__main__":
     main()
