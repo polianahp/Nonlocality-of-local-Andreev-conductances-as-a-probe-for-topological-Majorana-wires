@@ -40,7 +40,7 @@ DATA_DIRS = [
 DATA_DIR = DATA_DIRS[0]  # Fallback reference
 
 # Output folder where plots and CSV results will be saved
-PLOT_DIR = "Plots/FPCA_dis_realizations"
+PLOT_DIR = "Plots/FPCA_dis_realizations_maxnorm"
 
 # ---------- Curve Type Include List ----------
 # Registry of all possible curve types and their corresponding .npy filenames.
@@ -60,7 +60,7 @@ INCLUDE_CURVE_TYPES = ["BR_LL", "BR_RR", "BL_LL", "BL_RR"]
 #   "max"       : Normalize each curve G(U) by its maximum value across the barrier sweep.
 #   "symmetric" : Normalize each curve G(U) by its value at the symmetric barrier point U_sym.
 #   "none"      : Use raw conductance curves.
-NORMALIZE_METHOD = "symmetric"
+NORMALIZE_METHOD = "max"
 SYMMETRIC_BARRIER_VALUE = 2.0             # Only used if NORMALIZE_METHOD == "symmetric"
 
 # ---------- Functional Representation (FDataGrid vs FDataBasis) ----------
@@ -112,7 +112,7 @@ def silhouette_scorer(estimator, X):
     # Silhouette score requires at least 2 distinct clusters
     if len(np.unique(labels)) < 2:
         return -1.0
-    return silhouette_score(scores, labels)
+    return silhouette_score(scores, labels, sample_size=10000, random_state=RANDOM_STATE)
 
 
 def main():
@@ -147,12 +147,8 @@ def main():
         raise RuntimeError(f"No valid dataset folders containing {BARRIER_FILE}.npy found across: {DATA_DIRS}")
     print(f"  Total realization subfolders to process: {len(subdirs)}")
 
-    # Establish master reference barrier_arr across all subfolders (use highest resolution grid encountered)
-    master_barrier_arr = None
-    for sub in subdirs:
-        sub_b = np.load(sub / f"{BARRIER_FILE}.npy")
-        if master_barrier_arr is None or len(sub_b) > len(master_barrier_arr):
-            master_barrier_arr = sub_b
+    # Establish reference barrier_arr across all subfolders
+    master_barrier_arr = np.load(subdirs[0] / f"{BARRIER_FILE}.npy")
 
     all_curves = []
     all_labels = []
@@ -211,11 +207,12 @@ def main():
             elif NORMALIZE_METHOD != "none":
                 raise ValueError(f"Unknown NORMALIZE_METHOD: '{NORMALIZE_METHOD}'")
 
-            # Interpolate onto master barrier_arr if grid resolutions differ
+            # Verify sweep resolutions match exactly
             if len(sub_barrier) != len(barrier_arr) or not np.allclose(sub_barrier, barrier_arr):
-                from scipy.interpolate import interp1d
-                interp_func = interp1d(sub_barrier, arr, axis=1, kind="cubic", bounds_error=False, fill_value="extrapolate")
-                arr = interp_func(barrier_arr)
+                raise ValueError(
+                    f"Resolution mismatch in realization '{sub.name}': "
+                    f"sweep grid length is {len(sub_barrier)}, but expected {len(barrier_arr)} to match master grid."
+                )
 
             sub_curve_data[label] = arr
             n_params, _ = arr.shape
@@ -605,12 +602,12 @@ def generate_plots_for_model(
                 vmax=n_clusters - 0.5,
             )
 
-            # Contour for ensemble average topological phase boundary (>= 50% of realizations topological)
+            # Contour for ensemble average topological phase boundary (>= 75% of realizations topological)
             ax.contour(
                 unique_vz,
                 unique_mu,
                 mean_pfaff_grid,
-                levels=[0.5],
+                levels=[0.75],
                 colors=["black"],
                 linewidths=3.0,
                 alpha=0.9,
@@ -619,7 +616,7 @@ def generate_plots_for_model(
                 unique_vz,
                 unique_mu,
                 mean_pfaff_grid,
-                levels=[0.5, 1.0],
+                levels=[0.75, 1.0],
                 colors=["black"],
                 alpha=0.45,
             )
@@ -627,7 +624,7 @@ def generate_plots_for_model(
             ax.set_xlabel("$V_Z$", fontsize=13)
             ax.set_ylabel("$\\mu$", fontsize=13)
             ax.set_title(
-                f"Ensemble Majority Phase Map: {label} Conductance Curves\n(FPC={n_components}, K={n_clusters} | Dark overlay = Topological in >=50% realizations)",
+                f"Ensemble Majority Phase Map: {label} Conductance Curves\n(FPC={n_components}, K={n_clusters} | Dark overlay = Topological in >=75% realizations)",
                 fontsize=13,
             )
 

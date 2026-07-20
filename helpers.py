@@ -977,12 +977,45 @@ def calc_invariant_metric(f1, f2):
         
     
 
-def calc_correlation(f1,f2):
-    f1 = f1/f1[0]
-    f2 = f2/f2[0]
+import sys
 
-    corr = np.dot(f1,f2)/(np.linalg.norm(f1)*np.linalg.norm(f2))
-    
+def calc_correlation(f1, f2, barrier_arr=None):
+    if barrier_arr is None:
+        try:
+            frame = sys._getframe(1)
+            while frame:
+                if 'barrier_arr' in frame.f_locals and frame.f_locals['barrier_arr'] is not None:
+                    arr = frame.f_locals['barrier_arr']
+                    if hasattr(arr, 'shape') and len(arr) == len(f1):
+                        barrier_arr = arr
+                        break
+                if 'barrier_arr' in frame.f_globals and frame.f_globals['barrier_arr'] is not None:
+                    arr = frame.f_globals['barrier_arr']
+                    if hasattr(arr, 'shape') and len(arr) == len(f1):
+                        barrier_arr = arr
+                        break
+                frame = frame.f_back
+        except Exception:
+            pass
+
+    if barrier_arr is not None and hasattr(barrier_arr, '__len__') and len(barrier_arr) == len(f1):
+        pos_mask = np.asarray(barrier_arr) >= 0.0
+        if np.any(pos_mask):
+            f1 = np.asarray(f1)[pos_mask]
+            f2 = np.asarray(f2)[pos_mask]
+
+    if len(f1) == 0 or len(f2) == 0:
+        return 0.0
+
+    f1 = np.asarray(f1) / (f1[0] if f1[0] != 0 else 1.0)
+    f2 = np.asarray(f2) / (f2[0] if f2[0] != 0 else 1.0)
+
+    norm_f1 = np.linalg.norm(f1)
+    norm_f2 = np.linalg.norm(f2)
+    if norm_f1 == 0 or norm_f2 == 0:
+        return 0.0
+
+    corr = np.dot(f1, f2) / (norm_f1 * norm_f2)
     return corr
 
 
@@ -1732,3 +1765,315 @@ def calc_protocol_v3(corr_map, peaks_left, peaks_right, mono_pass, pdi_arr, para
         prot_dat *= stable_map
         
     return prot_dat
+
+
+def antisymmetric_nonlocal_part(conductance: np.ndarray) -> np.ndarray:
+    """
+    Extracts the anti-symmetric (odd) component along the bias axis (last axis).
+    Assumes bias grid is symmetric around 0 (e.g., -V_max to +V_max).
+    
+    Formula: G_antisym(V) = [G(V) - G(-V)] / 2
+    """
+    return (conductance - conductance[..., ::-1]) / 2.0
+
+
+def extract_nonlocal_gap(
+    bias: np.ndarray,
+    g_nonlocal: np.ndarray,
+    median_size: int = 2,
+    gauss_sigma: float = 0.5,
+    gap_threshold_factor: float = 0.05,
+    upper_conductance_threshold: float = 1e6,
+    noise_threshold: float = 0.0,
+    max_gap_mode: str = "max_bias"
+):
+    """
+    Extracts the topological excitation gap Delta_ex from nonlocal conductance
+    using anti-symmetrization and dynamic thresholding.
+    
+    Parameters:
+        bias: 1D array of bias voltages/energies (must be symmetric around 0).
+        g_nonlocal: 2D array [N_params, N_bias] of nonlocal conductance (or 1D array [N_bias]).
+        median_size: Size of median pre-filter (eliminates outliers/spikes).
+        gauss_sigma: Standard deviation for Gaussian smoothing.
+        gap_threshold_factor: Fraction of peak conductance to define gap edge (default: 0.05).
+        upper_conductance_threshold: Ceiling for peak conductance scaling.
+        noise_threshold: Absolute noise floor threshold.
+        max_gap_mode: "max_bias" returns V_max if gapless/fully-gapped beyond grid, "nan" returns np.nan.
+        
+    Returns:
+        gap_values: 1D array of extracted topological gap Delta_ex for each trace (or scalar if input is 1D).
+        filtered_antisym: 2D array (or 1D) of the smoothed anti-symmetric conductance.
+        binary_mask: 2D boolean array (or 1D) showing above-gap regions.
+    """
+    import scipy.ndimage
+    
+    # 1. Median Filter (if median_size > 1)
+    if median_size > 1:
+        if g_nonlocal.ndim == 2:
+            g_med = scipy.ndimage.median_filter(g_nonlocal, size=(1, median_size))
+        else:
+            g_med = scipy.ndimage.median_filter(g_nonlocal, size=median_size)
+    else:
+        g_med = g_nonlocal.copy()
+        
+    # 2. Anti-symmetrize along bias axis
+    g_antisym = antisymmetric_nonlocal_part(g_med)
+    
+    # 3. Gaussian smoothing along bias axis
+    if gauss_sigma > 0:
+        if g_antisym.ndim == 2:
+            g_filt = scipy.ndimage.gaussian_filter(g_antisym, sigma=(0, gauss_sigma))
+        else:
+            g_filt = scipy.ndimage.gaussian_filter(g_antisym, sigma=gauss_sigma)
+    else:
+        g_filt = g_antisym.copy()
+        
+    # 4. Dynamic thresholding and binary masking
+    izero = np.argmin(np.abs(bias))
+    n_params = g_filt.shape[0] if g_filt.ndim == 2 else 1
+    g_2d = g_filt if g_filt.ndim == 2 else g_filt[None, :]
+    
+    gap_values = np.zeros(n_params)
+    binary_mask = np.zeros_like(g_2d, dtype=bool)
+    
+    for idx in range(n_params):
+        trace = g_2d[idx]
+        peak_val = min(np.max(np.abs(trace)), upper_conductance_threshold)
+        thresh = max(gap_threshold_factor * peak_val, noise_threshold)
+        
+        mask = np.abs(trace) > thresh
+        binary_mask[idx] = mask
+        
+        # 5. Extract gap from positive bias side (from izero to end)
+        pos_bias = bias[izero:]
+        pos_mask = mask[izero:]
+        
+        above_gap_indices = np.where(pos_mask)[0]
+        if len(above_gap_indices) == 0:
+            gap_values[idx] = pos_bias[-1] if max_gap_mode == "max_bias" else np.nan
+        else:
+            first_idx = above_gap_indices[0]
+            if first_idx == 0:
+                gap_values[idx] = 0.0
+            elif first_idx == len(pos_bias) - 1:
+                gap_values[idx] = pos_bias[-1] if max_gap_mode == "max_bias" else np.nan
+            else:
+                v_low = pos_bias[first_idx - 1]
+                v_high = pos_bias[first_idx]
+                g_low = np.abs(trace[izero + first_idx - 1])
+                g_high = np.abs(trace[izero + first_idx])
+                if g_high > g_low:
+                    gap_values[idx] = v_low + (v_high - v_low) * (thresh - g_low) / (g_high - g_low)
+                else:
+                    gap_values[idx] = (v_low + v_high) / 2.0
+                
+    if g_nonlocal.ndim == 1:
+        return gap_values[0], g_filt, binary_mask[0]
+    return gap_values, g_filt, binary_mask
+
+
+def extract_nonlocal_gap_tgp(
+    bias: np.ndarray,
+    g_nonlocal: np.ndarray,
+    median_size: int = 2,
+    gauss_sigma: float = 0.0,
+    gap_threshold_factor: float = 0.05,
+    upper_conductance_threshold: float = float('inf'),
+    noise_threshold: float = 0.0,
+    max_gap_mode: str = "max_bias"
+):
+    """
+    TGP-compatible transport gap extraction from nonlocal conductance.
+    
+    Reproduces the exact algorithm from azure-quantum-tgp (tgp.two.determine_gap
+    + tgp.two.extract_gap_from_trace), translated to pure numpy/scipy.
+    
+    Key differences from extract_nonlocal_gap:
+    - Global threshold (single scalar across all traces) instead of per-trace
+    - np.max(G) signed max instead of np.max(np.abs(G))
+    - Forward midpoint interpolation instead of linear interpolation
+    - No first_idx==0 special case (gapless returns dV/2, not 0.0)
+    - Default gauss_sigma=0.0 (disabled) instead of 0.5
+    - Default upper_conductance_threshold=inf instead of 1e6
+    
+    Parameters:
+        bias: 1D array of bias voltages (must be symmetric around 0).
+        g_nonlocal: 2D array [N_params, N_bias] or 1D array [N_bias].
+        median_size: Size of median pre-filter.
+        gauss_sigma: Std dev for Gaussian smoothing (0.0 = disabled).
+        gap_threshold_factor: Fraction of global peak conductance (default 0.05).
+        upper_conductance_threshold: Ceiling for peak conductance scaling.
+        noise_threshold: Absolute noise floor threshold.
+        max_gap_mode: "max_bias" or "nan".
+        
+    Returns:
+        gap_values: 1D array (or scalar) of gap values.
+        filtered_antisym: Filtered anti-symmetric conductance.
+        binary_mask: Boolean mask of above-gap regions.
+    """
+    import scipy.ndimage
+    
+    # 1. Median Filter
+    if median_size > 1:
+        if g_nonlocal.ndim == 2:
+            g_med = scipy.ndimage.median_filter(g_nonlocal, size=(1, median_size))
+        else:
+            g_med = scipy.ndimage.median_filter(g_nonlocal, size=median_size)
+    else:
+        g_med = g_nonlocal.copy()
+        
+    # 2. Anti-symmetrize along bias axis
+    g_antisym = antisymmetric_nonlocal_part(g_med)
+    
+    # 3. Gaussian smoothing (disabled by default, matching TGP)
+    if gauss_sigma > 0:
+        if g_antisym.ndim == 2:
+            g_filt = scipy.ndimage.gaussian_filter(g_antisym, sigma=(0, gauss_sigma))
+        else:
+            g_filt = scipy.ndimage.gaussian_filter(g_antisym, sigma=gauss_sigma)
+    else:
+        g_filt = g_antisym.copy()
+        
+    # 4. Global thresholding (TGP uses one threshold for entire 2D array)
+    izero = np.argmin(np.abs(bias))
+    n_params = g_filt.shape[0] if g_filt.ndim == 2 else 1
+    g_2d = g_filt if g_filt.ndim == 2 else g_filt[None, :]
+    
+    # Global signed max across ALL traces (matches np.max(G) in TGP)
+    global_peak = np.max(g_2d)
+    f = gap_threshold_factor * min(global_peak, upper_conductance_threshold)
+    global_thresh = max(f, noise_threshold)
+    
+    gap_values = np.zeros(n_params)
+    binary_mask = np.zeros_like(g_2d, dtype=bool)
+    
+    for idx in range(n_params):
+        trace = g_2d[idx]
+        mask = np.abs(trace) > global_thresh
+        binary_mask[idx] = mask
+        
+        # 5. Extract gap from positive bias side
+        pos_bias = bias[izero:]
+        pos_mask = mask[izero:]
+        
+        above_gap_indices = np.where(pos_mask)[0]
+        if len(above_gap_indices) == 0:
+            gap_values[idx] = pos_bias[-1] if max_gap_mode == "max_bias" else np.nan
+        else:
+            first_idx = above_gap_indices[0]
+            found_gap = pos_bias[first_idx]
+            if first_idx == len(pos_bias) - 1:
+                gap_values[idx] = found_gap if max_gap_mode == "max_bias" else np.nan
+            else:
+                # Forward midpoint correction (TGP formula)
+                correction = (pos_bias[first_idx + 1] - pos_bias[first_idx]) / 2
+                gap_values[idx] = found_gap + correction
+                
+    if g_nonlocal.ndim == 1:
+        return gap_values[0], g_filt, binary_mask[0]
+    return gap_values, g_filt, binary_mask
+
+
+def nanmin_gap_combination(gap_LR: np.ndarray, gap_RL: np.ndarray) -> np.ndarray:
+    """
+    NaN-safe element-wise minimum of left and right transport gaps.
+    
+    Matches azure-quantum-tgp set_zbp_gap behavior:
+    - If one side is NaN and other is valid, preserves the valid value.
+    - If both are NaN, returns NaN.
+    - Otherwise returns min(left, right).
+    """
+    gap_LR_safe = np.where(np.isnan(gap_LR), np.inf, gap_LR)
+    gap_RL_safe = np.where(np.isnan(gap_RL), np.inf, gap_RL)
+    result = np.minimum(gap_LR_safe, gap_RL_safe)
+    return np.where(np.isinf(result), np.nan, result)
+
+
+def compute_gapped_islands_and_boundaries(
+    gap_grid: np.ndarray,
+    min_gap_threshold: float = 1e-4,
+    pct_boundary_threshold: float = 0.70,
+    variance: int = 3,
+) -> dict:
+    """
+    Identifies 2D gapped islands in parameter space, evaluates the percentage
+    of their boundary that borders a gapless region (~gap_boolean), and labels
+    islands meeting the gapless boundary criterion (e.g. >= 70%).
+
+    Parameters
+    ----------
+    gap_grid : 2D np.ndarray (Nmu, Nvz)
+        Transport gap values across parameter grid. NaN or <= min_gap_threshold indicates gapless.
+    min_gap_threshold : float
+        Minimum gap value to consider a point gapped. Default 1e-4.
+    pct_boundary_threshold : float
+        Fraction of island boundary that must touch a gapless region to qualify. Default 0.70 (70%).
+    variance : int
+        Distance tolerance in grid pixels to search for gap closing near boundary. Default 3.
+
+    Returns
+    -------
+    dict containing:
+        - 'gap_boolean': 2D bool array (True = gapped)
+        - 'labeled_islands': 2D int array (0 = background, 1..N = island ID)
+        - 'boundary_pct': dict {island_id: float}
+        - 'valid_islands_mask': 2D bool array (True = point in island with boundary >= pct_boundary_threshold)
+        - 'classified_grid': 2D int array (0 = gapless, 1 = rejected island, 2 = valid island)
+        - 'num_islands': int total number of islands found
+    """
+    import scipy.ndimage
+
+    gap_boolean = ~np.isnan(gap_grid) & (gap_grid > min_gap_threshold)
+    gap_closed = ~gap_boolean
+
+    structure = np.ones((3, 3), dtype=int)
+    labeled_islands, num_features = scipy.ndimage.label(gap_boolean, structure=structure)
+
+    boundary_pct = {}
+    valid_islands_mask = np.zeros_like(gap_boolean, dtype=bool)
+    classified_grid = np.zeros_like(labeled_islands, dtype=int)
+
+    s = max(1, variance // 2)
+    Nmu, Nvz = gap_grid.shape
+
+    for island_id in range(1, num_features + 1):
+        island_mask = (labeled_islands == island_id)
+        
+        # Add single pixel padding to avoid edge effects
+        island_padded = np.pad(island_mask, 1, mode='constant', constant_values=False)
+        boundary_pixels = []
+        
+        for i, j in zip(*np.where(island_mask)):
+            ip, jp = i + 1, j + 1
+            neighbors_in_island = island_padded[ip-1:ip+2, jp-1:jp+2]
+            if not np.all(neighbors_in_island):
+                boundary_pixels.append((i, j))
+        
+        if len(boundary_pixels) == 0:
+            pct = 0.0
+        else:
+            gapless_count = 0
+            for i, j in boundary_pixels:
+                i_min, i_max = max(0, i - s), min(Nmu, i + s + 1)
+                j_min, j_max = max(0, j - s), min(Nvz, j + s + 1)
+                if np.any(gap_closed[i_min:i_max, j_min:j_max]):
+                    gapless_count += 1
+            pct = gapless_count / len(boundary_pixels)
+        
+        boundary_pct[island_id] = pct
+
+        if pct >= pct_boundary_threshold:
+            valid_islands_mask[island_mask] = True
+            classified_grid[island_mask] = 2
+        else:
+            classified_grid[island_mask] = 1
+
+    return {
+        "gap_boolean": gap_boolean,
+        "labeled_islands": labeled_islands,
+        "boundary_pct": boundary_pct,
+        "valid_islands_mask": valid_islands_mask,
+        "classified_grid": classified_grid,
+        "num_islands": num_features,
+    }
