@@ -119,7 +119,7 @@ def create_overlay_rgba(mu, V_z, I, prot_dat):
                 rgba[i, j] = [1.0, 1.0, 1.0, 1.0]
     return unique_mu, unique_vz, rgba
 
-def generate_continuous_phase_maps(dirname, mu, V_z, I, spectrum_arr, gap_transport_all, site_localizations, weight_localization_arr):
+def generate_continuous_phase_maps(dirname, mu, V_z, I, eff_gap, gap_transport_all, site_localizations, weight_localization_arr, curvature_arr=None):
     print("\nGenerating global 2D continuous phase maps (effective gap, transport gap, site & weight localizations)...")
     plots_dir = dirname / "Plots"
     plots_dir.mkdir(parents=True, exist_ok=True)
@@ -175,12 +175,11 @@ def generate_continuous_phase_maps(dirname, mu, V_z, I, spectrum_arr, gap_transp
         plt.close(fig_map)
         print(f"Saved phase map to: {map_out}")
 
-    # 1. Effective Topological Gap
-    if spectrum_arr is not None and isinstance(spectrum_arr, np.ndarray) and spectrum_arr.ndim == 2 and spectrum_arr.shape[1] >= 4:
-        eff_gap = spectrum_arr[:, 3] - spectrum_arr[:, 2]
-        save_continuous_phase_map(eff_gap, r'Phase Map: Effective Topological Gap ($E_1 - E_0$)', 'phase_map_effective_topological_gap.png', r'Effective Gap ($E_1 - E_0$)', cmap='viridis')
+    # 1. Effective Topological Gap (First Excited State E_1)
+    if eff_gap is not None:
+        save_continuous_phase_map(eff_gap, r'Phase Map: First Excited State ($E_1$)', 'phase_map_effective_topological_gap.png', r'First Excited State ($E_1$)', cmap='viridis')
     else:
-        print("Warning: spectrum_arr not available or insufficient columns for Effective Topological Gap phase map.")
+        print("Warning: eff_gap not available for Effective Topological Gap phase map.")
 
     # 2. Transport Gap
     if gap_transport_all is not None:
@@ -199,6 +198,12 @@ def generate_continuous_phase_maps(dirname, mu, V_z, I, spectrum_arr, gap_transp
         save_continuous_phase_map(weight_localization_arr, r'Phase Map: Weight Localizations ($90\%$ Density Fraction)', 'phase_map_weight_localizations.png', r'Fractional Wire Length ($90\%$ Density)', cmap='magma_r')
     else:
         print("Warning: weight_localization_arr not available for Weight Localizations phase map.")
+
+    # 4b. Curvature
+    if curvature_arr is not None and not np.all(np.isnan(curvature_arr)):
+        save_continuous_phase_map(curvature_arr, r'Phase Map: Zero-Bias Curvature (Gapless Points)', 'phase_map_curvature.png', r'Curvature ($d^2I/dV^2$)', cmap='coolwarm')
+    elif curvature_arr is not None:
+        print("Warning: curvature_arr exists but contains only NaNs.")
 
     # 5. Gapped Island Binary Classification & Qualified Gap Maps (70% Gapless Boundary)
     if gap_transport_all is not None:
@@ -350,10 +355,12 @@ def process_single_directory(dirname, args, single_points):
     spectrum_arr_path = dirname / "spectrum_arr.npy"
     site_localizations_path = dirname / "site_localizations.npy"
     weight_localization_path = dirname / "weight_localization_arr.npy"
+    fine_zero_bias_path = dirname / "fine_zero_bias_conductance.npy"
 
     spectrum_arr = np.load(spectrum_arr_path, allow_pickle=True) if spectrum_arr_path.exists() else None
     site_localizations = np.load(site_localizations_path, allow_pickle=True) if site_localizations_path.exists() else None
     weight_localization_arr = np.load(weight_localization_path, allow_pickle=True) if weight_localization_path.exists() else None
+    fine_zero_bias_conductance = np.load(fine_zero_bias_path, allow_pickle=True) if fine_zero_bias_path.exists() else None
     
     if dIdVs_LR_path.exists() and dIdVs_RL_path.exists() and energies_path.exists():
         print("Extracting anti-symmetrized non-local transport gaps (Delta_LR, Delta_RL, Mutual)...")
@@ -399,9 +406,48 @@ def process_single_directory(dirname, args, single_points):
         pdi_winding = pdi_data[:, 2]
     I = hp.filter_pdi(pdi_winding, thresh=args.pdi_thresh)
 
+    # Apply gapless mask and compute E1 effective gap
+    if spectrum_arr is not None:
+        mask_gapless = np.abs(spectrum_arr[:, 2]) <= args.epsilon
+        eff_gap_val = spectrum_arr[:, 3]
+        eff_gap = np.where(mask_gapless, eff_gap_val, np.nan)
+    else:
+        mask_gapless = np.ones(len(mu), dtype=bool)
+        eff_gap = None
+        
+    # Mask the arrays that are plotted
+    if gap_transport_all is not None:
+        gap_transport_all = np.where(mask_gapless, gap_transport_all, np.nan)
+    if site_localizations is not None:
+        site_localizations = np.where(mask_gapless, site_localizations, np.nan)
+    if weight_localization_arr is not None:
+        weight_localization_arr = np.where(mask_gapless, weight_localization_arr, np.nan)
+
+    # Compute Curvature from pre-calculated 7-point array
+    curvature_arr = np.full(len(mu), np.nan)
+    if spectrum_arr is not None and fine_zero_bias_conductance is not None:
+        print("Computing zero-bias curvature for gapless points...")
+        eps = args.epsilon
+        # 7 points are at [-0.06, -0.04, -0.02, 0.0, 0.02, 0.04, 0.06]
+        # Central point (0.0) is at index 3
+        idx_zero = 3
+        # Calculate step based on epsilon (e.g., eps=0.02 -> step=1, eps=0.04 -> step=2)
+        step = int(np.round(eps / 0.02))
+        if 1 <= step <= 3:
+            f_minus = fine_zero_bias_conductance[:, idx_zero - step]
+            f_zero = fine_zero_bias_conductance[:, idx_zero]
+            f_plus = fine_zero_bias_conductance[:, idx_zero + step]
+            
+            cond_valid = f_zero > args.cond_threshold
+            valid_mask = cond_valid & mask_gapless
+            
+            curvature_arr[valid_mask] = (f_plus[valid_mask] - 2 * f_zero[valid_mask] + f_minus[valid_mask]) / (eps ** 2)
+        else:
+            print(f"Warning: Epsilon {eps} cannot be mapped to the 0.02 spacing grid for curvature calculation.")
+
     if getattr(args, 'phase_maps_only', False) or getattr(args, 'skip_single_points', False):
         print("Flag --phase-maps-only set: Skipping single point cut calculations and point maps.")
-        generate_continuous_phase_maps(dirname, mu, V_z, I, spectrum_arr, gap_transport_all, site_localizations, weight_localization_arr)
+        generate_continuous_phase_maps(dirname, mu, V_z, I, eff_gap, gap_transport_all, site_localizations, weight_localization_arr, curvature_arr)
         return
 
     # Calculate full correlations for Right and Left sweeps
@@ -1099,7 +1145,7 @@ def process_single_directory(dirname, args, single_points):
     # ==========================================
     # Global 2D Continuous Phase Maps (Effective Gap, Transport Gap, Localizations)
     # ==========================================
-    generate_continuous_phase_maps(dirname, mu, V_z, I, spectrum_arr, gap_transport_all, site_localizations, weight_localization_arr)
+    generate_continuous_phase_maps(dirname, mu, V_z, I, eff_gap, gap_transport_all, site_localizations, weight_localization_arr, curvature_arr)
 
 
 def main():
@@ -1128,6 +1174,8 @@ def main():
     parser.add_argument("--overlap-output", type=str, default="Plots/Tdis_pfaff4/overlap_plot.png", help="Path to save the 2D overlay plot.")
     parser.add_argument("--single-points", type=str, default="[]", help="List of (V_z, mu) tuples for single point plotting, e.g. '[(0.45323, 3.4564)]'")
     parser.add_argument("--skip-recalc", action="store_true", help="Skip live Kwant recalculation for single points and pull from pre-computed data within parameter grid resolution.")
+    parser.add_argument("--epsilon", type=float, default=0.005, help="Resolution threshold to define gapless points.")
+    parser.add_argument("--cond-threshold", type=float, default=1e-9, help="Conductance threshold for finite zero-bias check.")
     parser.add_argument("--process-all-realizations", action="store_true", help="Automatically run post-processing pipeline across all disorder realizations (disorder_realization_0..9_results and Tdis_pfaff4).")
     parser.add_argument("--phase-maps-only", action="store_true", help="Skip single-point cut and map calculations and only generate continuous 2D phase maps.")
     parser.add_argument("--skip-single-points", action="store_true", help="Alias for --phase-maps-only.")
@@ -1143,11 +1191,14 @@ def main():
 
     if args.process_all_realizations:
         base_root = Path(PathConfigs.ROOT) if not os.path.isabs(args.dirname) else Path(args.dirname).parent.parent
-        dis_dir = base_root / "Data" / "dis_realizations"
-        all_dirs = sorted(list(dis_dir.glob("disorder_realization_*_results"))) if dis_dir.exists() else []
-        pfaff4_dir = base_root / "Data" / "Tdis_pfaff4"
+        data_dir = base_root / "Data"
+        all_dirs = sorted(list(data_dir.glob("disorder_realization_*_results"))) if data_dir.exists() else []
+        pfaff4_dir = data_dir / "Tdis_pfaff4"
         if pfaff4_dir.exists():
             all_dirs.append(pfaff4_dir)
+        non_int_dir = data_dir / "non_interacting_results_local"
+        if non_int_dir.exists():
+            all_dirs.append(non_int_dir)
 
         print(f"Found {len(all_dirs)} directories to process: {[d.name for d in all_dirs]}")
         for d in all_dirs:

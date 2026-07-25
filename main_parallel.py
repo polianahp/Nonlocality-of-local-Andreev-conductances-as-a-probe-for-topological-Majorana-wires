@@ -122,6 +122,7 @@ def worker_simulation_step(iter_data, static_params):
     Gmat = 0
     rG_corr = 0
     lG_corr = 0
+    fine_dIdVl = np.zeros(7)
     
     if static_params['conductance_flag']:
         
@@ -131,6 +132,8 @@ def worker_simulation_step(iter_data, static_params):
                            barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
     
         dIdVl, dIdVr, dIdV_LR, dIdV_RL, ldos = hp.calc_dIdV(syst, energies, solver_type=solver_type)
+        fine_energies = np.linspace(-0.06, 0.06, 7)
+        fine_dIdVl, _, _, _, _ = hp.calc_dIdV(syst, fine_energies, solver_type=solver_type)
         Gmat = hp.calc_conductance_matrix(syst, 0.0, solver_type=solver_type)
         for k, eng in enumerate(eng_window):
             cL, cR = hp.calc_conductance(syst, energy=eng, solver_type=solver_type)
@@ -205,6 +208,7 @@ def worker_simulation_step(iter_data, static_params):
         'dIdVr': dIdVr,
         'dIdV_LR': dIdV_LR,
         'dIdV_RL': dIdV_RL,
+        'fine_dIdVl': fine_dIdVl,
         'ldos': ldos,
         'Gmat': Gmat,
         'gamma_sq': gamma_sq,
@@ -358,6 +362,7 @@ if __name__ == "__main__":
     #ldos_arr = np.zeros(shape = (len(params_list), len(energies), num_orbitals)) 
     
     dIdVs_left_arr = np.zeros(shape = (len(params_list), len(energies)))
+    fine_zero_bias_conductance = np.zeros(shape = (len(params_list), 7))
     dIdVs_right_arr = np.zeros(shape = (len(params_list), len(energies)))
     dIdVs_LR_arr = np.zeros(shape = (len(params_list), len(energies)))
     dIdVs_RL_arr = np.zeros(shape = (len(params_list), len(energies)))
@@ -407,6 +412,7 @@ if __name__ == "__main__":
         idx = res['i']
         
         dIdVs_left_arr[idx, :] = res['dIdVl']
+        fine_zero_bias_conductance[idx, :] = res['fine_dIdVl']
         dIdVs_right_arr[idx, :] = res['dIdVr']
         dIdVs_LR_arr[idx, :] = res['dIdV_LR']
         dIdVs_RL_arr[idx, :] = res['dIdV_RL']
@@ -473,6 +479,7 @@ if __name__ == "__main__":
     hp.np_save_wrapped(pdi_data, "pdi_data", dirname)
     hp.np_save_wrapped(energies, "energies", dirname)
     hp.np_save_wrapped(dIdVs_left_arr, "dIdVs_left_arr", dirname)
+    hp.np_save_wrapped(fine_zero_bias_conductance, "fine_zero_bias_conductance", dirname)
     hp.np_save_wrapped(dIdVs_right_arr, "dIdVs_right_arr", dirname)
     hp.np_save_wrapped(dIdVs_LR_arr, "dIdVs_LR", dirname)
     hp.np_save_wrapped(dIdVs_RL_arr, "dIdVs_RL", dirname)
