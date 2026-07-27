@@ -136,6 +136,39 @@ def worker_simulation_step(iter_data, static_params):
     lG_corr = 0
     fine_dIdVl = np.zeros(7)
     
+    if static_params['conductance_flag']:
+        syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma, V_z=vz, 
+                           alpha=alpha, Ln=Ln, Lb=Lb, 
+                           Ls=Ls, mu_leads=mu_leads,
+                           barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
+                           
+        Gmat = hp.calc_conductance_matrix(syst, 0.0, solver_type=solver_type)
+        
+        for k in range(points):
+            barrier_var_tot = barrier_arr[k] #+ mu
+            
+            # Varying Right Barrier (UR)
+            syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma,
+                                    V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
+                                    Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
+                                    barrier_r=barrier_var_tot, Vdisx=Vdisx)
+            
+            Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0, solver_type=solver_type)
+            b_right_cond_left[k] = Gmat_UR[0, 0]
+            b_right_cond_right[k] = Gmat_UR[1, 1]
+            b_right_GRL[k] = Gmat_UR[1, 0]
+            b_right_GLR[k] = Gmat_UR[0, 1]
+            
+            # Varying Left Barrier (UL)
+            syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma,
+                                    V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
+                                    Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot,
+                                    barrier_r=barrier_tot, Vdisx=Vdisx)
+            
+            Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0, solver_type=solver_type)
+            b_left_cond_left[k] = Gmat_UL[0, 0]
+            b_left_cond_right[k] = Gmat_UL[1, 1]
+        
     # --- Conditional Heavy Calculations ---
     if energy_0 <= 0.1:
         if static_params['localization_flag']:
@@ -145,38 +178,7 @@ def worker_simulation_step(iter_data, static_params):
             mzm_separation = hp.calc_MZM_separation(rho_M1, rho_M2)
             
         if static_params['conductance_flag']:
-            syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma, V_z=vz, 
-                               alpha=alpha, Ln=Ln, Lb=Lb, 
-                               Ls=Ls, mu_leads=mu_leads,
-                               barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
-        
             dIdVl, dIdVr, dIdV_LR, dIdV_RL, ldos = hp.calc_dIdV(syst, energies, solver_type=solver_type)
-            Gmat = hp.calc_conductance_matrix(syst, 0.0, solver_type=solver_type)
-            
-            for k in range(points):
-                barrier_var_tot = barrier_arr[k] #+ mu
-                
-                # Varying Right Barrier (UR)
-                syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma,
-                                        V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
-                                        Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
-                                        barrier_r=barrier_var_tot, Vdisx=Vdisx)
-                
-                Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0, solver_type=solver_type)
-                b_right_cond_left[k] = Gmat_UR[0, 0]
-                b_right_cond_right[k] = Gmat_UR[1, 1]
-                b_right_GRL[k] = Gmat_UR[1, 0]
-                b_right_GLR[k] = Gmat_UR[0, 1]
-                
-                # Varying Left Barrier (UL)
-                syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma,
-                                        V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
-                                        Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot,
-                                        barrier_r=barrier_tot, Vdisx=Vdisx)
-                
-                Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0, solver_type=solver_type)
-                b_left_cond_left[k] = Gmat_UL[0, 0]
-                b_left_cond_right[k] = Gmat_UL[1, 1]
     
     
     results = {
