@@ -1,6 +1,6 @@
 Data/
 __pycache__/
 Plots/
-Slides/
+slides/
 *.png
 *.pdf

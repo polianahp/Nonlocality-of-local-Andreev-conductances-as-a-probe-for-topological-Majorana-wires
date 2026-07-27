@@ -86,7 +86,7 @@ def worker_simulation_step(iter_data, static_params):
     mzm_separation = 0
     topological_gap = 0.0
 
-    # --- 1. Build Symmetric System & Calculate Spectral Properties ---
+    # Build Symmetric System & Calculate Spectral Properties ---
 
     if static_params['spectra_flag'] or static_params['localization_flag']:
         syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
@@ -249,7 +249,7 @@ def worker_pdi_step(iter_data, static_params):
     qn = static_params['qn']
     Delta0 = static_params['Delta0']
 
-    # Apply Renormalization Factor Z to align with Kwant physics
+    # Apply Renormalization Factor Z to align with Kwant 
     #Z = Delta0 / (Delta0 + gamma)
     Z = 1
     ts *= Z
@@ -311,12 +311,12 @@ meVpK = 8.6173325e-2 # Kelvin into meV
 
 if __name__ == "__main__":
     
-    # --- Hardcoded Configuration Path (For VS Code Debugging) ---
+    # Hardcoded Configuration Path 
     # Set this to a path like "Parameters/my_config.yaml" to use it as the default.
     CONFIG_PATH = "Parameters/non_interacting.yaml" 
     # ------------------------------------------------------------
 
-    # 1. Configuration Orchestration
+    # Configuration
     config = ConfigManager.get_config(config_path=CONFIG_PATH)
     state = SimulationState(config)
     
@@ -329,13 +329,14 @@ if __name__ == "__main__":
 
     print(f"--- Starting Simulation ---")
     print(f"Output Directory: {dirname}")
+    print(f"Hopping: {state.t:.4f}, Spin-Orbit: {state.alpha:.4f}, Delta: {state.Delta:.4f}")
     print(f"Disorder File: {fname}")
     print(f"Barrier Length (Lb): {config.Lb}")
     print(f"PDI Barrier Length (Lb_pdi): {config.Lb_pdi}")
     print(f"Acceleration Mode: {config.acceleration_type}")
     print(f"--------------------------------\n")
     
-    # 2. Artifact Logging
+    # Artifact Logging
     ConfigManager.log_artifact(config, PathConfigs.DATA / dirname)
     
     # Initialize Disorder
@@ -343,7 +344,7 @@ if __name__ == "__main__":
     path = Path(PathConfigs.RUN_FILES / fname)
     Vdisx = hp.initialize_vdis_from_data(path, lambda_dis=config.lambda_dis, Ls=config.Ls)
 
-    # 3. Parameter Preparation
+    # Parameter Preparation
     static_params = state.get_static_params(Vdisx, config)
     
     params_list = state.params_list

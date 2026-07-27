@@ -153,12 +153,12 @@ def generate_continuous_phase_maps(dirname, mu, V_z, I, eff_gap, gap_transport_a
         cbar = fig_map.colorbar(im, ax=ax_map, pad=0.03, extend='max' if vmax is not None else 'neither')
         cbar.set_label(cbar_label, fontsize=11)
 
-        # Overlay topological phase volume (I == 1) with light transparent gray and thin boundary line
+        # Overlay topological phase volume (I == 1) with dark gray overlay and distinct boundary line
         if np.any(I_grid == 1) and np.any(I_grid == 0):
             VZ, MU = np.meshgrid(unique_vz_grid, unique_mu_grid)
-            ax_map.contourf(VZ, MU, I_grid, levels=[0.5, 1.5], colors=['#e0e0e0'], alpha=0.3)
-            ax_map.contour(VZ, MU, I_grid, levels=[0.5], colors=['#e0e0e0'], linewidths=1.0, alpha=0.7)
-            topological_patch = mpatches.Patch(facecolor='#e0e0e0', edgecolor='#e0e0e0', linewidth=1.0, alpha=0.4, label='Topological Phase ($I = 1$)')
+            ax_map.contourf(VZ, MU, I_grid, levels=[0.5, 1.5], colors=['#404040'], alpha=0.55)
+            ax_map.contour(VZ, MU, I_grid, levels=[0.5], colors=['#202020'], linewidths=1.5, alpha=0.9)
+            topological_patch = mpatches.Patch(facecolor='#404040', edgecolor='#202020', linewidth=1.5, alpha=0.6, label='Topological Phase ($I = 1$)')
             ax_map.legend(handles=[topological_patch], loc='upper right', fontsize=9, frameon=True)
 
         ax_map.set_title(title_str, fontsize=12, pad=15)
@@ -427,7 +427,7 @@ def process_single_directory(dirname, args, single_points):
     curvature_arr = np.full(len(mu), np.nan)
     if spectrum_arr is not None and fine_zero_bias_conductance is not None:
         print("Computing zero-bias curvature for gapless points...")
-        eps = args.epsilon
+        eps = args.curvature_epsilon
         # 7 points are at [-0.06, -0.04, -0.02, 0.0, 0.02, 0.04, 0.06]
         # Central point (0.0) is at index 3
         idx_zero = 3
@@ -1175,6 +1175,7 @@ def main():
     parser.add_argument("--single-points", type=str, default="[]", help="List of (V_z, mu) tuples for single point plotting, e.g. '[(0.45323, 3.4564)]'")
     parser.add_argument("--skip-recalc", action="store_true", help="Skip live Kwant recalculation for single points and pull from pre-computed data within parameter grid resolution.")
     parser.add_argument("--epsilon", type=float, default=0.005, help="Resolution threshold to define gapless points.")
+    parser.add_argument("--curvature-epsilon", type=float, default=0.02, help="Spacing step size for finite difference curvature (0.02, 0.04, or 0.06).")
     parser.add_argument("--cond-threshold", type=float, default=1e-9, help="Conductance threshold for finite zero-bias check.")
     parser.add_argument("--process-all-realizations", action="store_true", help="Automatically run post-processing pipeline across all disorder realizations (disorder_realization_0..9_results and Tdis_pfaff4).")
     parser.add_argument("--phase-maps-only", action="store_true", help="Skip single-point cut and map calculations and only generate continuous 2D phase maps.")
