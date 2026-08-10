@@ -48,9 +48,9 @@ def test_extract_nonlocal_gap_thresholding():
         energies, g_total, median_size=1, gauss_sigma=0.0, gap_threshold_factor=thresh_factor, noise_threshold=1e-4
     )
     
-    # With linear interpolation between sub-gap (0.0) at E=0.19 and above-gap (1.0) at E=0.20 across thresh (0.05),
-    # the exact threshold crossing voltage is: delta_true - dE * (1 - thresh_factor) = 0.1905.
-    expected_gap = delta_true - dE * (1.0 - thresh_factor)
+    # With the Microsoft TGP midpoint formula, the gap is found at the first point
+    # crossing the threshold (E=0.20) plus half the grid spacing.
+    expected_gap = delta_true + dE / 2.0
     assert np.isclose(gap_val, expected_gap, atol=1e-12), f"Extracted gap {gap_val} does not match expected {expected_gap}."
 
 
@@ -78,7 +78,7 @@ def test_extract_nonlocal_gap_2d():
     assert mask.shape == g_2d.shape, f"Expected mask shape {g_2d.shape}, got {mask.shape}"
     
     for i, d in enumerate(delta_expected):
-        expected_gap = d - dE * (1.0 - thresh_factor)
+        expected_gap = d + dE / 2.0
         assert np.isclose(gaps[i], expected_gap, atol=1e-12), f"Trace {i}: expected gap {expected_gap}, got {gaps[i]}"
 
 
@@ -124,8 +124,8 @@ def test_single_trace_cross_validation_no_filters():
     g_total = g_signal + 0.05 * np.cos(energies)
     
     #helpers.py TGP implementation
-    gap_ours, _, _ = hp.extract_nonlocal_gap_tgp(
-        energies, g_total, median_size=1, gauss_sigma=0.0, gap_threshold_factor=thresh_factor, noise_threshold=1e-4
+    gap_ours, _, _ = hp.extract_nonlocal_gap(
+        energies, g_total, median_size=1, gauss_sigma=0.0, gap_threshold_factor=thresh_factor, noise_threshold=1e-4, global_threshold=False
     )
     
     # Microsoft TGP determine_gap
@@ -153,8 +153,8 @@ def test_multi_trace_cross_validation_no_filters():
         g_2d[i, energies <= -d + 1e-9] = -(i + 1) * 0.8
         g_2d[i] += 0.1
         
-    gaps_ours, _, _ = hp.extract_nonlocal_gap_tgp(
-        energies, g_2d, median_size=1, gauss_sigma=0.0, gap_threshold_factor=thresh_factor, noise_threshold=1e-4
+    gaps_ours, _, _ = hp.extract_nonlocal_gap(
+        energies, g_2d, median_size=1, gauss_sigma=0.0, gap_threshold_factor=thresh_factor, noise_threshold=1e-4, global_threshold=True
     )
     
     da = xr.DataArray(g_2d, dims=["field", "left_bias"], coords={"field": np.arange(n_params), "left_bias": energies})
@@ -173,8 +173,8 @@ def test_single_trace_cross_validation_with_filters():
     energies = np.linspace(-1.0, 1.0, 201)
     g_noisy = np.sin(5 * energies) + np.where(np.abs(energies) > 0.3, np.sign(energies) * 2.0, 0.0)
     
-    gap_ours, _, _ = hp.extract_nonlocal_gap_tgp(
-        energies, g_noisy, median_size=3, gauss_sigma=1.0, gap_threshold_factor=0.05
+    gap_ours, _, _ = hp.extract_nonlocal_gap(
+        energies, g_noisy, median_size=3, gauss_sigma=1.0, gap_threshold_factor=0.05, global_threshold=False
     )
     
     da = xr.DataArray(g_noisy, dims=["left_bias"], coords={"left_bias": energies})
@@ -193,8 +193,8 @@ def test_zero_bias_crossing():
     energies = np.linspace(-1.0, 1.0, 101)
     g_gapless = 5.0 * energies
     
-    gap_ours, _, _ = hp.extract_nonlocal_gap_tgp(
-        energies, g_gapless, median_size=1, gauss_sigma=0.0, gap_threshold_factor=0.05
+    gap_ours, _, _ = hp.extract_nonlocal_gap(
+        energies, g_gapless, median_size=1, gauss_sigma=0.0, gap_threshold_factor=0.05, global_threshold=False
     )
     
     da = xr.DataArray(g_gapless, dims=["left_bias"], coords={"left_bias": energies})
@@ -214,11 +214,11 @@ def test_fully_gapped_trace():
     energies = np.linspace(-1.0, 1.0, 101)
     g_flat = np.zeros_like(energies)
     
-    gap_ours_max, _, _ = hp.extract_nonlocal_gap_tgp(
-        energies, g_flat, median_size=1, gauss_sigma=0.0, max_gap_mode="max_bias"
+    gap_ours_max, _, _ = hp.extract_nonlocal_gap(
+        energies, g_flat, median_size=1, gauss_sigma=0.0, max_gap_mode="max_bias", global_threshold=False
     )
-    gap_ours_nan, _, _ = hp.extract_nonlocal_gap_tgp(
-        energies, g_flat, median_size=1, gauss_sigma=0.0, max_gap_mode="nan"
+    gap_ours_nan, _, _ = hp.extract_nonlocal_gap(
+        energies, g_flat, median_size=1, gauss_sigma=0.0, max_gap_mode="nan", global_threshold=False
     )
     
     da = xr.DataArray(g_flat, dims=["left_bias"], coords={"left_bias": energies})

@@ -164,6 +164,7 @@ class SimulationState:
 
         # 2. Derived Physical Parameters
         self.t = 1000 * eta_m / (2 * config.a0**2 * config.ms)
+        print(f"Derived Hopping Parameter t: {self.t:.4f}")
         self.alpha = 140.0 / config.a0
         self.Delta = config.Delta_0 * config.gamma / (config.Delta_0 + config.gamma)
         

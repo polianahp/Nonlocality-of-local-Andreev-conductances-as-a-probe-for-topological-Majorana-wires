@@ -109,11 +109,11 @@ def worker_simulation_step(iter_data, static_params):
     else:
         topological_gap = np.nan
 
-    # 2. TGP 25x7 dIdV Sweep
+    # 2. TGP 25x11 dIdV Sweep (Fine grid around 0 bias for ZBP curvature)
     tgp_barrier_arr = np.array([4.3548, 3.6774, 3.0000, 2.3710, 1.6935])
-    tgp_energies = np.array([-0.1, -0.05, -0.02, 0.0, 0.02, 0.05, 0.1])
-    tgp_stage1_dIdVl = np.zeros((5, 5, 7))
-    tgp_stage1_dIdVr = np.zeros((5, 5, 7))
+    tgp_energies = np.linspace(-0.0125, 0.0125, 11)  # 2.5 uV spacing
+    tgp_stage1_dIdVl = np.zeros((5, 5, 11))
+    tgp_stage1_dIdVr = np.zeros((5, 5, 11))
     
     for l_idx, b_l in enumerate(tgp_barrier_arr):
         for r_idx, b_r in enumerate(tgp_barrier_arr):

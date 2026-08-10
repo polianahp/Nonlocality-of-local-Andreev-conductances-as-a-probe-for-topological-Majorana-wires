@@ -4,3 +4,5 @@ Plots/
 slides/
 *.png
 *.pdf
+local_packages/
+msft_data/
