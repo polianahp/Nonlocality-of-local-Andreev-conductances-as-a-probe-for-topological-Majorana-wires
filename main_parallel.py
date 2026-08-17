@@ -59,7 +59,7 @@ def worker_simulation_step(iter_data, static_params):
     eng_window_range = static_params['eng_window_range']
     solver_type = static_params.get('solver_type', 'cpu')
     
-    # --- 2. Barrier Sweeps (Nested Loop logic) ---
+    # Barrier Sweeps ---
     points = len(barrier_arr)
     
     # Pre-allocate local arrays
@@ -82,13 +82,11 @@ def worker_simulation_step(iter_data, static_params):
     rho_M2 = np.zeros(rho_M1.shape, dtype = complex)
     site_localization = 0
     weight_localization = 1.0
-    overlap_integral = 0.0
     mzm_separation = 0
     topological_gap = 0.0
 
-    # --- Unconditional Calculations ---
     
-    # 1. BdG Eigenvalues
+    # BdG Eigenvalues
     syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
     evals, evecs = hp.solve_ham(syst_closed, solver_type=solver_type, k=num_eigenvalues)
     
@@ -109,32 +107,27 @@ def worker_simulation_step(iter_data, static_params):
     else:
         topological_gap = np.nan
 
-    # 2. TGP 25x11 dIdV Sweep (Fine grid around 0 bias for ZBP curvature)
+
     tgp_barrier_arr = np.array([4.3548, 3.6774, 3.0000, 2.3710, 1.6935])
-    tgp_energies = np.linspace(-0.0125, 0.0125, 11)  # 2.5 uV spacing
-    tgp_stage1_dIdVl = np.zeros((5, 5, 11))
-    tgp_stage1_dIdVr = np.zeros((5, 5, 11))
+    tgp_energies = hp.make_dynamic_grid()
+    tgp_stage1_dIdVl   = np.zeros((5, tgp_energies))
+    tgp_stage1_dIdVr   = np.zeros((5, tgp_energies))
+    tgp_stage1_dIdV_LR = np.zeros((5, tgp_energies))
+    tgp_stage1_dIdV_RL = np.zeros((5, tgp_energies))
     
-    for l_idx, b_l in enumerate(tgp_barrier_arr):
-        for r_idx, b_r in enumerate(tgp_barrier_arr):
-            syst_tgp = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz, 
-                                       alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
-                                       barrier_l=b_l, barrier_r=b_r, Vdisx=Vdisx)
-            dL, dR, _, _, _ = hp.calc_dIdV(syst_tgp, tgp_energies, solver_type=solver_type)
-            tgp_stage1_dIdVl[l_idx, r_idx, :] = dL
-            tgp_stage1_dIdVr[l_idx, r_idx, :] = dR
+    for idx, b_val in enumerate(tgp_barrier_arr):
+        syst_tgp = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz, 
+                                   alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
+                                   barrier_l=b_val, barrier_r=b_val, Vdisx=Vdisx)
+        dL, dR, dLR, dRL, _ = hp.calc_dIdV(syst_tgp, tgp_energies, solver_type=solver_type)
+        tgp_stage1_dIdVl[idx, :] = dL
+        tgp_stage1_dIdVr[idx, :] = dR
+        tgp_stage1_dIdV_LR[idx, :] = dLR
+        tgp_stage1_dIdV_RL[idx, :] = dRL
     
-    
-    eng_window = np.linspace(-0.15, 0.15, eng_window_range)
-    csL = np.zeros_like(eng_window)
-    csR = np.zeros_like(eng_window)
-    
-    pk_l = 0
-    pk_r = 0 
+
     Gmat = 0
-    rG_corr = 0
-    lG_corr = 0
-    fine_dIdVl = np.zeros(7)
+
     
     if static_params['conductance_flag']:
         syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma, V_z=vz, 
@@ -174,22 +167,15 @@ def worker_simulation_step(iter_data, static_params):
         if static_params['localization_flag']:
             rho_M1, rho_M2, _ = hp.get_psiM_density(evals, evecs)
             weight_localization = hp.calc_weight_localization(rho_M1, rho_M2, weight_threshold=static_params['weight_threshold'])
-            overlap_integral = hp.calc_overlap(rho_M1, rho_M2)
             mzm_separation = hp.calc_MZM_separation(rho_M1, rho_M2)
             
-        if static_params['conductance_flag']:
-            dIdVl, dIdVr, dIdV_LR, dIdV_RL, ldos = hp.calc_dIdV(syst, energies, solver_type=solver_type)
-    
     
     results = {
         'i':i,
-        'dIdVl': dIdVl,
-        'dIdVr': dIdVr,
-        'dIdV_LR': dIdV_LR,
-        'dIdV_RL': dIdV_RL,
         'tgp_stage1_dIdVl': tgp_stage1_dIdVl,
         'tgp_stage1_dIdVr': tgp_stage1_dIdVr,
-        'ldos': ldos,
+        'tgp_stage1_dIdV_LR': tgp_stage1_dIdV_LR,
+        'tgp_stage1_dIdV_RL': tgp_stage1_dIdV_RL,
         'Gmat': Gmat,
         'gamma_sq': gamma_sq,
         'energy_0': energy_0,
@@ -203,8 +189,8 @@ def worker_simulation_step(iter_data, static_params):
         'b_left_cond_right': b_left_cond_right,
         'spectrum':spectrum,
         'weight_localization': weight_localization,
-        'overlap_integral': overlap_integral,
-        'mzm_separation': mzm_separation
+        'mzm_separation': mzm_separation,
+        'tgp_barrier_arr':tgp_barrier_arr
     }
     return results
 
@@ -337,9 +323,14 @@ if __name__ == "__main__":
     print(f"LEN: {num_orbitals}")
     #ldos_arr = np.zeros(shape = (len(params_list), len(energies), num_orbitals)) 
     
+
+
     dIdVs_left_arr = np.zeros(shape = (len(params_list), len(energies)))
-    tgp_stage1_dIdVl = np.zeros(shape = (len(params_list), 5, 5, 7))
-    tgp_stage1_dIdVr = np.zeros(shape = (len(params_list), 5, 5, 7))
+    lengrid = len(hp.make_dynamic_grid())
+    tgp_stage1_dIdVl   = np.zeros(shape = (len(params_list), 5, lengrid))
+    tgp_stage1_dIdVr   = np.zeros(shape = (len(params_list), 5, lengrid))
+    tgp_stage1_dIdV_LR = np.zeros(shape = (len(params_list), 5, lengrid))
+    tgp_stage1_dIdV_RL = np.zeros(shape = (len(params_list), 5, lengrid))
     dIdVs_right_arr = np.zeros(shape = (len(params_list), len(energies)))
     dIdVs_LR_arr = np.zeros(shape = (len(params_list), len(energies)))
     dIdVs_RL_arr = np.zeros(shape = (len(params_list), len(energies)))
@@ -354,7 +345,6 @@ if __name__ == "__main__":
     spectrum_arr = np.zeros(shape=(len(params_list), 4))
 
     weight_localization_arr = np.zeros(len(params_list))
-    overlap_integral_arr = np.zeros(len(params_list))
     mzm_separation_arr = np.zeros(len(params_list))
     gamma_sq_arr = np.zeros_like(params_list, dtype=complex)
     mp_eng_arr = np.zeros_like(params_list)
@@ -381,17 +371,13 @@ if __name__ == "__main__":
             results.append(worker_simulation_step(pms, static_params))
 
     for res in results:
-        
+        tgp_barrier_arr = res['tgp_barrier_arr']
         idx = res['i']
         
-        dIdVs_left_arr[idx, :] = res['dIdVl']
-        tgp_stage1_dIdVl[idx, :, :, :] = res['tgp_stage1_dIdVl']
-        tgp_stage1_dIdVr[idx, :, :, :] = res['tgp_stage1_dIdVr']
-        dIdVs_right_arr[idx, :] = res['dIdVr']
-        dIdVs_LR_arr[idx, :] = res['dIdV_LR']
-        dIdVs_RL_arr[idx, :] = res['dIdV_RL']
-        #ldos_arr[idx, :, :] = res['ldos']
-        Conductance_matrix[idx, :, :] = res['Gmat']
+        tgp_stage1_dIdVl[idx, :, :] = res['tgp_stage1_dIdVl']
+        tgp_stage1_dIdVr[idx, :, :] = res['tgp_stage1_dIdVr']
+        tgp_stage1_dIdV_LR[idx, :, :] = res['tgp_stage1_dIdV_LR']
+        tgp_stage1_dIdV_RL[idx, :, :] = res['tgp_stage1_dIdV_RL']
         gamma_sq_arr[idx] = res['gamma_sq']
         mp_eng_arr[idx] = res['energy_0']
         topological_gap_arr[idx] = res['topological_gap']
@@ -408,7 +394,6 @@ if __name__ == "__main__":
             spectrum_arr[idx, :] = res['spectrum']
         
         weight_localization_arr[idx] = res['weight_localization']
-        overlap_integral_arr[idx] = res['overlap_integral']
         mzm_separation_arr[idx] = res['mzm_separation']
         
         
@@ -438,7 +423,7 @@ if __name__ == "__main__":
 
 
     
-    
+    #dIdVl, dIdVr, dIdV_LR, dIdV_RL, ldos = hp.calc_dIdV(syst, energies, solver_type=solver_type)
     # -------------------------------------------------------------------------
     # Saving Results
     # -------------------------------------------------------------------------
@@ -447,12 +432,10 @@ if __name__ == "__main__":
     hp.np_save_wrapped(Vdisx, "Vdisx", dirname)
     hp.np_save_wrapped(pdi_data, "pdi_data", dirname)
     hp.np_save_wrapped(energies, "energies", dirname)
-    hp.np_save_wrapped(dIdVs_left_arr, "dIdVs_left_arr", dirname)
     hp.np_save_wrapped(tgp_stage1_dIdVl, "tgp_stage1_dIdVl", dirname)
     hp.np_save_wrapped(tgp_stage1_dIdVr, "tgp_stage1_dIdVr", dirname)
-    hp.np_save_wrapped(dIdVs_right_arr, "dIdVs_right_arr", dirname)
-    hp.np_save_wrapped(dIdVs_LR_arr, "dIdVs_LR", dirname)
-    hp.np_save_wrapped(dIdVs_RL_arr, "dIdVs_RL", dirname)
+    hp.np_save_wrapped(tgp_stage1_dIdV_LR, "tgp_stage1_dIdV_LR", dirname)
+    hp.np_save_wrapped(tgp_stage1_dIdV_RL, "tgp_stage1_dIdV_RL", dirname)
     #hp.np_save_wrapped(ldos_arr, "LDOS", dirname)
     hp.np_save_wrapped(topological_gap_arr, "topological_gap", dirname)
     hp.np_save_wrapped(barrier_right_conductance_left_arr, "barrier_right_conductance_left_arr", dirname)
@@ -469,8 +452,8 @@ if __name__ == "__main__":
     hp.np_save_wrapped(spectrum_arr,"spectrum_arr", dirname)
 
     hp.np_save_wrapped(weight_localization_arr, "weight_localization_arr", dirname)
-    hp.np_save_wrapped(overlap_integral_arr, "OverlapIntegral", dirname)
     hp.np_save_wrapped(mzm_separation_arr, "mzm_separation_arr", dirname)
+    hp.np_save_wrapped(tgp_barrier_arr,'tgp_barrier_arr', dirname)
 
     
     all_params = {

@@ -41,7 +41,7 @@ class SimulationConfig(BaseModel):
     qn: int = 20
     
     # Simulation Resolution
-    Upoints: PositiveInt = 100
+    Upoints: PositiveInt = 75
     num_engs: PositiveInt = 101
     num_eigenvalues: PositiveInt = 12
     eng_window_range: PositiveInt = 51

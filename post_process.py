@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.colors as mcolors
@@ -8,14 +10,18 @@ from pathlib import Path
 import os
 import helpers as hp
 
-def generate_continuous_phase_map(val_grid, unique_mu, unique_vz, title_str, filename_str, cbar_label, cmap='viridis', vmin=None, vmax=None, I_grid=None, I_color='#404040', I_alpha=0.55, dark_theme=False):
+def generate_continuous_phase_map(val_grid, unique_mu, unique_vz, title_str, filename_str, cbar_label, cmap='viridis', vmin=None, vmax=None, I_grid=None, I_color='#404040', I_alpha=0.55, dark_theme=False, nan_color='#b0b0b0'):
     if dark_theme:
         plt.style.use('dark_background')
     else:
         plt.style.use('default')
         
     fig, ax = plt.subplots(figsize=(7, 8), dpi=150)
-    im = ax.imshow(val_grid, origin='lower', extent=[unique_vz[0], unique_vz[-1], unique_mu[0], unique_mu[-1]], aspect='auto', cmap=cmap, vmin=vmin, vmax=vmax)
+    current_cmap = plt.get_cmap(cmap).copy()
+    current_cmap.set_bad(color=nan_color)
+    ax.set_facecolor(nan_color)
+    
+    im = ax.imshow(val_grid, origin='lower', extent=[unique_vz[0], unique_vz[-1], unique_mu[0], unique_mu[-1]], aspect='auto', cmap=current_cmap, vmin=vmin, vmax=vmax)
     cbar = fig.colorbar(im, ax=ax, pad=0.03, extend='max' if vmax is not None else 'neither')
     cbar.set_label(cbar_label, fontsize=11)
     
@@ -112,10 +118,11 @@ def main():
     gap_transport_path = dirname / "gap_transport_all.npy"
     dIdVs_LR = np.load(dirname / "dIdVs_LR.npy")
     dIdVs_RL = np.load(dirname / "dIdVs_RL.npy")
-    energies = np.load(dirname / "energies.npy")
+    energies = np.load(dirname / "energies.npy") #bias voltage array 
     gap_LR = np.zeros(len(mu))
     gap_RL = np.zeros(len(mu))
-    
+
+    #Determining the transport gap for each (mu, Vz) point, threshold his mu dependent
     for m in unique_mu:
         idx_m = np.where(mu == m)[0]
         
@@ -139,38 +146,70 @@ def main():
     stage1_dir.mkdir(parents=True, exist_ok=True)
     stage2_dir.mkdir(parents=True, exist_ok=True)
     
-    resolutions = [0.1, 0.05, 0.02]
+    resolutions = [0.1, 0.05, 0.04, 0.03, 0.02, 0.01, 0.0025]
     # Energy array: [-0.1, -0.05, -0.02, 0.0, 0.02, 0.05, 0.1]
-    res_steps = {0.1: 3, 0.05: 2, 0.02: 1}
-    idx_zero = 3
     
     E0_grid = to_grid(E0)
     
     tp_fp_counts = {}
     
+    # Calculate Curvature L and R using savgol_filter on the fine 11-point ZBP mesh
+    # Re-implemented from Microsoft's azure-quantum-tgp (tgp/two.py: derivative_threshold)
+    import scipy.signal
+    
+    # bias_window = 0.01 (10 uV). delta = 0.0025 (2.5 uV).
+    # savgol_filter returns the smoothed derivatives at all points, we want the center point
+    w_len = tgp_l.shape[-1]
+    c_idx = w_len // 2
+    curv_L_all = scipy.signal.savgol_filter(tgp_l, window_length=w_len, polyorder=2, deriv=2, delta=0.0025, axis=-1)[:, :, :, c_idx]
+    curv_R_all = scipy.signal.savgol_filter(tgp_r, window_length=w_len, polyorder=2, deriv=2, delta=0.0025, axis=-1)[:, :, :, c_idx]
+
+    # Plot Average Curvature maps
+    def plot_curv(grid, title, filename):
+        fig, ax = plt.subplots(figsize=(7, 8), dpi=150)
+        vmin = np.nanpercentile(grid, 5)
+        vmax = np.nanpercentile(grid, 95)
+        im = ax.imshow(grid, origin='lower', extent=[unique_vz[0], unique_vz[-1], unique_mu[0], unique_mu[-1]], 
+                       aspect='auto', cmap='coolwarm', vmin=vmin, vmax=vmax)
+        cbar = fig.colorbar(im, ax=ax, pad=0.03, extend='both')
+        cbar.set_label('Average Curvature', fontsize=11)
+        
+        VZ, MU = np.meshgrid(unique_vz, unique_mu)
+        ax.contour(VZ, MU, grid, levels=[-100.0], colors=['black'], linewidths=1.5, linestyles='dashed')
+        
+        if pfaffian_grid is not None and np.any(pfaffian_grid > 0.5):
+            ax.contourf(VZ, MU, pfaffian_grid, levels=[0.5, 1.5], colors=['#303030'], alpha=0.7)
+            patch_pfaff = mpatches.Patch(facecolor='#303030', alpha=0.7, label='Pfaffian')
+            ax.legend(handles=[patch_pfaff], loc='upper right', fontsize=9, frameon=True)
+            
+        ax.set_title(title, fontsize=12, pad=15)
+        ax.set_xlabel(r'Zeeman Field $V_z$', fontsize=11)
+        ax.set_ylabel(r'Chemical Potential $\mu$', fontsize=11)
+        fig.tight_layout()
+        fig.savefig(filename, dpi=300)
+        plt.close(fig)
+
+    avg_curv_L_1d = np.mean(curv_L_all, axis=(1, 2))
+    avg_curv_R_1d = np.mean(curv_R_all, axis=(1, 2))
+    plot_curv(to_grid(avg_curv_L_1d), "Average ZBP Curvature (Left)", stage1_dir / "avg_curvature_L.png")
+    plot_curv(to_grid(avg_curv_R_1d), "Average ZBP Curvature (Right)", stage1_dir / "avg_curvature_R.png")
+    
     for res in resolutions:
-        # Calculate Curvature L and R using savgol_filter on the fine 11-point ZBP mesh
-        # Re-implemented from Microsoft's azure-quantum-tgp (tgp/two.py: derivative_threshold)
-        import scipy.signal
-        
-        # bias_window = 0.01 (10 uV). delta = 0.0025 (2.5 uV).
-        # Microsoft window_length = max(3, (int(2 * 0.01 / 0.0025) // 2) * 2 + 1) = 9
-        # savgol_filter returns the smoothed derivatives at all points, we want the center point (index 5 of 11)
-        curv_L = scipy.signal.savgol_filter(tgp_l, window_length=9, polyorder=2, deriv=2, delta=0.0025, axis=-1)[:, :, :, 5]
-        curv_R = scipy.signal.savgol_filter(tgp_r, window_length=9, polyorder=2, deriv=2, delta=0.0025, axis=-1)[:, :, :, 5]
-        
         # ZBP condition: strictly negative curvature <= -100.0
-        zbp_mask_L = (curv_L <= -100.0) # Shape: (N, 5, 5)
-        zbp_mask_R = (curv_R <= -100.0)
+        zbp_mask_L = (curv_L_all <= -100.0) # Shape: (N, 5, 5)
+        zbp_mask_R = (curv_R_all <= -100.0)
         
-        # Marginal probability logic (Microsoft Stage 2)
+        # Marginal probability 
         # Re-implemented from Microsoft's azure-quantum-tgp (tgp/two.py: zbp_dataset_derivative)
-        # using the 0.60 independent marginal passing fraction.
+        # using the 0.60 independent marginal passing fraction. Passing rates for L and R are computed separately. 
         prob_L = np.mean(zbp_mask_L, axis=(1, 2)) # shape (N,)
         prob_R = np.mean(zbp_mask_R, axis=(1, 2))
         
         stage1_pass = (prob_L >= 0.60) & (prob_R >= 0.60)
         stage1_pass = stage1_pass.astype(float)
+        
+        # Save raw ZBP information before it is modified
+        zbp_grid = to_grid(stage1_pass)
         
         # Keep old stage2_pass as well for symmetric requirement (or set to stage1_pass if 1:1)
         # Microsoft only has `passed_TGP` (which is gap & ZBP probability), but we'll use stage1_pass
@@ -178,36 +217,61 @@ def main():
         
         # Qualified Transport Gap
         gap_grid = to_grid(gap_transport_all)
-        gap_grid_qual = np.where(E0_grid <= res, gap_grid, np.nan)
         
         # Topological Island Mask
         island_mask = (gap_grid > res) & (stage1_grid == 1)
         
-        # Cluster Pruning (Connected Components)
+        # Cluster Pruning
         # Re-implemented from Microsoft's azure-quantum-tgp (tgp/two.py: cluster_and_score)
         # Discard any topological 'island' that contains fewer than min_samples = 3 pixels.
+        # Also enforce gapless boundary condition (>= 60% of boundary pixels must be near a closed gap)
         import scipy.ndimage
         labels, num_features = scipy.ndimage.label(island_mask, structure=np.ones((3,3)))
+        
+        gap_closed = (gap_grid <= res)
+        gap_closed_dilated = scipy.ndimage.binary_dilation(gap_closed, structure=np.ones((3,3)))
+        
         for i in range(1, num_features + 1):
-            if np.sum(labels == i) < 3:
-                island_mask[labels == i] = False
+            cluster_mask = (labels == i)
+            # Size condition
+            if np.sum(cluster_mask) < 3:
+                island_mask[cluster_mask] = False
+                continue
+                
+            # Boundary condition
+            eroded_cluster = scipy.ndimage.binary_erosion(cluster_mask, structure=np.ones((3,3)))
+            boundary_mask = cluster_mask & ~eroded_cluster
+            
+            if np.sum(boundary_mask) > 0:
+                gapless_pct = np.sum(boundary_mask & gap_closed_dilated) / np.sum(boundary_mask)
+                if gapless_pct < 0.60:
+                    island_mask[cluster_mask] = False
+            else:
+                island_mask[cluster_mask] = False
                 
         # Update stage1_grid to reflect the pruned islands
         stage1_grid[~island_mask] = 0
-        stage2_grid = stage1_grid.copy() # Match stage1 and stage2 since we unified the probability check
+        stage2_grid = stage1_grid.copy() 
         
         # Plot Binary Maps
         generate_continuous_phase_map(stage1_grid, unique_mu, unique_vz, f'Stage 1 (Res {res})', stage1_dir / f'phase_map_TGP_stage1_res_{res}.png', 'Pass (1) / Fail (0)', cmap='gray', vmin=0, vmax=1)
         generate_continuous_phase_map(stage2_grid, unique_mu, unique_vz, f'Stage 2 (Res {res})', stage2_dir / f'phase_map_TGP_stage2_res_{res}.png', 'Pass (1) / Fail (0)', cmap='gray', vmin=0, vmax=1)
         
-        generate_continuous_phase_map(gap_grid_qual, unique_mu, unique_vz, f'Qualified Transport Gap (Res {res})', stage2_dir / f'phase_map_qualified_transport_gap_res_{res}.png', 'Gap', cmap='viridis')
+        gap_grid_qual = np.where(stage2_grid == 1, gap_grid, np.nan)
+        generate_continuous_phase_map(gap_grid_qual, unique_mu, unique_vz, f'Qualified Transport Gap (Res {res})', stage2_dir / f'phase_map_qualified_transport_gap_res_{res}.png', 'Gap', cmap='viridis', I_grid=island_mask, I_color='white', I_alpha=0.25)
+        
+        # Qualified Topological Gap E1
+        if E1 is not None:
+            E1_grid = to_grid(E1)
+            E1_grid_qual = np.where(stage2_grid == 1, E1_grid, np.nan)
+            generate_continuous_phase_map(E1_grid_qual, unique_mu, unique_vz, f'Topological Gap E1 (Res {res})', stage2_dir / f'phase_map_topological_gap_E1_res_{res}.png', 'E1 Gap', cmap='viridis', I_grid=island_mask, I_color='white', I_alpha=0.25)
         
         # TGP Summary Phase Diagram
         summary_grid = np.zeros_like(gap_grid)
-        summary_grid[(gap_grid > res) & (stage2_grid == 0)] = 1
-        summary_grid[(gap_grid > res) & (stage2_grid == 1)] = 2
-        summary_grid[(gap_grid <= res) & (stage2_grid == 0)] = 3
-        summary_grid[(gap_grid <= res) & (stage2_grid == 1)] = 4
+        summary_grid[(gap_grid > res) & (zbp_grid == 0)] = 1
+        summary_grid[(gap_grid > res) & (zbp_grid == 1)] = 2
+        summary_grid[(gap_grid <= res) & (zbp_grid == 0)] = 3
+        summary_grid[(gap_grid <= res) & (zbp_grid == 1)] = 4
         
         fig, ax = plt.subplots(figsize=(7, 8), dpi=150)
         cmap_sum = mcolors.ListedColormap(['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'])
@@ -265,11 +329,11 @@ def main():
             
             def create_stage3_summary(s3_grid, suffix):
                 summary_grid_s3 = np.zeros_like(gap_grid)
-                summary_grid_s3[(gap_grid > res) & (stage2_grid == 0)] = 1
-                summary_grid_s3[(gap_grid > res) & (stage2_grid == 1) & (s3_grid == 1)] = 2
-                summary_grid_s3[(gap_grid > res) & (stage2_grid == 1) & (s3_grid == 0)] = 3
-                summary_grid_s3[(gap_grid <= res) & (stage2_grid == 0)] = 4
-                summary_grid_s3[(gap_grid <= res) & (stage2_grid == 1)] = 5
+                summary_grid_s3[(gap_grid > res) & (zbp_grid == 0)] = 1
+                summary_grid_s3[(gap_grid > res) & (zbp_grid == 1) & (s3_grid == 1)] = 2
+                summary_grid_s3[(gap_grid > res) & (zbp_grid == 1) & (s3_grid == 0)] = 3
+                summary_grid_s3[(gap_grid <= res) & (zbp_grid == 0)] = 4
+                summary_grid_s3[(gap_grid <= res) & (zbp_grid == 1)] = 5
                 
                 fig, ax = plt.subplots(figsize=(7, 8), dpi=150)
                 cmap_sum_s3 = mcolors.ListedColormap(['#1f77b4', '#9467bd', '#ff7f0e', '#2ca02c', '#d62728'])

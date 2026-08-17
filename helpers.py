@@ -80,6 +80,9 @@ def get_gpu_smatrix(syst, energy=0.0, args=(), params=None):
     return gpu_solver.smatrix(syst, energy, args=args, params=params)
 
 
+
+
+
 def calc_conductance(syst, energy = 0.0, return_smatrix = False, solver_type='cpu'):
     if solver_type == 'gpu':
         smatrix = get_gpu_smatrix(syst, energy)
@@ -236,7 +239,7 @@ def calc_dIdV(syst, energies, solver_type='cpu'):
 
 def detect_peaks_oldoldold(conductance_arr, energy_mesh, prominence=0.01):
     """
-    Detects peaks in the differential conductance array with priority for Majorana physics.
+    Detects peaks in the differential conductance array 
     
     Logic:
     - If a peak is found at zero (within tolerance), return (1, 0).
@@ -793,6 +796,8 @@ def build_system_closed(t, mu, gamma, Delta0, V_z, alpha, Ls, Vdisx, a=1):
     lat = kwant.lattice.square(a, norbs=4)
     
     Z = Delta0 / (Delta0 + gamma)
+
+    print(f"Induced Gap: {Z * gamma}")
     
     # Calculate the finite-size corrected band bottom
     epsilon0 = 2 * t * np.cos(np.pi / (Ls + 1.0))
@@ -1794,7 +1799,7 @@ def extract_nonlocal_gap(
     """
     import scipy.ndimage
     
-    # 1. Median Filter (if median_size > 1)
+    # Median Filter (if median_size > 1)
     if median_size > 1:
         if g_nonlocal.ndim == 2:
             g_med = scipy.ndimage.median_filter(g_nonlocal, size=(1, median_size))
@@ -1803,10 +1808,10 @@ def extract_nonlocal_gap(
     else:
         g_med = g_nonlocal.copy()
         
-    # 2. Anti-symmetrize along bias axis
+    # Anti-symmetrize along bias axis
     g_antisym = antisymmetric_nonlocal_part(g_med)
     
-    # 3. Gaussian smoothing along bias axis
+    # Gaussian smoothing along bias axis
     if gauss_sigma > 0:
         if g_antisym.ndim == 2:
             g_filt = scipy.ndimage.gaussian_filter(g_antisym, sigma=(0, gauss_sigma))
@@ -1815,7 +1820,7 @@ def extract_nonlocal_gap(
     else:
         g_filt = g_antisym.copy()
         
-    # 4. Dynamic thresholding and binary masking
+    # Dynamic threshold/binary masking
     izero = np.argmin(np.abs(bias))
     n_params = g_filt.shape[0] if g_filt.ndim == 2 else 1
     g_2d = g_filt if g_filt.ndim == 2 else g_filt[None, :]
@@ -1967,3 +1972,28 @@ def compute_gapped_islands_and_boundaries(
         "classified_grid": classified_grid,
         "num_islands": num_features,
     }
+
+
+
+def make_dynamic_grid():
+    '''
+    Generates a mesh grid based on the differences in dfgd.
+    '''
+
+    dfgd = np.asarray([0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 ,
+       0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 ,
+       0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025,
+       0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025,
+       0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025,
+       0.0025, 0.0025, 0.0025, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005,
+       0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0025, 0.0025, 0.0025,
+       0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025,
+       0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025,
+       0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025, 0.0025,
+       0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 ,
+       0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 ])
+
+    el = -np.sum(dfgd)/2
+    newgd = np.round(np.asarray([el] + [el := el + d for d in dfgd]), decimals = 5)
+
+    return newgd
