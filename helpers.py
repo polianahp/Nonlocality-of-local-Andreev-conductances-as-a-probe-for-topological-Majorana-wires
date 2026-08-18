@@ -796,8 +796,6 @@ def build_system_closed(t, mu, gamma, Delta0, V_z, alpha, Ls, Vdisx, a=1):
     lat = kwant.lattice.square(a, norbs=4)
     
     Z = Delta0 / (Delta0 + gamma)
-
-    print(f"Induced Gap: {Z * gamma}")
     
     # Calculate the finite-size corrected band bottom
     epsilon0 = 2 * t * np.cos(np.pi / (Ls + 1.0))

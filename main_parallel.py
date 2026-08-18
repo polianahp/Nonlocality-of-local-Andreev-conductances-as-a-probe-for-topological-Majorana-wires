@@ -105,15 +105,15 @@ def worker_simulation_step(iter_data, static_params):
     if len(pos_evals) > 1:
         topological_gap = pos_evals[1]
     else:
-        topological_gap = np.nan
+        topological_gap = np.nanc
 
 
     tgp_barrier_arr = np.array([4.3548, 3.6774, 3.0000, 2.3710, 1.6935])
     tgp_energies = hp.make_dynamic_grid()
-    tgp_stage1_dIdVl   = np.zeros((5, tgp_energies))
-    tgp_stage1_dIdVr   = np.zeros((5, tgp_energies))
-    tgp_stage1_dIdV_LR = np.zeros((5, tgp_energies))
-    tgp_stage1_dIdV_RL = np.zeros((5, tgp_energies))
+    tgp_stage1_dIdVl   = np.zeros((5, len(tgp_energies)))
+    tgp_stage1_dIdVr   = np.zeros((5, len(tgp_energies)))
+    tgp_stage1_dIdV_LR = np.zeros((5, len(tgp_energies)))
+    tgp_stage1_dIdV_RL = np.zeros((5, len(tgp_energies)))
     
     for idx, b_val in enumerate(tgp_barrier_arr):
         syst_tgp = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz, 
@@ -274,7 +274,7 @@ if __name__ == "__main__":
     
     # Hardcoded Configuration Path 
     # Set this to a path like "Parameters/my_config.yaml" to use it as the default.
-    CONFIG_PATH = "Parameters/non_interacting.yaml" 
+    CONFIG_PATH = "Parameters/tgp_test.yaml" 
     # ------------------------------------------------------------
 
     # Configuration

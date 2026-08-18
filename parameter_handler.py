@@ -183,7 +183,7 @@ class SimulationState:
         ]
         
         # Constant coordinate arrays
-        self.barrier_arr = np.linspace(-70*config.barrier0, 70 * config.barrier0, config.Upoints)
+        self.barrier_arr = np.linspace(-60*config.barrier0, 60 * config.barrier0, config.Upoints)
         self.energies = np.linspace(-0.5, 0.5, config.num_engs)
         
         # Mapping acceleration type to Kwant solver type

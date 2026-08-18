@@ -46,11 +46,12 @@ def _roi1(ds):
 
 def analyze_1(fn, T_mK, *, return_ds: bool = False):
     thresholds = dict(
+        set_2w_th={"n_tiles": 4},
         set_gapped={"th_2w_p": 0.5},
         set_3w_th={"th_3w": 1e3},
         set_3w_tat={"th_3w_tat": 0.7},
     )
-    ds = xr.load_dataset(fn)
+    ds = fn if isinstance(fn, xr.Dataset) else xr.load_dataset(fn)
     ds = tgp.prepare.prepare_sim(ds, T_mK=T_mK)
     r = dict(ds.attrs)
     try:
@@ -83,6 +84,9 @@ class Thresholds:
         elif ds.sample_name == "simulated_DLG_epsilon":
             lever_arm = 85  # meV/V
             g_factor = 5.1
+        elif ds.sample_name == "simulated_1D_nanowire":
+            lever_arm = 1.0  # Dummy or explicit lever arm
+            g_factor = 50.0  # Typical InSb/InAs value
         else:
             raise Exception("Unknown device name.")
         μ_B = physical_constants["Bohr magneton in eV/T"][0]
@@ -258,7 +262,7 @@ def show_region(
     lo, hi = np.vectorize(clopper_pearson)(successes, total, 0.05)
     table["confidence interval_low"] = lo.round(3) * 1e2
     table["confidence interval_high"] = hi.round(3) * 1e2
-    table = table.style.set_caption(caption).format(precision=1)
+    table = table.style.set_caption(caption).format("{:.1f}")
     display(table)
 
 
@@ -273,7 +277,7 @@ def show_device(
         device[i] = mask.sum().to_dict()
         device[i]["total"] = len(mask)
     table = pd.DataFrame(device).T
-    table = table.style.set_caption(caption).format(precision=2)
+    table = table.style.set_caption(caption).format("{:.2f}")
     display(table)
 
 
