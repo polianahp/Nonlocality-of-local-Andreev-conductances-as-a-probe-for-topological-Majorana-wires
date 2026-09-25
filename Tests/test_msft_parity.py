@@ -7,7 +7,7 @@ import scipy.sparse.csgraph
 
 # Add NonlocalProtocol to path
 sys.path.append(str(Path(__file__).parent.parent))
-import helpers as hp
+import src.helpers as hp
 
 # Add azure-quantum-tgp to path
 sys.path.append("/home/pseudonym/Documents/Code/azure-quantum-tgp")

@@ -5,7 +5,7 @@ from pathlib import Path
 
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-import helpers as hp
+import src.helpers as hp
 
 
 def test_antisymmetric_nonlocal_part_exactness():

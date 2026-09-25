@@ -15,8 +15,10 @@ from scipy.constants import physical_constants
 import scipy.stats
 from tqdm.auto import tqdm
 import xarray as xr
-
+from src.gpu_broadening import prepare_sim_gpu
+from src.parameter_handler import ConfigManager
 import tgp
+
 
 
 def _roi1(ds):
@@ -44,15 +46,28 @@ def _roi1(ds):
     )
 
 
-def analyze_1(fn, T_mK, *, return_ds: bool = False):
+def analyze_1(fn, T_mK, *, return_ds: bool = False, params=None):
+    if params is None:
+        raise ValueError("Params is None. Please add params as a keyword argument.")
+
     thresholds = dict(
-        set_2w_th={"n_tiles": 4},
-        set_gapped={"th_2w_p": 0.5},
-        set_3w_th={"th_3w": 1e3},
-        set_3w_tat={"th_3w_tat": 0.7},
+        set_2w_th={"n_tiles": params.n_tiles},
+        set_gapped={"th_2w_p": params.th_2w_p},
+        set_3w_th={"th_3w": params.th_3w},
+        set_3w_tat={"th_3w_tat": params.th_3w_tat},
     )
+
     ds = fn if isinstance(fn, xr.Dataset) else xr.load_dataset(fn)
-    ds = tgp.prepare.prepare_sim(ds, T_mK=T_mK)
+    
+    # Only run the thermal broadening if it hasn't been done yet
+    if "T_mK" not in ds.attrs or ds.attrs.get("T_mK") != T_mK:
+        if getattr(params, "GPU_broadening", False):
+            print("Running Prepare Sim GPU...")
+            ds = prepare_sim_gpu(ds, T_mK=T_mK)
+        else:
+            print("Running Prepare Sim CPU...")
+            ds = tgp.prepare.prepare_sim(ds, T_mK=T_mK)
+        
     r = dict(ds.attrs)
     try:
         tgp.one.analyze(ds, thresholds)
@@ -168,13 +183,25 @@ def analyze_2(
     B_max: float | None = None,
     force: bool = False,
     return_datasets: bool = True,
+    params=None,
 ) -> dict[str, Any]:
-#    ds = (
-#        ds_or_fname
-#        if isinstance(ds_or_fname, xr.Dataset)
-#        else load_cached_broadened(ds_or_fname, T_mK, force=force, folder="cached")
-#    )
-    ds = ds_or_fname
+    if params is None:
+        import os
+        yaml_path = "Inputs/Parameters/agent_protocol.yaml" if os.path.exists("Inputs/Parameters/agent_protocol.yaml") else "Inputs/Parameters/default_protocol.yaml"
+        params = ConfigManager.get_protocol_config(yaml_path)
+
+    if isinstance(ds_or_fname, (str, Path)):
+        ds = xr.load_dataset(ds_or_fname, engine="h5netcdf", invalid_netcdf=True)
+    else:
+        ds = ds_or_fname
+
+    if "T_mK" not in ds.attrs or ds.attrs.get("T_mK") != T_mK:
+        if getattr(params, "GPU_broadening", False):
+            print("Running Prepare Sim GPU...")
+            ds = prepare_sim_gpu(ds, T_mK=T_mK)
+        else:
+            print("Running Prepare Sim CPU...")
+            ds = tgp.prepare.prepare_sim(ds, T_mK=T_mK)
     if B_max is not None:
         sel = ds.B <= B_max
         if sel.sum() <= 1:
@@ -192,7 +219,7 @@ def analyze_2(
     )
 
     zbp_ds = tgp.two.zbp_dataset_derivative(
-        ds_left, ds_right, average_over_cutter=False
+        ds_left, ds_right, average_over_cutter=params.average_over_cutter
     )
     tgp.two.set_gap_threshold(zbp_ds, threshold_high=th.gap_threshold_high)
     zbp_ds = tgp.two.cluster_and_score(

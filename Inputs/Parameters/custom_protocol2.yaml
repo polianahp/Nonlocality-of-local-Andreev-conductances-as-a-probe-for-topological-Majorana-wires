@@ -1,0 +1,34 @@
+# ==========================================
+# Azure Quantum TGP Post-Processing Protocol
+# Default Configuration Parameters
+# ==========================================
+
+# --- Hardware / Experimental Corrections ---
+phase_shift_left: 0.0      # Left lock-in phase shift.
+phase_shift_right: 0.0     # Right lock-in phase shift.
+
+# --- Stage 0: Thermal Broadening ---
+T_mK: 40.0                 # Electronic temperature (mK) for Fermi-Dirac broadening. Official uses 30 (S1) or 40 (S2).
+
+# --- Stage 1: Gapless Region Identification (1w, 2w, 3w) ---
+B_max: null                # Upper magnetic field bound for defining a known trivial region. 
+V_max: null                # Upper chemical potential bound for the trivial region.
+n_tiles: 100               # Number of tiles for auto noise-floor detection in 2w measurement.
+th_2w: null                # Explicit 2w threshold. If null, auto-calculated via noise floor.
+th_2w_p: 0.5               # Fraction of 2w measurements that must pass the threshold to be flagged as net gapless.
+th_3w: 1000.0              # Curvature threshold for the 3w measurement to find gap-closing boundaries.
+th_3w_tat: 0.7             # Fraction of cutter-gate configs that must find a gap closing.
+
+# --- Stage 2: Zero Bias Peak (ZBP) Detection ---
+derivative_threshold: 10.0  # Min magnitude of the 2nd derivative of local conductance to qualify as a ZBP.
+zbp_probability_threshold: 0.6  # Fraction of cutter-pairs that must independently detect a ZBP.
+threshold_high: 0.067      # Maximum extracted gap (meV) to filter out unrealistically large gaps.
+threshold_low: 0.010       # Minimum extracted gap (meV) required for a ZBP pixel to be considered gapped.
+cluster_ncutter_threshold: 0.5  # Min fraction of cutter-pair configurations in which a valid cluster must appear.
+min_cluster_size: 7        # Minimum number of (B,V) pixels for an OPTICS cluster to be considered valid.
+
+# --- Plotting & Visualization Settings ---
+selected_cutter: 0         # Cutter pair index used for single-cutter visualizations.
+selected_clusters: []      # List of selected cluster numbers for ROI inspection.
+B_FIXED: 1.18              # Fixed Zeeman field coordinate for crosshair slices (x-axis).
+V_FIXED: 2.85              # Fixed chemical potential coordinate for crosshair slices (y-axis).

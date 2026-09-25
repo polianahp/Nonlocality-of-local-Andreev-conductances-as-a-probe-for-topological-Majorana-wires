@@ -6,7 +6,7 @@ import os
 # Add parent directory to path so that helpers and main_parallel can be imported when running pytest directly from the Tests directory
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import main_parallel as mp_module
-import helpers as hp
+import src.helpers as hp
 
 def test_worker_step_cpu():
     # Minimal static params

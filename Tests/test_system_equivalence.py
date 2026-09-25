@@ -24,12 +24,12 @@ import scipy.sparse.linalg as sla
 # Ensure imports work from the project directory
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from helpers import (
+from src.helpers import (
     build_system_closed,
     PDICalculator,
     cal_pfaffian_invariant,
 )
-from pfaffian_invariant import PfaffianSimulator, eta_m
+from src.pfaffian_invariant import PfaffianSimulator, eta_m
 
 
 # ============================================================================

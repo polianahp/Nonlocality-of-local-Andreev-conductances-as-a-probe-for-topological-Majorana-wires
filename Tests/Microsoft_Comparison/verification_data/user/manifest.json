@@ -1,0 +1,42 @@
+{
+  "0": {
+    "stage1_input": "/home/pseudonym/Documents/Code/azure-quantum-tgp/data/simulated/yield/stage1/test/simulated_DLG_epsilon__disorder_seed_1__geometry_seed_1__surface_charge_0.1.nc",
+    "stage2_input": "/home/pseudonym/Documents/Code/azure-quantum-tgp/data/simulated/yield/stage2/test/simulated_DLG_epsilon__disorder_seed_1__geometry_seed_1__surface_charge_0.1.nc",
+    "dataset_output": "scored_user_0.nc"
+  },
+  "1": {
+    "stage1_input": "/home/pseudonym/Documents/Code/azure-quantum-tgp/data/simulated/yield/stage1/test/simulated_DLG_epsilon__disorder_seed_1__geometry_seed_1__surface_charge_1.0.nc",
+    "stage2_input": "/home/pseudonym/Documents/Code/azure-quantum-tgp/data/simulated/yield/stage2/test/simulated_DLG_epsilon__disorder_seed_1__geometry_seed_1__surface_charge_1.0.nc",
+    "dataset_output": "scored_user_1.nc"
+  },
+  "2": {
+    "stage1_input": "/home/pseudonym/Documents/Code/azure-quantum-tgp/data/simulated/yield/stage1/test/simulated_DLG_epsilon__disorder_seed_1__geometry_seed_1__surface_charge_2.7.nc",
+    "stage2_input": "/home/pseudonym/Documents/Code/azure-quantum-tgp/data/simulated/yield/stage2/test/simulated_DLG_epsilon__disorder_seed_1__geometry_seed_1__surface_charge_2.7.nc",
+    "dataset_output": "scored_user_2.nc"
+  },
+  "3": {
+    "stage1_input": "/home/pseudonym/Documents/Code/azure-quantum-tgp/data/simulated/yield/stage1/test/simulated_DLG_epsilon__disorder_seed_1__geometry_seed_1__surface_charge_4.0.nc",
+    "stage2_input": "/home/pseudonym/Documents/Code/azure-quantum-tgp/data/simulated/yield/stage2/test/simulated_DLG_epsilon__disorder_seed_1__geometry_seed_1__surface_charge_4.0.nc",
+    "dataset_output": "scored_user_3.nc"
+  },
+  "4": {
+    "stage1_input": "/home/pseudonym/Documents/Code/azure-quantum-tgp/data/simulated/yield/stage1/test/simulated_DLG_epsilon__disorder_seed_1__geometry_seed_2__surface_charge_0.1.nc",
+    "stage2_input": "/home/pseudonym/Documents/Code/azure-quantum-tgp/data/simulated/yield/stage2/test/simulated_DLG_epsilon__disorder_seed_1__geometry_seed_2__surface_charge_0.1.nc",
+    "dataset_output": "scored_user_4.nc"
+  },
+  "5": {
+    "stage1_input": "/home/pseudonym/Documents/Code/azure-quantum-tgp/data/simulated/yield/stage1/test/simulated_DLG_epsilon__disorder_seed_1__geometry_seed_2__surface_charge_1.0.nc",
+    "stage2_input": "/home/pseudonym/Documents/Code/azure-quantum-tgp/data/simulated/yield/stage2/test/simulated_DLG_epsilon__disorder_seed_1__geometry_seed_2__surface_charge_1.0.nc",
+    "dataset_output": "scored_user_5.nc"
+  },
+  "6": {
+    "stage1_input": "/home/pseudonym/Documents/Code/azure-quantum-tgp/data/simulated/yield/stage1/test/simulated_DLG_epsilon__disorder_seed_1__geometry_seed_2__surface_charge_2.7.nc",
+    "stage2_input": "/home/pseudonym/Documents/Code/azure-quantum-tgp/data/simulated/yield/stage2/test/simulated_DLG_epsilon__disorder_seed_1__geometry_seed_2__surface_charge_2.7.nc",
+    "dataset_output": "scored_user_6.nc"
+  },
+  "7": {
+    "stage1_input": "/home/pseudonym/Documents/Code/azure-quantum-tgp/data/simulated/yield/stage1/test/simulated_DLG_epsilon__disorder_seed_1__geometry_seed_2__surface_charge_4.0.nc",
+    "stage2_input": "/home/pseudonym/Documents/Code/azure-quantum-tgp/data/simulated/yield/stage2/test/simulated_DLG_epsilon__disorder_seed_1__geometry_seed_2__surface_charge_4.0.nc",
+    "dataset_output": "scored_user_7.nc"
+  }
+}

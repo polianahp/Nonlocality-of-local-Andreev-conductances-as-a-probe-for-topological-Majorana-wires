@@ -14,14 +14,14 @@ import kwant
 import tinyarray
 import multiprocessing as mp
 from tqdm import tqdm
-import helpers as hp
+import src.helpers as hp
 from pathlib import Path
-from config import PathConfigs
+from src.config import PathConfigs
 import itertools as itr
 from functools import partial
 import argparse
 import scipy.sparse.linalg as sla
-from parameter_handler import ConfigManager, SimulationState
+from src.parameter_handler import ConfigManager, SimulationState
 
 
 

@@ -1,0 +1,1071 @@
+============================================================
+ TGP VERIFICATION SUITE - DETAILED RESULTS
+============================================================
+
+[Test File 0] simulated_DLG_epsilon__disorder_seed_1__geometry_seed_1__surface_charge_0.1.nc
+  Testing Stage 1 ROI1 Bounds...
+    [PASS] V_min: ref=-0.478 | usr=-0.478
+    [PASS] V_max: ref=-0.4495 | usr=-0.4495
+    [PASS] B_min: ref=1.5 | usr=1.5
+    [PASS] B_max: ref=3.0 | usr=3.0
+    [PASS] param T_mK_stage1: ref=30.0 | usr=30.0
+    [PASS] param roi1_pct_box: ref=10 | usr=10.0
+    [PASS] param roi1_min_margin_box: ref=[0.003, 0.2] | usr=[0.003, 0.2]
+    [PASS] param n_tiles: ref=100 | usr=100
+    [PASS] param th_2w_p: ref=0.5 | usr=0.5
+    [PASS] param th_3w: ref=1000.0 | usr=1000.0
+    [PASS] param th_3w_tat: ref=0.7 | usr=0.7
+  Testing Stage 2 Metrics...
+    [PASS] extra.device_passed: ref=inconclusive | usr=inconclusive
+    [PASS] roi2_stats counts: ref={'not passed': 0, 'true positive': 0, 'false positive': 0} | usr={'not passed': 0, 'true positive': 0, 'false positive': 0}
+    [PASS] passing_list: ref=[] | usr=[]
+    [PASS] soi2_stats cluster keys: ref=[] | usr=[]
+    [PASS] overlapping_clusters: ref=[] | usr=[]
+    [PASS] param T_mK_stage2: ref=40.0 | usr=40.0
+    [PASS] param gap_threshold_factor: ref=0.01 | usr=0.01
+    [PASS] param noise_threshold: ref=0.0001 | usr=0.0001
+    [PASS] param bias_window: ref=0.007 | usr=0.007
+    [PASS] param derivative_threshold: ref=100.0 | usr=100.0
+    [PASS] param zbp_probability_threshold: ref=0.6 | usr=0.6
+    [PASS] param average_over_cutter: ref=0 | usr=0
+    [PASS] param threshold_low: ref=0.005 | usr=0.005
+    [PASS] param threshold_high: ref=0.067 | usr=0.067
+    [PASS] param min_cluster_size: ref=7 | usr=7
+    [PASS] param cluster_gap_threshold: ref=0.005 | usr=0.005
+    [PASS] param cluster_percentage_boundary_threshold: ref=0.6 | usr=0.6
+    [PASS] param cluster_ncutter_threshold: ref=0.5 | usr=0.5
+    [PASS] param cluster_volume_threshold: ref=1.992616548359012e-06 | usr=1.992616548359012e-06
+  [PLOT] Generated side-by-side comparison plot: phase_diagram_comparison_device_0.png
+
+[Test File 1] simulated_DLG_epsilon__disorder_seed_1__geometry_seed_1__surface_charge_1.0.nc
+  Testing Stage 1 ROI1 Bounds...
+    [PASS] V_min: ref=-0.735 | usr=-0.735
+    [PASS] V_max: ref=-0.7045 | usr=-0.7045
+    [PASS] B_min: ref=1.6 | usr=1.6
+    [PASS] B_max: ref=3.0 | usr=3.0
+    [PASS] param T_mK_stage1: ref=30.0 | usr=30.0
+    [PASS] param roi1_pct_box: ref=10 | usr=10.0
+    [PASS] param roi1_min_margin_box: ref=[0.003, 0.2] | usr=[0.003, 0.2]
+    [PASS] param n_tiles: ref=100 | usr=100
+    [PASS] param th_2w_p: ref=0.5 | usr=0.5
+    [PASS] param th_3w: ref=1000.0 | usr=1000.0
+    [PASS] param th_3w_tat: ref=0.7 | usr=0.7
+  Testing Stage 2 Metrics...
+    [PASS] extra.device_passed: ref=passed | usr=passed
+    [PASS] roi2_stats counts: ref={'not passed': 0, 'true positive': 1, 'false positive': 0} | usr={'not passed': 0, 'true positive': 1, 'false positive': 0}
+    [PASS] passing_list: ref=['true positive'] | usr=['true positive']
+    [PASS] soi2_stats cluster keys: ref=['(1, 1)', '(2, 1)', '(3, 1)', '(4, 1)', '(4, 2)'] | usr=['(1, 1)', '(2, 1)', '(3, 1)', '(4, 1)', '(4, 2)']
+      [PASS] cluster (1, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (1, 1) cluster_V_center: ref=-0.7295 | usr=-0.7295
+      [PASS] cluster (1, 1) cluster_B_center: ref=2.55 | usr=2.55
+      [PASS] cluster (1, 1) median_gap: ref=0.02375 | usr=0.02375
+      [PASS] cluster (1, 1) cluster_V_size: ref=0.000500000000000056 | usr=0.000500000000000056
+      [PASS] cluster (1, 1) top_quintile_gap: ref=0.026250000000000002 | usr=0.026250000000000002
+      [PASS] cluster (1, 1) cluster_volume: ref=0.11249999999998722 | usr=0.11249999999998722
+      [PASS] cluster (1, 1) percentage_boundary: ref=0.8888888888888888 | usr=0.8888888888888888
+      [PASS] cluster (1, 1) cluster_B_size: ref=0.19999999999999973 | usr=0.19999999999999973
+      [PASS] cluster (2, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (2, 1) cluster_V_center: ref=-0.72925 | usr=-0.72925
+      [PASS] cluster (2, 1) cluster_B_center: ref=2.5 | usr=2.5
+      [PASS] cluster (2, 1) median_gap: ref=0.021249999999999998 | usr=0.021249999999999998
+      [PASS] cluster (2, 1) cluster_V_size: ref=0.000500000000000056 | usr=0.000500000000000056
+      [PASS] cluster (2, 1) top_quintile_gap: ref=0.02375 | usr=0.02375
+      [PASS] cluster (2, 1) cluster_volume: ref=0.08749999999999006 | usr=0.08749999999999006
+      [PASS] cluster (2, 1) percentage_boundary: ref=0.8571428571428571 | usr=0.8571428571428571
+      [PASS] cluster (2, 1) cluster_B_size: ref=0.1499999999999999 | usr=0.1499999999999999
+      [PASS] cluster (3, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (3, 1) cluster_V_center: ref=-0.7295 | usr=-0.7295
+      [PASS] cluster (3, 1) cluster_B_center: ref=2.55 | usr=2.55
+      [PASS] cluster (3, 1) median_gap: ref=0.021249999999999998 | usr=0.021249999999999998
+      [PASS] cluster (3, 1) cluster_V_size: ref=0.0012499999999999734 | usr=0.0012499999999999734
+      [PASS] cluster (3, 1) top_quintile_gap: ref=0.02375 | usr=0.02375
+      [PASS] cluster (3, 1) cluster_volume: ref=0.19999999999997728 | usr=0.19999999999997728
+      [PASS] cluster (3, 1) percentage_boundary: ref=0.875 | usr=0.875
+      [PASS] cluster (3, 1) cluster_B_size: ref=0.25 | usr=0.25
+      [PASS] cluster (4, 1) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (4, 1) cluster_V_center: ref=-0.72975 | usr=-0.72975
+      [PASS] cluster (4, 1) cluster_B_center: ref=2.7 | usr=2.7
+      [PASS] cluster (4, 1) median_gap: ref=0.01625 | usr=0.01625
+      [PASS] cluster (4, 1) cluster_V_size: ref=0.0007500000000000284 | usr=0.0007500000000000284
+      [PASS] cluster (4, 1) top_quintile_gap: ref=0.036250000000000004 | usr=0.036250000000000004
+      [PASS] cluster (4, 1) cluster_volume: ref=0.1249999999999858 | usr=0.1249999999999858
+      [PASS] cluster (4, 1) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (4, 1) cluster_B_size: ref=0.1499999999999999 | usr=0.1499999999999999
+      [PASS] cluster (4, 2) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (4, 2) cluster_V_center: ref=-0.72925 | usr=-0.72925
+      [PASS] cluster (4, 2) cluster_B_center: ref=2.5 | usr=2.5
+      [PASS] cluster (4, 2) median_gap: ref=0.01625 | usr=0.01625
+      [PASS] cluster (4, 2) cluster_V_size: ref=0.000500000000000056 | usr=0.000500000000000056
+      [PASS] cluster (4, 2) top_quintile_gap: ref=0.018750000000000003 | usr=0.018750000000000003
+      [PASS] cluster (4, 2) cluster_volume: ref=0.09999999999998864 | usr=0.09999999999998864
+      [PASS] cluster (4, 2) percentage_boundary: ref=0.875 | usr=0.875
+      [PASS] cluster (4, 2) cluster_B_size: ref=0.20000000000000018 | usr=0.20000000000000018
+    [PASS] overlapping_clusters: ref=[['(1, 1)', '(2, 1)', '(3, 1)', '(4, 1)', '(4, 2)']] | usr=[['(1, 1)', '(2, 1)', '(3, 1)', '(4, 1)', '(4, 2)']]
+    [PASS] param T_mK_stage2: ref=40.0 | usr=40.0
+    [PASS] param gap_threshold_factor: ref=0.05 | usr=0.05
+    [PASS] param noise_threshold: ref=0.0001 | usr=0.0001
+    [PASS] param bias_window: ref=0.007 | usr=0.007
+    [PASS] param derivative_threshold: ref=100.0 | usr=100.0
+    [PASS] param zbp_probability_threshold: ref=0.6 | usr=0.6
+    [PASS] param average_over_cutter: ref=0 | usr=0
+    [PASS] param threshold_low: ref=0.005 | usr=0.005
+    [PASS] param threshold_high: ref=0.067 | usr=0.067
+    [PASS] param min_cluster_size: ref=7 | usr=7
+    [PASS] param cluster_gap_threshold: ref=0.005 | usr=0.005
+    [PASS] param cluster_percentage_boundary_threshold: ref=0.6 | usr=0.6
+    [PASS] param cluster_ncutter_threshold: ref=0.5 | usr=0.5
+    [PASS] param cluster_volume_threshold: ref=1.992616548359012e-06 | usr=1.992616548359012e-06
+  [PLOT] Generated side-by-side comparison plot: phase_diagram_comparison_device_1.png
+
+[Test File 2] simulated_DLG_epsilon__disorder_seed_1__geometry_seed_1__surface_charge_2.7.nc
+  Testing Stage 1 ROI1 Bounds...
+    [PASS] V_min: ref=-1.2154999999999998 | usr=-1.2154999999999998
+    [PASS] V_max: ref=-1.1945000000000001 | usr=-1.1945000000000001
+    [PASS] B_min: ref=1.75 | usr=1.75
+    [PASS] B_max: ref=3.0 | usr=3.0
+    [PASS] param T_mK_stage1: ref=30.0 | usr=30.0
+    [PASS] param roi1_pct_box: ref=10 | usr=10.0
+    [PASS] param roi1_min_margin_box: ref=[0.003, 0.2] | usr=[0.003, 0.2]
+    [PASS] param n_tiles: ref=100 | usr=100
+    [PASS] param th_2w_p: ref=0.5 | usr=0.5
+    [PASS] param th_3w: ref=1000.0 | usr=1000.0
+    [PASS] param th_3w_tat: ref=0.7 | usr=0.7
+  Testing Stage 2 Metrics...
+    [PASS] extra.device_passed: ref=passed | usr=passed
+    [PASS] roi2_stats counts: ref={'not passed': 0, 'true positive': 5, 'false positive': 0} | usr={'not passed': 0, 'true positive': 5, 'false positive': 0}
+    [PASS] passing_list: ref=['true positive', 'true positive', 'true positive', 'true positive', 'true positive'] | usr=['true positive', 'true positive', 'true positive', 'true positive', 'true positive']
+    [PASS] soi2_stats cluster keys: ref=['(0, 1)', '(0, 2)', '(0, 3)', '(0, 4)', '(0, 5)', '(1, 1)', '(1, 2)', '(1, 3)', '(1, 4)', '(2, 1)', '(2, 2)', '(2, 3)', '(2, 4)', '(2, 5)', '(3, 1)', '(3, 2)', '(3, 3)', '(3, 4)', '(3, 5)', '(3, 6)', '(4, 1)', '(4, 2)', '(4, 3)', '(4, 4)'] | usr=['(0, 1)', '(0, 2)', '(0, 3)', '(0, 4)', '(0, 5)', '(1, 1)', '(1, 2)', '(1, 3)', '(1, 4)', '(2, 1)', '(2, 2)', '(2, 3)', '(2, 4)', '(2, 5)', '(3, 1)', '(3, 2)', '(3, 3)', '(3, 4)', '(3, 5)', '(3, 6)', '(4, 1)', '(4, 2)', '(4, 3)', '(4, 4)']
+      [PASS] cluster (0, 1) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (0, 1) cluster_V_center: ref=-1.202 | usr=-1.202
+      [PASS] cluster (0, 1) cluster_B_center: ref=2.7 | usr=2.7
+      [PASS] cluster (0, 1) median_gap: ref=0.026250000000000002 | usr=0.026250000000000002
+      [PASS] cluster (0, 1) cluster_V_size: ref=0.003249999999999975 | usr=0.003249999999999975
+      [PASS] cluster (0, 1) top_quintile_gap: ref=0.04125 | usr=0.04125
+      [PASS] cluster (0, 1) cluster_volume: ref=1.0250000000003432 | usr=1.0250000000003432
+      [PASS] cluster (0, 1) percentage_boundary: ref=0.6875 | usr=0.6875
+      [PASS] cluster (0, 1) cluster_B_size: ref=0.7000000000000002 | usr=0.7000000000000002
+      [PASS] cluster (0, 2) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (0, 2) cluster_V_center: ref=-1.20725 | usr=-1.20725
+      [PASS] cluster (0, 2) cluster_B_center: ref=2.45 | usr=2.45
+      [PASS] cluster (0, 2) median_gap: ref=0.01 | usr=0.01
+      [PASS] cluster (0, 2) cluster_V_size: ref=0.0022499999999998632 | usr=0.0022499999999998632
+      [PASS] cluster (0, 2) top_quintile_gap: ref=0.01625 | usr=0.01625
+      [PASS] cluster (0, 2) cluster_volume: ref=0.5250000000001758 | usr=0.5250000000001758
+      [PASS] cluster (0, 2) percentage_boundary: ref=0.9512195121951219 | usr=0.9512195121951219
+      [PASS] cluster (0, 2) cluster_B_size: ref=0.5 | usr=0.5
+      [PASS] cluster (0, 3) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (0, 3) cluster_V_center: ref=-1.21175 | usr=-1.21175
+      [PASS] cluster (0, 3) cluster_B_center: ref=2.2 | usr=2.2
+      [PASS] cluster (0, 3) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (0, 3) cluster_V_size: ref=0.001000000000000112 | usr=0.001000000000000112
+      [PASS] cluster (0, 3) top_quintile_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (0, 3) cluster_volume: ref=0.27500000000009206 | usr=0.27500000000009206
+      [PASS] cluster (0, 3) percentage_boundary: ref=0.631578947368421 | usr=0.631578947368421
+      [PASS] cluster (0, 3) cluster_B_size: ref=0.30000000000000027 | usr=0.30000000000000027
+      [PASS] cluster (0, 4) ncutters: ref=5.0 | usr=5.0
+      [PASS] cluster (0, 4) cluster_V_center: ref=-1.2105 | usr=-1.2105
+      [PASS] cluster (0, 4) cluster_B_center: ref=2.4 | usr=2.4
+      [PASS] cluster (0, 4) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (0, 4) cluster_V_size: ref=0.0004999999999999449 | usr=0.0004999999999999449
+      [PASS] cluster (0, 4) top_quintile_gap: ref=0.01225 | usr=0.01225
+      [PASS] cluster (0, 4) cluster_volume: ref=0.11250000000003767 | usr=0.11250000000003767
+      [PASS] cluster (0, 4) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (0, 4) cluster_B_size: ref=0.2999999999999998 | usr=0.2999999999999998
+      [PASS] cluster (0, 5) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (0, 5) cluster_V_center: ref=-1.20725 | usr=-1.20725
+      [PASS] cluster (0, 5) cluster_B_center: ref=2.85 | usr=2.85
+      [PASS] cluster (0, 5) median_gap: ref=0.021249999999999998 | usr=0.021249999999999998
+      [PASS] cluster (0, 5) cluster_V_size: ref=0.00024999999999986144 | usr=0.00024999999999986144
+      [PASS] cluster (0, 5) top_quintile_gap: ref=0.02275 | usr=0.02275
+      [PASS] cluster (0, 5) cluster_volume: ref=0.10000000000003348 | usr=0.10000000000003348
+      [PASS] cluster (0, 5) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (0, 5) cluster_B_size: ref=0.25 | usr=0.25
+      [PASS] cluster (1, 1) ncutters: ref=5.0 | usr=5.0
+      [PASS] cluster (1, 1) cluster_V_center: ref=-1.2105 | usr=-1.2105
+      [PASS] cluster (1, 1) cluster_B_center: ref=2.4 | usr=2.4
+      [PASS] cluster (1, 1) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (1, 1) cluster_V_size: ref=0.0014999999999998348 | usr=0.0014999999999998348
+      [PASS] cluster (1, 1) top_quintile_gap: ref=0.013250000000000001 | usr=0.013250000000000001
+      [PASS] cluster (1, 1) cluster_volume: ref=0.337500000000113 | usr=0.337500000000113
+      [PASS] cluster (1, 1) percentage_boundary: ref=0.8 | usr=0.8
+      [PASS] cluster (1, 1) cluster_B_size: ref=0.30000000000000027 | usr=0.30000000000000027
+      [PASS] cluster (1, 2) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (1, 2) cluster_V_center: ref=-1.20725 | usr=-1.20725
+      [PASS] cluster (1, 2) cluster_B_center: ref=2.8 | usr=2.8
+      [PASS] cluster (1, 2) median_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (1, 2) cluster_V_size: ref=0.0007500000000000284 | usr=0.0007500000000000284
+      [PASS] cluster (1, 2) top_quintile_gap: ref=0.021249999999999998 | usr=0.021249999999999998
+      [PASS] cluster (1, 2) cluster_volume: ref=0.18750000000006278 | usr=0.18750000000006278
+      [PASS] cluster (1, 2) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (1, 2) cluster_B_size: ref=0.3500000000000001 | usr=0.3500000000000001
+      [PASS] cluster (1, 3) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (1, 3) cluster_V_center: ref=-1.209 | usr=-1.209
+      [PASS] cluster (1, 3) cluster_B_center: ref=2.7 | usr=2.7
+      [PASS] cluster (1, 3) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (1, 3) cluster_V_size: ref=0.0004999999999999449 | usr=0.0004999999999999449
+      [PASS] cluster (1, 3) top_quintile_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (1, 3) cluster_volume: ref=0.18750000000006278 | usr=0.18750000000006278
+      [PASS] cluster (1, 3) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (1, 3) cluster_B_size: ref=0.40000000000000036 | usr=0.40000000000000036
+      [PASS] cluster (1, 4) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (1, 4) cluster_V_center: ref=-1.21125 | usr=-1.21125
+      [PASS] cluster (1, 4) cluster_B_center: ref=2.7 | usr=2.7
+      [PASS] cluster (1, 4) median_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (1, 4) cluster_V_size: ref=0.0017499999999999183 | usr=0.0017499999999999183
+      [PASS] cluster (1, 4) top_quintile_gap: ref=0.021249999999999998 | usr=0.021249999999999998
+      [PASS] cluster (1, 4) cluster_volume: ref=0.13750000000004603 | usr=0.13750000000004603
+      [PASS] cluster (1, 4) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (1, 4) cluster_B_size: ref=0.3500000000000001 | usr=0.3500000000000001
+      [PASS] cluster (2, 1) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (2, 1) cluster_V_center: ref=-1.20275 | usr=-1.20275
+      [PASS] cluster (2, 1) cluster_B_center: ref=2.75 | usr=2.75
+      [PASS] cluster (2, 1) median_gap: ref=0.01625 | usr=0.01625
+      [PASS] cluster (2, 1) cluster_V_size: ref=0.0029999999999998916 | usr=0.0029999999999998916
+      [PASS] cluster (2, 1) top_quintile_gap: ref=0.026250000000000002 | usr=0.026250000000000002
+      [PASS] cluster (2, 1) cluster_volume: ref=0.8500000000002846 | usr=0.8500000000002846
+      [PASS] cluster (2, 1) percentage_boundary: ref=0.7833333333333333 | usr=0.7833333333333333
+      [PASS] cluster (2, 1) cluster_B_size: ref=0.6000000000000001 | usr=0.6000000000000001
+      [PASS] cluster (2, 2) ncutters: ref=5.0 | usr=5.0
+      [PASS] cluster (2, 2) cluster_V_center: ref=-1.21075 | usr=-1.21075
+      [PASS] cluster (2, 2) cluster_B_center: ref=2.5 | usr=2.5
+      [PASS] cluster (2, 2) median_gap: ref=0.01 | usr=0.01
+      [PASS] cluster (2, 2) cluster_V_size: ref=0.0009999999999998899 | usr=0.0009999999999998899
+      [PASS] cluster (2, 2) top_quintile_gap: ref=0.018250000000000002 | usr=0.018250000000000002
+      [PASS] cluster (2, 2) cluster_volume: ref=0.27500000000009206 | usr=0.27500000000009206
+      [PASS] cluster (2, 2) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (2, 2) cluster_B_size: ref=0.5 | usr=0.5
+      [PASS] cluster (2, 3) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (2, 3) cluster_V_center: ref=-1.209 | usr=-1.209
+      [PASS] cluster (2, 3) cluster_B_center: ref=2.8 | usr=2.8
+      [PASS] cluster (2, 3) median_gap: ref=0.01 | usr=0.01
+      [PASS] cluster (2, 3) cluster_V_size: ref=0.000500000000000167 | usr=0.000500000000000167
+      [PASS] cluster (2, 3) top_quintile_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (2, 3) cluster_volume: ref=0.15000000000005023 | usr=0.15000000000005023
+      [PASS] cluster (2, 3) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (2, 3) cluster_B_size: ref=0.3500000000000001 | usr=0.3500000000000001
+      [PASS] cluster (2, 4) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (2, 4) cluster_V_center: ref=-1.20725 | usr=-1.20725
+      [PASS] cluster (2, 4) cluster_B_center: ref=2.8 | usr=2.8
+      [PASS] cluster (2, 4) median_gap: ref=0.01 | usr=0.01
+      [PASS] cluster (2, 4) cluster_V_size: ref=0.00024999999999986144 | usr=0.00024999999999986144
+      [PASS] cluster (2, 4) top_quintile_gap: ref=0.02025 | usr=0.02025
+      [PASS] cluster (2, 4) cluster_volume: ref=0.15000000000005023 | usr=0.15000000000005023
+      [PASS] cluster (2, 4) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (2, 4) cluster_B_size: ref=0.3500000000000001 | usr=0.3500000000000001
+      [PASS] cluster (2, 5) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (2, 5) cluster_V_center: ref=-1.21175 | usr=-1.21175
+      [PASS] cluster (2, 5) cluster_B_center: ref=2.25 | usr=2.25
+      [PASS] cluster (2, 5) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (2, 5) cluster_V_size: ref=0.0004999999999999449 | usr=0.0004999999999999449
+      [PASS] cluster (2, 5) top_quintile_gap: ref=0.01225 | usr=0.01225
+      [PASS] cluster (2, 5) cluster_volume: ref=0.11250000000003767 | usr=0.11250000000003767
+      [PASS] cluster (2, 5) percentage_boundary: ref=0.7777777777777778 | usr=0.7777777777777778
+      [PASS] cluster (2, 5) cluster_B_size: ref=0.1499999999999999 | usr=0.1499999999999999
+      [PASS] cluster (3, 1) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (3, 1) cluster_V_center: ref=-1.203 | usr=-1.203
+      [PASS] cluster (3, 1) cluster_B_center: ref=2.7 | usr=2.7
+      [PASS] cluster (3, 1) median_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (3, 1) cluster_V_size: ref=0.0020000000000000018 | usr=0.0020000000000000018
+      [PASS] cluster (3, 1) top_quintile_gap: ref=0.027750000000000004 | usr=0.027750000000000004
+      [PASS] cluster (3, 1) cluster_volume: ref=0.6625000000002218 | usr=0.6625000000002218
+      [PASS] cluster (3, 1) percentage_boundary: ref=0.8367346938775511 | usr=0.8367346938775511
+      [PASS] cluster (3, 1) cluster_B_size: ref=0.6499999999999999 | usr=0.6499999999999999
+      [PASS] cluster (3, 2) ncutters: ref=5.0 | usr=5.0
+      [PASS] cluster (3, 2) cluster_V_center: ref=-1.21075 | usr=-1.21075
+      [PASS] cluster (3, 2) cluster_B_center: ref=2.55 | usr=2.55
+      [PASS] cluster (3, 2) median_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (3, 2) cluster_V_size: ref=0.0007500000000000284 | usr=0.0007500000000000284
+      [PASS] cluster (3, 2) top_quintile_gap: ref=0.016750000000000008 | usr=0.016750000000000008
+      [PASS] cluster (3, 2) cluster_volume: ref=0.31250000000010464 | usr=0.31250000000010464
+      [PASS] cluster (3, 2) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (3, 2) cluster_B_size: ref=0.6499999999999999 | usr=0.6499999999999999
+      [PASS] cluster (3, 3) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (3, 3) cluster_V_center: ref=-1.21175 | usr=-1.21175
+      [PASS] cluster (3, 3) cluster_B_center: ref=2.3 | usr=2.3
+      [PASS] cluster (3, 3) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (3, 3) cluster_V_size: ref=0.0004999999999999449 | usr=0.0004999999999999449
+      [PASS] cluster (3, 3) top_quintile_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (3, 3) cluster_volume: ref=0.12500000000004186 | usr=0.12500000000004186
+      [PASS] cluster (3, 3) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (3, 3) cluster_B_size: ref=0.1499999999999999 | usr=0.1499999999999999
+      [PASS] cluster (3, 4) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (3, 4) cluster_V_center: ref=-1.201 | usr=-1.201
+      [PASS] cluster (3, 4) cluster_B_center: ref=2.75 | usr=2.75
+      [PASS] cluster (3, 4) median_gap: ref=0.00625 | usr=0.00625
+      [PASS] cluster (3, 4) cluster_V_size: ref=0.0012499999999999734 | usr=0.0012499999999999734
+      [PASS] cluster (3, 4) top_quintile_gap: ref=0.006750000000000001 | usr=0.006750000000000001
+      [PASS] cluster (3, 4) cluster_volume: ref=0.12500000000004186 | usr=0.12500000000004186
+      [PASS] cluster (3, 4) percentage_boundary: ref=0.9 | usr=0.9
+      [PASS] cluster (3, 4) cluster_B_size: ref=0.20000000000000018 | usr=0.20000000000000018
+      [PASS] cluster (3, 5) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (3, 5) cluster_V_center: ref=-1.209 | usr=-1.209
+      [PASS] cluster (3, 5) cluster_B_center: ref=2.85 | usr=2.85
+      [PASS] cluster (3, 5) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (3, 5) cluster_V_size: ref=0.0002500000000000835 | usr=0.0002500000000000835
+      [PASS] cluster (3, 5) top_quintile_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (3, 5) cluster_volume: ref=0.10000000000003348 | usr=0.10000000000003348
+      [PASS] cluster (3, 5) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (3, 5) cluster_B_size: ref=0.2999999999999998 | usr=0.2999999999999998
+      [PASS] cluster (3, 6) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (3, 6) cluster_V_center: ref=-1.207 | usr=-1.207
+      [PASS] cluster (3, 6) cluster_B_center: ref=2.45 | usr=2.45
+      [PASS] cluster (3, 6) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (3, 6) cluster_V_size: ref=0.0007500000000000284 | usr=0.0007500000000000284
+      [PASS] cluster (3, 6) top_quintile_gap: ref=0.010750000000000001 | usr=0.010750000000000001
+      [PASS] cluster (3, 6) cluster_volume: ref=0.0875000000000293 | usr=0.0875000000000293
+      [PASS] cluster (3, 6) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (3, 6) cluster_B_size: ref=0.19999999999999973 | usr=0.19999999999999973
+      [PASS] cluster (4, 1) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (4, 1) cluster_V_center: ref=-1.208 | usr=-1.208
+      [PASS] cluster (4, 1) cluster_B_center: ref=2.2 | usr=2.2
+      [PASS] cluster (4, 1) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (4, 1) cluster_V_size: ref=0.0024999999999999467 | usr=0.0024999999999999467
+      [PASS] cluster (4, 1) top_quintile_gap: ref=0.014750000000000006 | usr=0.014750000000000006
+      [PASS] cluster (4, 1) cluster_volume: ref=0.48750000000016325 | usr=0.48750000000016325
+      [PASS] cluster (4, 1) percentage_boundary: ref=0.6216216216216216 | usr=0.6216216216216216
+      [PASS] cluster (4, 1) cluster_B_size: ref=0.5000000000000002 | usr=0.5000000000000002
+      [PASS] cluster (4, 2) ncutters: ref=5.0 | usr=5.0
+      [PASS] cluster (4, 2) cluster_V_center: ref=-1.2105 | usr=-1.2105
+      [PASS] cluster (4, 2) cluster_B_center: ref=2.45 | usr=2.45
+      [PASS] cluster (4, 2) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (4, 2) cluster_V_size: ref=0.0014999999999998348 | usr=0.0014999999999998348
+      [PASS] cluster (4, 2) top_quintile_gap: ref=0.01625 | usr=0.01625
+      [PASS] cluster (4, 2) cluster_volume: ref=0.31250000000010464 | usr=0.31250000000010464
+      [PASS] cluster (4, 2) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (4, 2) cluster_B_size: ref=0.3500000000000001 | usr=0.3500000000000001
+      [PASS] cluster (4, 3) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (4, 3) cluster_V_center: ref=-1.20775 | usr=-1.20775
+      [PASS] cluster (4, 3) cluster_B_center: ref=2.7 | usr=2.7
+      [PASS] cluster (4, 3) median_gap: ref=0.00625 | usr=0.00625
+      [PASS] cluster (4, 3) cluster_V_size: ref=0.0012499999999999734 | usr=0.0012499999999999734
+      [PASS] cluster (4, 3) top_quintile_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (4, 3) cluster_volume: ref=0.21250000000007116 | usr=0.21250000000007116
+      [PASS] cluster (4, 3) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (4, 3) cluster_B_size: ref=0.5 | usr=0.5
+      [PASS] cluster (4, 4) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (4, 4) cluster_V_center: ref=-1.212 | usr=-1.212
+      [PASS] cluster (4, 4) cluster_B_center: ref=2.3 | usr=2.3
+      [PASS] cluster (4, 4) median_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (4, 4) cluster_V_size: ref=0.0002500000000000835 | usr=0.0002500000000000835
+      [PASS] cluster (4, 4) top_quintile_gap: ref=0.017750000000000005 | usr=0.017750000000000005
+      [PASS] cluster (4, 4) cluster_volume: ref=0.0875000000000293 | usr=0.0875000000000293
+      [PASS] cluster (4, 4) percentage_boundary: ref=0.8571428571428571 | usr=0.8571428571428571
+      [PASS] cluster (4, 4) cluster_B_size: ref=0.19999999999999973 | usr=0.19999999999999973
+    [PASS] overlapping_clusters: ref=[['(0, 1)', '(2, 1)', '(3, 1)', '(3, 4)'], ['(0, 2)', '(0, 5)', '(1, 2)', '(2, 4)', '(3, 6)', '(4, 1)', '(4, 3)'], ['(0, 3)', '(2, 5)', '(3, 3)', '(4, 4)'], ['(0, 4)', '(1, 1)', '(1, 4)', '(2, 2)', '(3, 2)', '(4, 2)'], ['(1, 3)', '(2, 3)', '(3, 5)']] | usr=[['(0, 1)', '(2, 1)', '(3, 1)', '(3, 4)'], ['(0, 2)', '(0, 5)', '(1, 2)', '(2, 4)', '(3, 6)', '(4, 1)', '(4, 3)'], ['(0, 3)', '(2, 5)', '(3, 3)', '(4, 4)'], ['(0, 4)', '(1, 1)', '(1, 4)', '(2, 2)', '(3, 2)', '(4, 2)'], ['(1, 3)', '(2, 3)', '(3, 5)']]
+    [PASS] param T_mK_stage2: ref=40.0 | usr=40.0
+    [PASS] param gap_threshold_factor: ref=0.05 | usr=0.05
+    [PASS] param noise_threshold: ref=0.0001 | usr=0.0001
+    [PASS] param bias_window: ref=0.007 | usr=0.007
+    [PASS] param derivative_threshold: ref=100.0 | usr=100.0
+    [PASS] param zbp_probability_threshold: ref=0.6 | usr=0.6
+    [PASS] param average_over_cutter: ref=0 | usr=0
+    [PASS] param threshold_low: ref=0.005 | usr=0.005
+    [PASS] param threshold_high: ref=0.067 | usr=0.067
+    [PASS] param min_cluster_size: ref=7 | usr=7
+    [PASS] param cluster_gap_threshold: ref=0.005 | usr=0.005
+    [PASS] param cluster_percentage_boundary_threshold: ref=0.6 | usr=0.6
+    [PASS] param cluster_ncutter_threshold: ref=0.5 | usr=0.5
+    [PASS] param cluster_volume_threshold: ref=1.992616548359012e-06 | usr=1.992616548359012e-06
+  [PLOT] Generated side-by-side comparison plot: phase_diagram_comparison_device_2.png
+
+[Test File 3] simulated_DLG_epsilon__disorder_seed_1__geometry_seed_1__surface_charge_4.0.nc
+  Testing Stage 1 ROI1 Bounds...
+    [PASS] V_min: ref=-1.5855 | usr=-1.5855
+    [PASS] V_max: ref=-1.5595 | usr=-1.5595
+    [PASS] B_min: ref=1.95 | usr=1.95
+    [PASS] B_max: ref=3.0 | usr=3.0
+    [PASS] param T_mK_stage1: ref=30.0 | usr=30.0
+    [PASS] param roi1_pct_box: ref=10 | usr=10.0
+    [PASS] param roi1_min_margin_box: ref=[0.003, 0.2] | usr=[0.003, 0.2]
+    [PASS] param n_tiles: ref=100 | usr=100
+    [PASS] param th_2w_p: ref=0.5 | usr=0.5
+    [PASS] param th_3w: ref=1000.0 | usr=1000.0
+    [PASS] param th_3w_tat: ref=0.7 | usr=0.7
+  Testing Stage 2 Metrics...
+    [PASS] extra.device_passed: ref=passed | usr=passed
+    [PASS] roi2_stats counts: ref={'not passed': 0, 'true positive': 1, 'false positive': 0} | usr={'not passed': 0, 'true positive': 1, 'false positive': 0}
+    [PASS] passing_list: ref=['true positive'] | usr=['true positive']
+    [PASS] soi2_stats cluster keys: ref=['(0, 1)', '(1, 1)', '(2, 1)', '(3, 1)', '(4, 1)'] | usr=['(0, 1)', '(1, 1)', '(2, 1)', '(3, 1)', '(4, 1)']
+      [PASS] cluster (0, 1) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (0, 1) cluster_V_center: ref=-1.56625 | usr=-1.56625
+      [PASS] cluster (0, 1) cluster_B_center: ref=2.9 | usr=2.9
+      [PASS] cluster (0, 1) median_gap: ref=0.018750000000000003 | usr=0.018750000000000003
+      [PASS] cluster (0, 1) cluster_V_size: ref=0.0007500000000000284 | usr=0.0007500000000000284
+      [PASS] cluster (0, 1) top_quintile_gap: ref=0.026250000000000002 | usr=0.026250000000000002
+      [PASS] cluster (0, 1) cluster_volume: ref=0.13749999999992393 | usr=0.13749999999992393
+      [PASS] cluster (0, 1) percentage_boundary: ref=0.7272727272727273 | usr=0.7272727272727273
+      [PASS] cluster (0, 1) cluster_B_size: ref=0.20000000000000018 | usr=0.20000000000000018
+      [PASS] cluster (1, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (1, 1) cluster_V_center: ref=-1.56675 | usr=-1.56675
+      [PASS] cluster (1, 1) cluster_B_center: ref=2.8 | usr=2.8
+      [PASS] cluster (1, 1) median_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (1, 1) cluster_V_size: ref=0.0007500000000000284 | usr=0.0007500000000000284
+      [PASS] cluster (1, 1) top_quintile_gap: ref=0.01625 | usr=0.01625
+      [PASS] cluster (1, 1) cluster_volume: ref=0.16249999999991008 | usr=0.16249999999991008
+      [PASS] cluster (1, 1) percentage_boundary: ref=0.9230769230769231 | usr=0.9230769230769231
+      [PASS] cluster (1, 1) cluster_B_size: ref=0.25 | usr=0.25
+      [PASS] cluster (2, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (2, 1) cluster_V_center: ref=-1.5665 | usr=-1.5665
+      [PASS] cluster (2, 1) cluster_B_center: ref=2.85 | usr=2.85
+      [PASS] cluster (2, 1) median_gap: ref=0.0275 | usr=0.0275
+      [PASS] cluster (2, 1) cluster_V_size: ref=0.000500000000000167 | usr=0.000500000000000167
+      [PASS] cluster (2, 1) top_quintile_gap: ref=0.03125 | usr=0.03125
+      [PASS] cluster (2, 1) cluster_volume: ref=0.14999999999991698 | usr=0.14999999999991698
+      [PASS] cluster (2, 1) percentage_boundary: ref=0.6666666666666666 | usr=0.6666666666666666
+      [PASS] cluster (2, 1) cluster_B_size: ref=0.25 | usr=0.25
+      [PASS] cluster (3, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (3, 1) cluster_V_center: ref=-1.56675 | usr=-1.56675
+      [PASS] cluster (3, 1) cluster_B_center: ref=2.85 | usr=2.85
+      [PASS] cluster (3, 1) median_gap: ref=0.015 | usr=0.015
+      [PASS] cluster (3, 1) cluster_V_size: ref=0.0007500000000000284 | usr=0.0007500000000000284
+      [PASS] cluster (3, 1) top_quintile_gap: ref=0.02175 | usr=0.02175
+      [PASS] cluster (3, 1) cluster_volume: ref=0.12499999999993083 | usr=0.12499999999993083
+      [PASS] cluster (3, 1) percentage_boundary: ref=0.9 | usr=0.9
+      [PASS] cluster (3, 1) cluster_B_size: ref=0.25 | usr=0.25
+      [PASS] cluster (4, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (4, 1) cluster_V_center: ref=-1.567 | usr=-1.567
+      [PASS] cluster (4, 1) cluster_B_center: ref=2.8 | usr=2.8
+      [PASS] cluster (4, 1) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (4, 1) cluster_V_size: ref=0.0007499999999998064 | usr=0.0007499999999998064
+      [PASS] cluster (4, 1) top_quintile_gap: ref=0.014250000000000002 | usr=0.014250000000000002
+      [PASS] cluster (4, 1) cluster_volume: ref=0.09999999999994467 | usr=0.09999999999994467
+      [PASS] cluster (4, 1) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (4, 1) cluster_B_size: ref=0.19999999999999973 | usr=0.19999999999999973
+    [PASS] overlapping_clusters: ref=[['(0, 1)', '(1, 1)', '(2, 1)', '(3, 1)', '(4, 1)']] | usr=[['(0, 1)', '(1, 1)', '(2, 1)', '(3, 1)', '(4, 1)']]
+    [PASS] param T_mK_stage2: ref=40.0 | usr=40.0
+    [PASS] param gap_threshold_factor: ref=0.05 | usr=0.05
+    [PASS] param noise_threshold: ref=0.0001 | usr=0.0001
+    [PASS] param bias_window: ref=0.007 | usr=0.007
+    [PASS] param derivative_threshold: ref=100.0 | usr=100.0
+    [PASS] param zbp_probability_threshold: ref=0.6 | usr=0.6
+    [PASS] param average_over_cutter: ref=0 | usr=0
+    [PASS] param threshold_low: ref=0.005 | usr=0.005
+    [PASS] param threshold_high: ref=0.067 | usr=0.067
+    [PASS] param min_cluster_size: ref=7 | usr=7
+    [PASS] param cluster_gap_threshold: ref=0.005 | usr=0.005
+    [PASS] param cluster_percentage_boundary_threshold: ref=0.6 | usr=0.6
+    [PASS] param cluster_ncutter_threshold: ref=0.5 | usr=0.5
+    [PASS] param cluster_volume_threshold: ref=1.992616548359012e-06 | usr=1.992616548359012e-06
+  [PLOT] Generated side-by-side comparison plot: phase_diagram_comparison_device_3.png
+
+[Test File 4] simulated_DLG_epsilon__disorder_seed_1__geometry_seed_2__surface_charge_0.1.nc
+  Testing Stage 1 ROI1 Bounds...
+    [PASS] V_min: ref=-0.473 | usr=-0.473
+    [PASS] V_max: ref=-0.452 | usr=-0.452
+    [PASS] B_min: ref=1.4000000000000001 | usr=1.4000000000000001
+    [PASS] B_max: ref=3.0 | usr=3.0
+    [PASS] param T_mK_stage1: ref=30.0 | usr=30.0
+    [PASS] param roi1_pct_box: ref=10 | usr=10.0
+    [PASS] param roi1_min_margin_box: ref=[0.003, 0.2] | usr=[0.003, 0.2]
+    [PASS] param n_tiles: ref=100 | usr=100
+    [PASS] param th_2w_p: ref=0.5 | usr=0.5
+    [PASS] param th_3w: ref=1000.0 | usr=1000.0
+    [PASS] param th_3w_tat: ref=0.7 | usr=0.7
+  Testing Stage 2 Metrics...
+    [PASS] extra.device_passed: ref=passed | usr=passed
+    [PASS] roi2_stats counts: ref={'not passed': 0, 'true positive': 1, 'false positive': 0} | usr={'not passed': 0, 'true positive': 1, 'false positive': 0}
+    [PASS] passing_list: ref=['true positive'] | usr=['true positive']
+    [PASS] soi2_stats cluster keys: ref=['(1, 1)', '(1, 2)', '(1, 3)', '(2, 1)', '(2, 2)', '(2, 3)', '(3, 1)', '(4, 1)'] | usr=['(1, 1)', '(1, 2)', '(1, 3)', '(2, 1)', '(2, 2)', '(2, 3)', '(3, 1)', '(4, 1)']
+      [PASS] cluster (1, 1) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (1, 1) cluster_V_center: ref=-0.4675 | usr=-0.4675
+      [PASS] cluster (1, 1) cluster_B_center: ref=2.55 | usr=2.55
+      [PASS] cluster (1, 1) median_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (1, 1) cluster_V_size: ref=0.0015000000000000013 | usr=0.0015000000000000013
+      [PASS] cluster (1, 1) top_quintile_gap: ref=0.01625 | usr=0.01625
+      [PASS] cluster (1, 1) cluster_volume: ref=0.44999999999995083 | usr=0.44999999999995083
+      [PASS] cluster (1, 1) percentage_boundary: ref=0.8 | usr=0.8
+      [PASS] cluster (1, 1) cluster_B_size: ref=0.5499999999999998 | usr=0.5499999999999998
+      [PASS] cluster (1, 2) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (1, 2) cluster_V_center: ref=-0.46925 | usr=-0.46925
+      [PASS] cluster (1, 2) cluster_B_center: ref=2.25 | usr=2.25
+      [PASS] cluster (1, 2) median_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (1, 2) cluster_V_size: ref=0.0012499999999999734 | usr=0.0012499999999999734
+      [PASS] cluster (1, 2) top_quintile_gap: ref=0.027250000000000003 | usr=0.027250000000000003
+      [PASS] cluster (1, 2) cluster_volume: ref=0.2124999999999768 | usr=0.2124999999999768
+      [PASS] cluster (1, 2) percentage_boundary: ref=0.8235294117647058 | usr=0.8235294117647058
+      [PASS] cluster (1, 2) cluster_B_size: ref=0.2999999999999998 | usr=0.2999999999999998
+      [PASS] cluster (1, 3) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (1, 3) cluster_V_center: ref=-0.47025 | usr=-0.47025
+      [PASS] cluster (1, 3) cluster_B_center: ref=2.1 | usr=2.1
+      [PASS] cluster (1, 3) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (1, 3) cluster_V_size: ref=0.0010000000000000009 | usr=0.0010000000000000009
+      [PASS] cluster (1, 3) top_quintile_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (1, 3) cluster_volume: ref=0.16249999999998224 | usr=0.16249999999998224
+      [PASS] cluster (1, 3) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (1, 3) cluster_B_size: ref=0.2999999999999998 | usr=0.2999999999999998
+      [PASS] cluster (2, 1) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (2, 1) cluster_V_center: ref=-0.46625 | usr=-0.46625
+      [PASS] cluster (2, 1) cluster_B_center: ref=2.75 | usr=2.75
+      [PASS] cluster (2, 1) median_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (2, 1) cluster_V_size: ref=0.0040000000000000036 | usr=0.0040000000000000036
+      [PASS] cluster (2, 1) top_quintile_gap: ref=0.018750000000000003 | usr=0.018750000000000003
+      [PASS] cluster (2, 1) cluster_volume: ref=1.1124999999998784 | usr=1.1124999999998784
+      [PASS] cluster (2, 1) percentage_boundary: ref=0.6086956521739131 | usr=0.6086956521739131
+      [PASS] cluster (2, 1) cluster_B_size: ref=0.6000000000000001 | usr=0.6000000000000001
+      [PASS] cluster (2, 2) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (2, 2) cluster_V_center: ref=-0.469 | usr=-0.469
+      [PASS] cluster (2, 2) cluster_B_center: ref=2.2 | usr=2.2
+      [PASS] cluster (2, 2) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (2, 2) cluster_V_size: ref=0.0012499999999999734 | usr=0.0012499999999999734
+      [PASS] cluster (2, 2) top_quintile_gap: ref=0.015750000000000004 | usr=0.015750000000000004
+      [PASS] cluster (2, 2) cluster_volume: ref=0.2124999999999768 | usr=0.2124999999999768
+      [PASS] cluster (2, 2) percentage_boundary: ref=0.75 | usr=0.75
+      [PASS] cluster (2, 2) cluster_B_size: ref=0.19999999999999973 | usr=0.19999999999999973
+      [PASS] cluster (2, 3) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (2, 3) cluster_V_center: ref=-0.47 | usr=-0.47
+      [PASS] cluster (2, 3) cluster_B_center: ref=2.15 | usr=2.15
+      [PASS] cluster (2, 3) median_gap: ref=0.007500000000000001 | usr=0.007500000000000001
+      [PASS] cluster (2, 3) cluster_V_size: ref=0.0005000000000000004 | usr=0.0005000000000000004
+      [PASS] cluster (2, 3) top_quintile_gap: ref=0.016750000000000004 | usr=0.016750000000000004
+      [PASS] cluster (2, 3) cluster_volume: ref=0.09999999999998908 | usr=0.09999999999998908
+      [PASS] cluster (2, 3) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (2, 3) cluster_B_size: ref=0.25 | usr=0.25
+      [PASS] cluster (3, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (3, 1) cluster_V_center: ref=-0.46775 | usr=-0.46775
+      [PASS] cluster (3, 1) cluster_B_center: ref=2.6 | usr=2.6
+      [PASS] cluster (3, 1) median_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (3, 1) cluster_V_size: ref=0.006500000000000006 | usr=0.006500000000000006
+      [PASS] cluster (3, 1) top_quintile_gap: ref=0.021249999999999998 | usr=0.021249999999999998
+      [PASS] cluster (3, 1) cluster_volume: ref=1.5624999999998292 | usr=1.5624999999998292
+      [PASS] cluster (3, 1) percentage_boundary: ref=0.6481481481481481 | usr=0.6481481481481481
+      [PASS] cluster (3, 1) cluster_B_size: ref=0.9500000000000002 | usr=0.9500000000000002
+      [PASS] cluster (4, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (4, 1) cluster_V_center: ref=-0.4695 | usr=-0.4695
+      [PASS] cluster (4, 1) cluster_B_center: ref=2.3 | usr=2.3
+      [PASS] cluster (4, 1) median_gap: ref=0.01 | usr=0.01
+      [PASS] cluster (4, 1) cluster_V_size: ref=0.0027499999999999747 | usr=0.0027499999999999747
+      [PASS] cluster (4, 1) top_quintile_gap: ref=0.027750000000000004 | usr=0.027750000000000004
+      [PASS] cluster (4, 1) cluster_volume: ref=0.5999999999999345 | usr=0.5999999999999345
+      [PASS] cluster (4, 1) percentage_boundary: ref=0.7209302325581395 | usr=0.7209302325581395
+      [PASS] cluster (4, 1) cluster_B_size: ref=0.5500000000000003 | usr=0.5500000000000003
+    [PASS] overlapping_clusters: ref=[['(1, 1)', '(1, 2)', '(1, 3)', '(2, 1)', '(2, 2)', '(2, 3)', '(3, 1)', '(4, 1)']] | usr=[['(1, 1)', '(1, 2)', '(1, 3)', '(2, 1)', '(2, 2)', '(2, 3)', '(3, 1)', '(4, 1)']]
+    [PASS] param T_mK_stage2: ref=40.0 | usr=40.0
+    [PASS] param gap_threshold_factor: ref=0.01 | usr=0.01
+    [PASS] param noise_threshold: ref=0.0001 | usr=0.0001
+    [PASS] param bias_window: ref=0.007 | usr=0.007
+    [PASS] param derivative_threshold: ref=100.0 | usr=100.0
+    [PASS] param zbp_probability_threshold: ref=0.6 | usr=0.6
+    [PASS] param average_over_cutter: ref=0 | usr=0
+    [PASS] param threshold_low: ref=0.005 | usr=0.005
+    [PASS] param threshold_high: ref=0.067 | usr=0.067
+    [PASS] param min_cluster_size: ref=7 | usr=7
+    [PASS] param cluster_gap_threshold: ref=0.005 | usr=0.005
+    [PASS] param cluster_percentage_boundary_threshold: ref=0.6 | usr=0.6
+    [PASS] param cluster_ncutter_threshold: ref=0.5 | usr=0.5
+    [PASS] param cluster_volume_threshold: ref=1.992616548359012e-06 | usr=1.992616548359012e-06
+  [PLOT] Generated side-by-side comparison plot: phase_diagram_comparison_device_4.png
+
+[Test File 5] simulated_DLG_epsilon__disorder_seed_1__geometry_seed_2__surface_charge_1.0.nc
+  Testing Stage 1 ROI1 Bounds...
+    [PASS] V_min: ref=-0.735 | usr=-0.735
+    [PASS] V_max: ref=-0.697 | usr=-0.697
+    [PASS] B_min: ref=1.7 | usr=1.7
+    [PASS] B_max: ref=3.0 | usr=3.0
+    [PASS] param T_mK_stage1: ref=30.0 | usr=30.0
+    [PASS] param roi1_pct_box: ref=10 | usr=10.0
+    [PASS] param roi1_min_margin_box: ref=[0.003, 0.2] | usr=[0.003, 0.2]
+    [PASS] param n_tiles: ref=100 | usr=100
+    [PASS] param th_2w_p: ref=0.5 | usr=0.5
+    [PASS] param th_3w: ref=1000.0 | usr=1000.0
+    [PASS] param th_3w_tat: ref=0.7 | usr=0.7
+  Testing Stage 2 Metrics...
+    [PASS] extra.device_passed: ref=passed | usr=passed
+    [PASS] roi2_stats counts: ref={'not passed': 0, 'true positive': 5, 'false positive': 0} | usr={'not passed': 0, 'true positive': 5, 'false positive': 0}
+    [PASS] passing_list: ref=['true positive', 'true positive', 'true positive', 'true positive', 'true positive'] | usr=['true positive', 'true positive', 'true positive', 'true positive', 'true positive']
+    [PASS] soi2_stats cluster keys: ref=['(0, 1)', '(0, 2)', '(0, 3)', '(1, 1)', '(1, 2)', '(1, 3)', '(1, 4)', '(1, 5)', '(2, 1)', '(2, 2)', '(2, 3)', '(2, 4)', '(2, 5)', '(3, 1)', '(3, 2)', '(3, 3)', '(3, 4)', '(3, 5)', '(4, 1)', '(4, 2)', '(4, 3)', '(4, 4)', '(4, 5)'] | usr=['(0, 1)', '(0, 2)', '(0, 3)', '(1, 1)', '(1, 2)', '(1, 3)', '(1, 4)', '(1, 5)', '(2, 1)', '(2, 2)', '(2, 3)', '(2, 4)', '(2, 5)', '(3, 1)', '(3, 2)', '(3, 3)', '(3, 4)', '(3, 5)', '(4, 1)', '(4, 2)', '(4, 3)', '(4, 4)', '(4, 5)']
+      [PASS] cluster (0, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (0, 1) cluster_V_center: ref=-0.71275 | usr=-0.71275
+      [PASS] cluster (0, 1) cluster_B_center: ref=2.3 | usr=2.3
+      [PASS] cluster (0, 1) median_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (0, 1) cluster_V_size: ref=0.0010000000000000009 | usr=0.0010000000000000009
+      [PASS] cluster (0, 1) top_quintile_gap: ref=0.01625 | usr=0.01625
+      [PASS] cluster (0, 1) cluster_volume: ref=0.137499999999985 | usr=0.137499999999985
+      [PASS] cluster (0, 1) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (0, 1) cluster_B_size: ref=0.2999999999999998 | usr=0.2999999999999998
+      [PASS] cluster (0, 2) ncutters: ref=5.0 | usr=5.0
+      [PASS] cluster (0, 2) cluster_V_center: ref=-0.7125 | usr=-0.7125
+      [PASS] cluster (0, 2) cluster_B_center: ref=2.8 | usr=2.8
+      [PASS] cluster (0, 2) median_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (0, 2) cluster_V_size: ref=0.0012500000000000844 | usr=0.0012500000000000844
+      [PASS] cluster (0, 2) top_quintile_gap: ref=0.01625 | usr=0.01625
+      [PASS] cluster (0, 2) cluster_volume: ref=0.137499999999985 | usr=0.137499999999985
+      [PASS] cluster (0, 2) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (0, 2) cluster_B_size: ref=0.30000000000000027 | usr=0.30000000000000027
+      [PASS] cluster (0, 3) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (0, 3) cluster_V_center: ref=-0.71675 | usr=-0.71675
+      [PASS] cluster (0, 3) cluster_B_center: ref=2.9 | usr=2.9
+      [PASS] cluster (0, 3) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (0, 3) cluster_V_size: ref=0.0007499999999999174 | usr=0.0007499999999999174
+      [PASS] cluster (0, 3) top_quintile_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (0, 3) cluster_volume: ref=0.09999999999998908 | usr=0.09999999999998908
+      [PASS] cluster (0, 3) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (0, 3) cluster_B_size: ref=0.25 | usr=0.25
+      [PASS] cluster (1, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (1, 1) cluster_V_center: ref=-0.71325 | usr=-0.71325
+      [PASS] cluster (1, 1) cluster_B_center: ref=2.25 | usr=2.25
+      [PASS] cluster (1, 1) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (1, 1) cluster_V_size: ref=0.0017499999999999183 | usr=0.0017499999999999183
+      [PASS] cluster (1, 1) top_quintile_gap: ref=0.014250000000000002 | usr=0.014250000000000002
+      [PASS] cluster (1, 1) cluster_volume: ref=0.2499999999999727 | usr=0.2499999999999727
+      [PASS] cluster (1, 1) percentage_boundary: ref=0.85 | usr=0.85
+      [PASS] cluster (1, 1) cluster_B_size: ref=0.3500000000000001 | usr=0.3500000000000001
+      [PASS] cluster (1, 2) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (1, 2) cluster_V_center: ref=-0.71475 | usr=-0.71475
+      [PASS] cluster (1, 2) cluster_B_center: ref=2.25 | usr=2.25
+      [PASS] cluster (1, 2) median_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (1, 2) cluster_V_size: ref=0.0010000000000000009 | usr=0.0010000000000000009
+      [PASS] cluster (1, 2) top_quintile_gap: ref=0.021750000000000002 | usr=0.021750000000000002
+      [PASS] cluster (1, 2) cluster_volume: ref=0.18749999999997952 | usr=0.18749999999997952
+      [PASS] cluster (1, 2) percentage_boundary: ref=0.8 | usr=0.8
+      [PASS] cluster (1, 2) cluster_B_size: ref=0.25 | usr=0.25
+      [PASS] cluster (1, 3) ncutters: ref=5.0 | usr=5.0
+      [PASS] cluster (1, 3) cluster_V_center: ref=-0.71275 | usr=-0.71275
+      [PASS] cluster (1, 3) cluster_B_center: ref=2.75 | usr=2.75
+      [PASS] cluster (1, 3) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (1, 3) cluster_V_size: ref=0.0007500000000000284 | usr=0.0007500000000000284
+      [PASS] cluster (1, 3) top_quintile_gap: ref=0.017750000000000005 | usr=0.017750000000000005
+      [PASS] cluster (1, 3) cluster_volume: ref=0.16249999999998224 | usr=0.16249999999998224
+      [PASS] cluster (1, 3) percentage_boundary: ref=0.8461538461538461 | usr=0.8461538461538461
+      [PASS] cluster (1, 3) cluster_B_size: ref=0.25 | usr=0.25
+      [PASS] cluster (1, 4) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (1, 4) cluster_V_center: ref=-0.716 | usr=-0.716
+      [PASS] cluster (1, 4) cluster_B_center: ref=2.55 | usr=2.55
+      [PASS] cluster (1, 4) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (1, 4) cluster_V_size: ref=0.0007500000000000284 | usr=0.0007500000000000284
+      [PASS] cluster (1, 4) top_quintile_gap: ref=0.009250000000000001 | usr=0.009250000000000001
+      [PASS] cluster (1, 4) cluster_volume: ref=0.12499999999998634 | usr=0.12499999999998634
+      [PASS] cluster (1, 4) percentage_boundary: ref=0.7 | usr=0.7
+      [PASS] cluster (1, 4) cluster_B_size: ref=0.19999999999999973 | usr=0.19999999999999973
+      [PASS] cluster (1, 5) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (1, 5) cluster_V_center: ref=-0.71675 | usr=-0.71675
+      [PASS] cluster (1, 5) cluster_B_center: ref=2.95 | usr=2.95
+      [PASS] cluster (1, 5) median_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (1, 5) cluster_V_size: ref=0.0004999999999999449 | usr=0.0004999999999999449
+      [PASS] cluster (1, 5) top_quintile_gap: ref=0.05025000000000003 | usr=0.05025000000000003
+      [PASS] cluster (1, 5) cluster_volume: ref=0.08749999999999045 | usr=0.08749999999999045
+      [PASS] cluster (1, 5) percentage_boundary: ref=0.8571428571428571 | usr=0.8571428571428571
+      [PASS] cluster (1, 5) cluster_B_size: ref=0.1499999999999999 | usr=0.1499999999999999
+      [PASS] cluster (2, 1) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (2, 1) cluster_V_center: ref=-0.715 | usr=-0.715
+      [PASS] cluster (2, 1) cluster_B_center: ref=2.15 | usr=2.15
+      [PASS] cluster (2, 1) median_gap: ref=0.01625 | usr=0.01625
+      [PASS] cluster (2, 1) cluster_V_size: ref=0.0010000000000000009 | usr=0.0010000000000000009
+      [PASS] cluster (2, 1) top_quintile_gap: ref=0.021249999999999998 | usr=0.021249999999999998
+      [PASS] cluster (2, 1) cluster_volume: ref=0.33749999999996316 | usr=0.33749999999996316
+      [PASS] cluster (2, 1) percentage_boundary: ref=0.7916666666666666 | usr=0.7916666666666666
+      [PASS] cluster (2, 1) cluster_B_size: ref=0.4500000000000002 | usr=0.4500000000000002
+      [PASS] cluster (2, 2) ncutters: ref=5.0 | usr=5.0
+      [PASS] cluster (2, 2) cluster_V_center: ref=-0.713 | usr=-0.713
+      [PASS] cluster (2, 2) cluster_B_center: ref=2.75 | usr=2.75
+      [PASS] cluster (2, 2) median_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (2, 2) cluster_V_size: ref=0.0007500000000000284 | usr=0.0007500000000000284
+      [PASS] cluster (2, 2) top_quintile_gap: ref=0.015750000000000004 | usr=0.015750000000000004
+      [PASS] cluster (2, 2) cluster_volume: ref=0.14999999999998362 | usr=0.14999999999998362
+      [PASS] cluster (2, 2) percentage_boundary: ref=0.9166666666666666 | usr=0.9166666666666666
+      [PASS] cluster (2, 2) cluster_B_size: ref=0.2999999999999998 | usr=0.2999999999999998
+      [PASS] cluster (2, 3) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (2, 3) cluster_V_center: ref=-0.716 | usr=-0.716
+      [PASS] cluster (2, 3) cluster_B_center: ref=2.6 | usr=2.6
+      [PASS] cluster (2, 3) median_gap: ref=0.00625 | usr=0.00625
+      [PASS] cluster (2, 3) cluster_V_size: ref=0.000500000000000056 | usr=0.000500000000000056
+      [PASS] cluster (2, 3) top_quintile_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (2, 3) cluster_volume: ref=0.11249999999998771 | usr=0.11249999999998771
+      [PASS] cluster (2, 3) percentage_boundary: ref=0.7777777777777778 | usr=0.7777777777777778
+      [PASS] cluster (2, 3) cluster_B_size: ref=0.20000000000000018 | usr=0.20000000000000018
+      [PASS] cluster (2, 4) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (2, 4) cluster_V_center: ref=-0.71175 | usr=-0.71175
+      [PASS] cluster (2, 4) cluster_B_center: ref=2.95 | usr=2.95
+      [PASS] cluster (2, 4) median_gap: ref=0.018750000000000003 | usr=0.018750000000000003
+      [PASS] cluster (2, 4) cluster_V_size: ref=0.0007499999999999174 | usr=0.0007499999999999174
+      [PASS] cluster (2, 4) top_quintile_gap: ref=0.018750000000000003 | usr=0.018750000000000003
+      [PASS] cluster (2, 4) cluster_volume: ref=0.09999999999998908 | usr=0.09999999999998908
+      [PASS] cluster (2, 4) percentage_boundary: ref=0.875 | usr=0.875
+      [PASS] cluster (2, 4) cluster_B_size: ref=0.10000000000000009 | usr=0.10000000000000009
+      [PASS] cluster (2, 5) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (2, 5) cluster_V_center: ref=-0.713 | usr=-0.713
+      [PASS] cluster (2, 5) cluster_B_center: ref=2.3 | usr=2.3
+      [PASS] cluster (2, 5) median_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (2, 5) cluster_V_size: ref=0.0002500000000000835 | usr=0.0002500000000000835
+      [PASS] cluster (2, 5) top_quintile_gap: ref=0.013250000000000001 | usr=0.013250000000000001
+      [PASS] cluster (2, 5) cluster_volume: ref=0.08749999999999045 | usr=0.08749999999999045
+      [PASS] cluster (2, 5) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (2, 5) cluster_B_size: ref=0.1499999999999999 | usr=0.1499999999999999
+      [PASS] cluster (3, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (3, 1) cluster_V_center: ref=-0.71175 | usr=-0.71175
+      [PASS] cluster (3, 1) cluster_B_center: ref=2.95 | usr=2.95
+      [PASS] cluster (3, 1) median_gap: ref=0.018750000000000003 | usr=0.018750000000000003
+      [PASS] cluster (3, 1) cluster_V_size: ref=0.0010000000000000009 | usr=0.0010000000000000009
+      [PASS] cluster (3, 1) top_quintile_gap: ref=0.018750000000000003 | usr=0.018750000000000003
+      [PASS] cluster (3, 1) cluster_volume: ref=0.16249999999998224 | usr=0.16249999999998224
+      [PASS] cluster (3, 1) percentage_boundary: ref=0.75 | usr=0.75
+      [PASS] cluster (3, 1) cluster_B_size: ref=0.1499999999999999 | usr=0.1499999999999999
+      [PASS] cluster (3, 2) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (3, 2) cluster_V_center: ref=-0.71325 | usr=-0.71325
+      [PASS] cluster (3, 2) cluster_B_center: ref=2.3 | usr=2.3
+      [PASS] cluster (3, 2) median_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (3, 2) cluster_V_size: ref=0.0010000000000000009 | usr=0.0010000000000000009
+      [PASS] cluster (3, 2) top_quintile_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (3, 2) cluster_volume: ref=0.137499999999985 | usr=0.137499999999985
+      [PASS] cluster (3, 2) percentage_boundary: ref=0.9090909090909091 | usr=0.9090909090909091
+      [PASS] cluster (3, 2) cluster_B_size: ref=0.19999999999999973 | usr=0.19999999999999973
+      [PASS] cluster (3, 3) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (3, 3) cluster_V_center: ref=-0.715 | usr=-0.715
+      [PASS] cluster (3, 3) cluster_B_center: ref=2.05 | usr=2.05
+      [PASS] cluster (3, 3) median_gap: ref=0.015 | usr=0.015
+      [PASS] cluster (3, 3) cluster_V_size: ref=0.0007500000000000284 | usr=0.0007500000000000284
+      [PASS] cluster (3, 3) top_quintile_gap: ref=0.02375 | usr=0.02375
+      [PASS] cluster (3, 3) cluster_volume: ref=0.12499999999998634 | usr=0.12499999999998634
+      [PASS] cluster (3, 3) percentage_boundary: ref=0.7 | usr=0.7
+      [PASS] cluster (3, 3) cluster_B_size: ref=0.1499999999999999 | usr=0.1499999999999999
+      [PASS] cluster (3, 4) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (3, 4) cluster_V_center: ref=-0.71675 | usr=-0.71675
+      [PASS] cluster (3, 4) cluster_B_center: ref=2.95 | usr=2.95
+      [PASS] cluster (3, 4) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (3, 4) cluster_V_size: ref=0.0007499999999999174 | usr=0.0007499999999999174
+      [PASS] cluster (3, 4) top_quintile_gap: ref=0.028750000000000015 | usr=0.028750000000000015
+      [PASS] cluster (3, 4) cluster_volume: ref=0.11249999999998771 | usr=0.11249999999998771
+      [PASS] cluster (3, 4) percentage_boundary: ref=0.8888888888888888 | usr=0.8888888888888888
+      [PASS] cluster (3, 4) cluster_B_size: ref=0.1499999999999999 | usr=0.1499999999999999
+      [PASS] cluster (3, 5) ncutters: ref=5.0 | usr=5.0
+      [PASS] cluster (3, 5) cluster_V_center: ref=-0.713 | usr=-0.713
+      [PASS] cluster (3, 5) cluster_B_center: ref=2.7 | usr=2.7
+      [PASS] cluster (3, 5) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (3, 5) cluster_V_size: ref=0.0007500000000000284 | usr=0.0007500000000000284
+      [PASS] cluster (3, 5) top_quintile_gap: ref=0.016750000000000008 | usr=0.016750000000000008
+      [PASS] cluster (3, 5) cluster_volume: ref=0.08749999999999045 | usr=0.08749999999999045
+      [PASS] cluster (3, 5) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (3, 5) cluster_B_size: ref=0.19999999999999973 | usr=0.19999999999999973
+      [PASS] cluster (4, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (4, 1) cluster_V_center: ref=-0.712 | usr=-0.712
+      [PASS] cluster (4, 1) cluster_B_center: ref=2.9 | usr=2.9
+      [PASS] cluster (4, 1) median_gap: ref=0.01625 | usr=0.01625
+      [PASS] cluster (4, 1) cluster_V_size: ref=0.0010000000000000009 | usr=0.0010000000000000009
+      [PASS] cluster (4, 1) top_quintile_gap: ref=0.01975 | usr=0.01975
+      [PASS] cluster (4, 1) cluster_volume: ref=0.1749999999999809 | usr=0.1749999999999809
+      [PASS] cluster (4, 1) percentage_boundary: ref=0.6153846153846154 | usr=0.6153846153846154
+      [PASS] cluster (4, 1) cluster_B_size: ref=0.1499999999999999 | usr=0.1499999999999999
+      [PASS] cluster (4, 2) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (4, 2) cluster_V_center: ref=-0.71625 | usr=-0.71625
+      [PASS] cluster (4, 2) cluster_B_center: ref=2.6 | usr=2.6
+      [PASS] cluster (4, 2) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (4, 2) cluster_V_size: ref=0.000500000000000056 | usr=0.000500000000000056
+      [PASS] cluster (4, 2) top_quintile_gap: ref=0.009750000000000002 | usr=0.009750000000000002
+      [PASS] cluster (4, 2) cluster_volume: ref=0.11249999999998771 | usr=0.11249999999998771
+      [PASS] cluster (4, 2) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (4, 2) cluster_B_size: ref=0.20000000000000018 | usr=0.20000000000000018
+      [PASS] cluster (4, 3) ncutters: ref=5.0 | usr=5.0
+      [PASS] cluster (4, 3) cluster_V_center: ref=-0.71325 | usr=-0.71325
+      [PASS] cluster (4, 3) cluster_B_center: ref=2.75 | usr=2.75
+      [PASS] cluster (4, 3) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (4, 3) cluster_V_size: ref=0.0010000000000000009 | usr=0.0010000000000000009
+      [PASS] cluster (4, 3) top_quintile_gap: ref=0.014250000000000004 | usr=0.014250000000000004
+      [PASS] cluster (4, 3) cluster_volume: ref=0.11249999999998771 | usr=0.11249999999998771
+      [PASS] cluster (4, 3) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (4, 3) cluster_B_size: ref=0.25 | usr=0.25
+      [PASS] cluster (4, 4) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (4, 4) cluster_V_center: ref=-0.717 | usr=-0.717
+      [PASS] cluster (4, 4) cluster_B_center: ref=2.9 | usr=2.9
+      [PASS] cluster (4, 4) median_gap: ref=0.00625 | usr=0.00625
+      [PASS] cluster (4, 4) cluster_V_size: ref=0.0007500000000000284 | usr=0.0007500000000000284
+      [PASS] cluster (4, 4) top_quintile_gap: ref=0.01225 | usr=0.01225
+      [PASS] cluster (4, 4) cluster_volume: ref=0.11249999999998771 | usr=0.11249999999998771
+      [PASS] cluster (4, 4) percentage_boundary: ref=0.7777777777777778 | usr=0.7777777777777778
+      [PASS] cluster (4, 4) cluster_B_size: ref=0.15000000000000036 | usr=0.15000000000000036
+      [PASS] cluster (4, 5) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (4, 5) cluster_V_center: ref=-0.7135 | usr=-0.7135
+      [PASS] cluster (4, 5) cluster_B_center: ref=2.3 | usr=2.3
+      [PASS] cluster (4, 5) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (4, 5) cluster_V_size: ref=0.0010000000000000009 | usr=0.0010000000000000009
+      [PASS] cluster (4, 5) top_quintile_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (4, 5) cluster_volume: ref=0.08749999999999045 | usr=0.08749999999999045
+      [PASS] cluster (4, 5) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (4, 5) cluster_B_size: ref=0.19999999999999973 | usr=0.19999999999999973
+    [PASS] overlapping_clusters: ref=[['(0, 1)', '(1, 1)', '(2, 5)', '(3, 2)', '(4, 5)'], ['(0, 2)', '(1, 3)', '(2, 2)', '(2, 4)', '(3, 1)', '(3, 5)', '(4, 1)', '(4, 3)'], ['(0, 3)', '(1, 5)', '(3, 4)', '(4, 4)'], ['(1, 2)', '(2, 1)', '(3, 3)'], ['(1, 4)', '(2, 3)', '(4, 2)']] | usr=[['(0, 1)', '(1, 1)', '(2, 5)', '(3, 2)', '(4, 5)'], ['(0, 2)', '(1, 3)', '(2, 2)', '(2, 4)', '(3, 1)', '(3, 5)', '(4, 1)', '(4, 3)'], ['(0, 3)', '(1, 5)', '(3, 4)', '(4, 4)'], ['(1, 2)', '(2, 1)', '(3, 3)'], ['(1, 4)', '(2, 3)', '(4, 2)']]
+    [PASS] param T_mK_stage2: ref=40.0 | usr=40.0
+    [PASS] param gap_threshold_factor: ref=0.05 | usr=0.05
+    [PASS] param noise_threshold: ref=0.0001 | usr=0.0001
+    [PASS] param bias_window: ref=0.007 | usr=0.007
+    [PASS] param derivative_threshold: ref=100.0 | usr=100.0
+    [PASS] param zbp_probability_threshold: ref=0.6 | usr=0.6
+    [PASS] param average_over_cutter: ref=0 | usr=0
+    [PASS] param threshold_low: ref=0.005 | usr=0.005
+    [PASS] param threshold_high: ref=0.067 | usr=0.067
+    [PASS] param min_cluster_size: ref=7 | usr=7
+    [PASS] param cluster_gap_threshold: ref=0.005 | usr=0.005
+    [PASS] param cluster_percentage_boundary_threshold: ref=0.6 | usr=0.6
+    [PASS] param cluster_ncutter_threshold: ref=0.5 | usr=0.5
+    [PASS] param cluster_volume_threshold: ref=1.992616548359012e-06 | usr=1.992616548359012e-06
+  [PLOT] Generated side-by-side comparison plot: phase_diagram_comparison_device_5.png
+
+[Test File 6] simulated_DLG_epsilon__disorder_seed_1__geometry_seed_2__surface_charge_2.7.nc
+  Testing Stage 1 ROI1 Bounds...
+    [PASS] V_min: ref=-1.208 | usr=-1.208
+    [PASS] V_max: ref=-1.1795000000000002 | usr=-1.1795000000000002
+    [PASS] B_min: ref=1.55 | usr=1.55
+    [PASS] B_max: ref=3.0 | usr=3.0
+    [PASS] param T_mK_stage1: ref=30.0 | usr=30.0
+    [PASS] param roi1_pct_box: ref=10 | usr=10.0
+    [PASS] param roi1_min_margin_box: ref=[0.003, 0.2] | usr=[0.003, 0.2]
+    [PASS] param n_tiles: ref=100 | usr=100
+    [PASS] param th_2w_p: ref=0.5 | usr=0.5
+    [PASS] param th_3w: ref=1000.0 | usr=1000.0
+    [PASS] param th_3w_tat: ref=0.7 | usr=0.7
+  Testing Stage 2 Metrics...
+    [PASS] extra.device_passed: ref=passed | usr=passed
+    [PASS] roi2_stats counts: ref={'not passed': 0, 'true positive': 2, 'false positive': 0} | usr={'not passed': 0, 'true positive': 2, 'false positive': 0}
+    [PASS] passing_list: ref=['true positive', 'true positive'] | usr=['true positive', 'true positive']
+    [PASS] soi2_stats cluster keys: ref=['(0, 1)', '(0, 2)', '(1, 1)', '(1, 2)', '(2, 1)', '(3, 1)', '(4, 1)'] | usr=['(0, 1)', '(0, 2)', '(1, 1)', '(1, 2)', '(2, 1)', '(3, 1)', '(4, 1)']
+      [PASS] cluster (0, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (0, 1) cluster_V_center: ref=-1.199 | usr=-1.199
+      [PASS] cluster (0, 1) cluster_B_center: ref=2.85 | usr=2.85
+      [PASS] cluster (0, 1) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (0, 1) cluster_V_size: ref=0.0022499999999998632 | usr=0.0022499999999998632
+      [PASS] cluster (0, 1) top_quintile_gap: ref=0.026249999999999968 | usr=0.026249999999999968
+      [PASS] cluster (0, 1) cluster_volume: ref=0.5499999999996957 | usr=0.5499999999996957
+      [PASS] cluster (0, 1) percentage_boundary: ref=0.7777777777777778 | usr=0.7777777777777778
+      [PASS] cluster (0, 1) cluster_B_size: ref=0.3500000000000001 | usr=0.3500000000000001
+      [PASS] cluster (0, 2) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (0, 2) cluster_V_center: ref=-1.1965 | usr=-1.1965
+      [PASS] cluster (0, 2) cluster_B_center: ref=2.6 | usr=2.6
+      [PASS] cluster (0, 2) median_gap: ref=0.01 | usr=0.01
+      [PASS] cluster (0, 2) cluster_V_size: ref=0.0007500000000000284 | usr=0.0007500000000000284
+      [PASS] cluster (0, 2) top_quintile_gap: ref=0.015250000000000001 | usr=0.015250000000000001
+      [PASS] cluster (0, 2) cluster_volume: ref=0.09999999999994467 | usr=0.09999999999994467
+      [PASS] cluster (0, 2) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (0, 2) cluster_B_size: ref=0.20000000000000018 | usr=0.20000000000000018
+      [PASS] cluster (1, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (1, 1) cluster_V_center: ref=-1.199 | usr=-1.199
+      [PASS] cluster (1, 1) cluster_B_center: ref=2.85 | usr=2.85
+      [PASS] cluster (1, 1) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (1, 1) cluster_V_size: ref=0.0017499999999999183 | usr=0.0017499999999999183
+      [PASS] cluster (1, 1) top_quintile_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (1, 1) cluster_volume: ref=0.28749999999984094 | usr=0.28749999999984094
+      [PASS] cluster (1, 1) percentage_boundary: ref=0.9565217391304348 | usr=0.9565217391304348
+      [PASS] cluster (1, 1) cluster_B_size: ref=0.2999999999999998 | usr=0.2999999999999998
+      [PASS] cluster (1, 2) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (1, 2) cluster_V_center: ref=-1.19575 | usr=-1.19575
+      [PASS] cluster (1, 2) cluster_B_center: ref=2.75 | usr=2.75
+      [PASS] cluster (1, 2) median_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (1, 2) cluster_V_size: ref=0.0022500000000000853 | usr=0.0022500000000000853
+      [PASS] cluster (1, 2) top_quintile_gap: ref=0.01625 | usr=0.01625
+      [PASS] cluster (1, 2) cluster_volume: ref=0.16249999999991008 | usr=0.16249999999991008
+      [PASS] cluster (1, 2) percentage_boundary: ref=0.9230769230769231 | usr=0.9230769230769231
+      [PASS] cluster (1, 2) cluster_B_size: ref=0.2999999999999998 | usr=0.2999999999999998
+      [PASS] cluster (2, 1) ncutters: ref=3.0 | usr=3.0
+      [PASS] cluster (2, 1) cluster_V_center: ref=-1.19625 | usr=-1.19625
+      [PASS] cluster (2, 1) cluster_B_center: ref=2.7 | usr=2.7
+      [PASS] cluster (2, 1) median_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (2, 1) cluster_V_size: ref=0.0012499999999999734 | usr=0.0012499999999999734
+      [PASS] cluster (2, 1) top_quintile_gap: ref=0.044750000000000005 | usr=0.044750000000000005
+      [PASS] cluster (2, 1) cluster_volume: ref=0.18749999999989625 | usr=0.18749999999989625
+      [PASS] cluster (2, 1) percentage_boundary: ref=0.8 | usr=0.8
+      [PASS] cluster (2, 1) cluster_B_size: ref=0.25 | usr=0.25
+      [PASS] cluster (3, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (3, 1) cluster_V_center: ref=-1.19925 | usr=-1.19925
+      [PASS] cluster (3, 1) cluster_B_center: ref=2.9 | usr=2.9
+      [PASS] cluster (3, 1) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (3, 1) cluster_V_size: ref=0.0017499999999999183 | usr=0.0017499999999999183
+      [PASS] cluster (3, 1) top_quintile_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (3, 1) cluster_volume: ref=0.26249999999985474 | usr=0.26249999999985474
+      [PASS] cluster (3, 1) percentage_boundary: ref=0.9047619047619048 | usr=0.9047619047619048
+      [PASS] cluster (3, 1) cluster_B_size: ref=0.2999999999999998 | usr=0.2999999999999998
+      [PASS] cluster (4, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (4, 1) cluster_V_center: ref=-1.19875 | usr=-1.19875
+      [PASS] cluster (4, 1) cluster_B_center: ref=2.9 | usr=2.9
+      [PASS] cluster (4, 1) median_gap: ref=0.00625 | usr=0.00625
+      [PASS] cluster (4, 1) cluster_V_size: ref=0.0022499999999998632 | usr=0.0022499999999998632
+      [PASS] cluster (4, 1) top_quintile_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (4, 1) cluster_volume: ref=0.3749999999997925 | usr=0.3749999999997925
+      [PASS] cluster (4, 1) percentage_boundary: ref=0.9666666666666667 | usr=0.9666666666666667
+      [PASS] cluster (4, 1) cluster_B_size: ref=0.25 | usr=0.25
+    [PASS] overlapping_clusters: ref=[['(0, 1)', '(1, 1)', '(3, 1)', '(4, 1)'], ['(0, 2)', '(1, 2)', '(2, 1)']] | usr=[['(0, 1)', '(1, 1)', '(3, 1)', '(4, 1)'], ['(0, 2)', '(1, 2)', '(2, 1)']]
+    [PASS] param T_mK_stage2: ref=40.0 | usr=40.0
+    [PASS] param gap_threshold_factor: ref=0.05 | usr=0.05
+    [PASS] param noise_threshold: ref=0.0001 | usr=0.0001
+    [PASS] param bias_window: ref=0.007 | usr=0.007
+    [PASS] param derivative_threshold: ref=100.0 | usr=100.0
+    [PASS] param zbp_probability_threshold: ref=0.6 | usr=0.6
+    [PASS] param average_over_cutter: ref=0 | usr=0
+    [PASS] param threshold_low: ref=0.005 | usr=0.005
+    [PASS] param threshold_high: ref=0.067 | usr=0.067
+    [PASS] param min_cluster_size: ref=7 | usr=7
+    [PASS] param cluster_gap_threshold: ref=0.005 | usr=0.005
+    [PASS] param cluster_percentage_boundary_threshold: ref=0.6 | usr=0.6
+    [PASS] param cluster_ncutter_threshold: ref=0.5 | usr=0.5
+    [PASS] param cluster_volume_threshold: ref=1.992616548359012e-06 | usr=1.992616548359012e-06
+  [PLOT] Generated side-by-side comparison plot: phase_diagram_comparison_device_6.png
+
+[Test File 7] simulated_DLG_epsilon__disorder_seed_1__geometry_seed_2__surface_charge_4.0.nc
+  Testing Stage 1 ROI1 Bounds...
+    [PASS] V_min: ref=-1.5704999999999998 | usr=-1.5704999999999998
+    [PASS] V_max: ref=-1.5470000000000002 | usr=-1.5470000000000002
+    [PASS] B_min: ref=1.8499999999999999 | usr=1.8499999999999999
+    [PASS] B_max: ref=3.0 | usr=3.0
+    [PASS] param T_mK_stage1: ref=30.0 | usr=30.0
+    [PASS] param roi1_pct_box: ref=10 | usr=10.0
+    [PASS] param roi1_min_margin_box: ref=[0.003, 0.2] | usr=[0.003, 0.2]
+    [PASS] param n_tiles: ref=100 | usr=100
+    [PASS] param th_2w_p: ref=0.5 | usr=0.5
+    [PASS] param th_3w: ref=1000.0 | usr=1000.0
+    [PASS] param th_3w_tat: ref=0.7 | usr=0.7
+  Testing Stage 2 Metrics...
+    [PASS] extra.device_passed: ref=passed | usr=passed
+    [PASS] roi2_stats counts: ref={'not passed': 0, 'true positive': 2, 'false positive': 0} | usr={'not passed': 0, 'true positive': 2, 'false positive': 0}
+    [PASS] passing_list: ref=['true positive', 'true positive'] | usr=['true positive', 'true positive']
+    [PASS] soi2_stats cluster keys: ref=['(0, 1)', '(0, 2)', '(0, 3)', '(1, 1)', '(1, 2)', '(1, 3)', '(2, 1)', '(2, 2)', '(2, 3)', '(3, 1)', '(3, 2)', '(3, 3)', '(3, 4)', '(4, 1)', '(4, 2)'] | usr=['(0, 1)', '(0, 2)', '(0, 3)', '(1, 1)', '(1, 2)', '(1, 3)', '(2, 1)', '(2, 2)', '(2, 3)', '(3, 1)', '(3, 2)', '(3, 3)', '(3, 4)', '(4, 1)', '(4, 2)']
+      [PASS] cluster (0, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (0, 1) cluster_V_center: ref=-1.5605 | usr=-1.5605
+      [PASS] cluster (0, 1) cluster_B_center: ref=2.85 | usr=2.85
+      [PASS] cluster (0, 1) median_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (0, 1) cluster_V_size: ref=0.0009999999999998899 | usr=0.0009999999999998899
+      [PASS] cluster (0, 1) top_quintile_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (0, 1) cluster_volume: ref=0.31250000000010325 | usr=0.31250000000010325
+      [PASS] cluster (0, 1) percentage_boundary: ref=0.8 | usr=0.8
+      [PASS] cluster (0, 1) cluster_B_size: ref=0.2999999999999998 | usr=0.2999999999999998
+      [PASS] cluster (0, 2) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (0, 2) cluster_V_center: ref=-1.56025 | usr=-1.56025
+      [PASS] cluster (0, 2) cluster_B_center: ref=2.5 | usr=2.5
+      [PASS] cluster (0, 2) median_gap: ref=0.00625 | usr=0.00625
+      [PASS] cluster (0, 2) cluster_V_size: ref=0.0004999999999999449 | usr=0.0004999999999999449
+      [PASS] cluster (0, 2) top_quintile_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (0, 2) cluster_volume: ref=0.13750000000004545 | usr=0.13750000000004545
+      [PASS] cluster (0, 2) percentage_boundary: ref=0.6363636363636364 | usr=0.6363636363636364
+      [PASS] cluster (0, 2) cluster_B_size: ref=0.20000000000000018 | usr=0.20000000000000018
+      [PASS] cluster (0, 3) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (0, 3) cluster_V_center: ref=-1.56725 | usr=-1.56725
+      [PASS] cluster (0, 3) cluster_B_center: ref=2.4 | usr=2.4
+      [PASS] cluster (0, 3) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (0, 3) cluster_V_size: ref=0.0012499999999999734 | usr=0.0012499999999999734
+      [PASS] cluster (0, 3) top_quintile_gap: ref=0.021250000000000012 | usr=0.021250000000000012
+      [PASS] cluster (0, 3) cluster_volume: ref=0.11250000000003717 | usr=0.11250000000003717
+      [PASS] cluster (0, 3) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (0, 3) cluster_B_size: ref=0.20000000000000018 | usr=0.20000000000000018
+      [PASS] cluster (1, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (1, 1) cluster_V_center: ref=-1.56125 | usr=-1.56125
+      [PASS] cluster (1, 1) cluster_B_center: ref=2.75 | usr=2.75
+      [PASS] cluster (1, 1) median_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (1, 1) cluster_V_size: ref=0.0020000000000000018 | usr=0.0020000000000000018
+      [PASS] cluster (1, 1) top_quintile_gap: ref=0.021249999999999998 | usr=0.021249999999999998
+      [PASS] cluster (1, 1) cluster_volume: ref=0.5125000000001693 | usr=0.5125000000001693
+      [PASS] cluster (1, 1) percentage_boundary: ref=0.975609756097561 | usr=0.975609756097561
+      [PASS] cluster (1, 1) cluster_B_size: ref=0.5499999999999998 | usr=0.5499999999999998
+      [PASS] cluster (1, 2) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (1, 2) cluster_V_center: ref=-1.56725 | usr=-1.56725
+      [PASS] cluster (1, 2) cluster_B_center: ref=2.35 | usr=2.35
+      [PASS] cluster (1, 2) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (1, 2) cluster_V_size: ref=0.0009999999999998899 | usr=0.0009999999999998899
+      [PASS] cluster (1, 2) top_quintile_gap: ref=0.023750000000000014 | usr=0.023750000000000014
+      [PASS] cluster (1, 2) cluster_volume: ref=0.10000000000003305 | usr=0.10000000000003305
+      [PASS] cluster (1, 2) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (1, 2) cluster_B_size: ref=0.20000000000000018 | usr=0.20000000000000018
+      [PASS] cluster (1, 3) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (1, 3) cluster_V_center: ref=-1.56025 | usr=-1.56025
+      [PASS] cluster (1, 3) cluster_B_center: ref=2.55 | usr=2.55
+      [PASS] cluster (1, 3) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (1, 3) cluster_V_size: ref=0.0 | usr=0.0
+      [PASS] cluster (1, 3) top_quintile_gap: ref=0.02925000000000002 | usr=0.02925000000000002
+      [PASS] cluster (1, 3) cluster_volume: ref=0.0875000000000289 | usr=0.0875000000000289
+      [PASS] cluster (1, 3) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (1, 3) cluster_B_size: ref=0.30000000000000027 | usr=0.30000000000000027
+      [PASS] cluster (2, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (2, 1) cluster_V_center: ref=-1.56725 | usr=-1.56725
+      [PASS] cluster (2, 1) cluster_B_center: ref=2.3 | usr=2.3
+      [PASS] cluster (2, 1) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (2, 1) cluster_V_size: ref=0.0015000000000000568 | usr=0.0015000000000000568
+      [PASS] cluster (2, 1) top_quintile_gap: ref=0.022250000000000006 | usr=0.022250000000000006
+      [PASS] cluster (2, 1) cluster_volume: ref=0.2500000000000826 | usr=0.2500000000000826
+      [PASS] cluster (2, 1) percentage_boundary: ref=0.9 | usr=0.9
+      [PASS] cluster (2, 1) cluster_B_size: ref=0.30000000000000027 | usr=0.30000000000000027
+      [PASS] cluster (2, 2) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (2, 2) cluster_V_center: ref=-1.56 | usr=-1.56
+      [PASS] cluster (2, 2) cluster_B_center: ref=2.5 | usr=2.5
+      [PASS] cluster (2, 2) median_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (2, 2) cluster_V_size: ref=0.0004999999999999449 | usr=0.0004999999999999449
+      [PASS] cluster (2, 2) top_quintile_gap: ref=0.024750000000000005 | usr=0.024750000000000005
+      [PASS] cluster (2, 2) cluster_volume: ref=0.10000000000003305 | usr=0.10000000000003305
+      [PASS] cluster (2, 2) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (2, 2) cluster_B_size: ref=0.25 | usr=0.25
+      [PASS] cluster (2, 3) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (2, 3) cluster_V_center: ref=-1.561 | usr=-1.561
+      [PASS] cluster (2, 3) cluster_B_center: ref=2.9 | usr=2.9
+      [PASS] cluster (2, 3) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (2, 3) cluster_V_size: ref=0.0004999999999999449 | usr=0.0004999999999999449
+      [PASS] cluster (2, 3) top_quintile_gap: ref=0.01125 | usr=0.01125
+      [PASS] cluster (2, 3) cluster_volume: ref=0.0875000000000289 | usr=0.0875000000000289
+      [PASS] cluster (2, 3) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (2, 3) cluster_B_size: ref=0.15000000000000036 | usr=0.15000000000000036
+      [PASS] cluster (3, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (3, 1) cluster_V_center: ref=-1.5605 | usr=-1.5605
+      [PASS] cluster (3, 1) cluster_B_center: ref=2.85 | usr=2.85
+      [PASS] cluster (3, 1) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (3, 1) cluster_V_size: ref=0.0012499999999999734 | usr=0.0012499999999999734
+      [PASS] cluster (3, 1) top_quintile_gap: ref=0.013250000000000001 | usr=0.013250000000000001
+      [PASS] cluster (3, 1) cluster_volume: ref=0.2750000000000909 | usr=0.2750000000000909
+      [PASS] cluster (3, 1) percentage_boundary: ref=0.8095238095238095 | usr=0.8095238095238095
+      [PASS] cluster (3, 1) cluster_B_size: ref=0.2999999999999998 | usr=0.2999999999999998
+      [PASS] cluster (3, 2) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (3, 2) cluster_V_center: ref=-1.567 | usr=-1.567
+      [PASS] cluster (3, 2) cluster_B_center: ref=2.5 | usr=2.5
+      [PASS] cluster (3, 2) median_gap: ref=0.01 | usr=0.01
+      [PASS] cluster (3, 2) cluster_V_size: ref=0.0015000000000000568 | usr=0.0015000000000000568
+      [PASS] cluster (3, 2) top_quintile_gap: ref=0.04375 | usr=0.04375
+      [PASS] cluster (3, 2) cluster_volume: ref=0.2000000000000661 | usr=0.2000000000000661
+      [PASS] cluster (3, 2) percentage_boundary: ref=0.6875 | usr=0.6875
+      [PASS] cluster (3, 2) cluster_B_size: ref=0.25 | usr=0.25
+      [PASS] cluster (3, 3) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (3, 3) cluster_V_center: ref=-1.56025 | usr=-1.56025
+      [PASS] cluster (3, 3) cluster_B_center: ref=2.5 | usr=2.5
+      [PASS] cluster (3, 3) median_gap: ref=0.04625 | usr=0.04625
+      [PASS] cluster (3, 3) cluster_V_size: ref=0.0007500000000000284 | usr=0.0007500000000000284
+      [PASS] cluster (3, 3) top_quintile_gap: ref=0.06125 | usr=0.06125
+      [PASS] cluster (3, 3) cluster_volume: ref=0.10000000000003305 | usr=0.10000000000003305
+      [PASS] cluster (3, 3) percentage_boundary: ref=1.0 | usr=1.0
+      [PASS] cluster (3, 3) cluster_B_size: ref=0.25 | usr=0.25
+      [PASS] cluster (3, 4) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (3, 4) cluster_V_center: ref=-1.5675 | usr=-1.5675
+      [PASS] cluster (3, 4) cluster_B_center: ref=2.15 | usr=2.15
+      [PASS] cluster (3, 4) median_gap: ref=0.028749999999999998 | usr=0.028749999999999998
+      [PASS] cluster (3, 4) cluster_V_size: ref=0.0004999999999999449 | usr=0.0004999999999999449
+      [PASS] cluster (3, 4) top_quintile_gap: ref=0.028749999999999998 | usr=0.028749999999999998
+      [PASS] cluster (3, 4) cluster_volume: ref=0.0875000000000289 | usr=0.0875000000000289
+      [PASS] cluster (3, 4) percentage_boundary: ref=0.8571428571428571 | usr=0.8571428571428571
+      [PASS] cluster (3, 4) cluster_B_size: ref=0.1499999999999999 | usr=0.1499999999999999
+      [PASS] cluster (4, 1) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (4, 1) cluster_V_center: ref=-1.5675 | usr=-1.5675
+      [PASS] cluster (4, 1) cluster_B_center: ref=2.3 | usr=2.3
+      [PASS] cluster (4, 1) median_gap: ref=0.026250000000000002 | usr=0.026250000000000002
+      [PASS] cluster (4, 1) cluster_V_size: ref=0.0025000000000001688 | usr=0.0025000000000001688
+      [PASS] cluster (4, 1) top_quintile_gap: ref=0.03125 | usr=0.03125
+      [PASS] cluster (4, 1) cluster_volume: ref=0.5125000000001693 | usr=0.5125000000001693
+      [PASS] cluster (4, 1) percentage_boundary: ref=0.7575757575757576 | usr=0.7575757575757576
+      [PASS] cluster (4, 1) cluster_B_size: ref=0.5500000000000003 | usr=0.5500000000000003
+      [PASS] cluster (4, 2) ncutters: ref=4.0 | usr=4.0
+      [PASS] cluster (4, 2) cluster_V_center: ref=-1.5605 | usr=-1.5605
+      [PASS] cluster (4, 2) cluster_B_center: ref=2.75 | usr=2.75
+      [PASS] cluster (4, 2) median_gap: ref=0.00875 | usr=0.00875
+      [PASS] cluster (4, 2) cluster_V_size: ref=0.0014999999999998348 | usr=0.0014999999999998348
+      [PASS] cluster (4, 2) top_quintile_gap: ref=0.01375 | usr=0.01375
+      [PASS] cluster (4, 2) cluster_volume: ref=0.4000000000001322 | usr=0.4000000000001322
+      [PASS] cluster (4, 2) percentage_boundary: ref=0.9642857142857143 | usr=0.9642857142857143
+      [PASS] cluster (4, 2) cluster_B_size: ref=0.6499999999999999 | usr=0.6499999999999999
+    [PASS] overlapping_clusters: ref=[['(0, 1)', '(0, 2)', '(1, 1)', '(1, 3)', '(2, 2)', '(2, 3)', '(3, 1)', '(3, 3)', '(4, 2)'], ['(0, 3)', '(1, 2)', '(2, 1)', '(3, 2)', '(3, 4)', '(4, 1)']] | usr=[['(0, 1)', '(0, 2)', '(1, 1)', '(1, 3)', '(2, 2)', '(2, 3)', '(3, 1)', '(3, 3)', '(4, 2)'], ['(0, 3)', '(1, 2)', '(2, 1)', '(3, 2)', '(3, 4)', '(4, 1)']]
+    [PASS] param T_mK_stage2: ref=40.0 | usr=40.0
+    [PASS] param gap_threshold_factor: ref=0.05 | usr=0.05
+    [PASS] param noise_threshold: ref=0.0001 | usr=0.0001
+    [PASS] param bias_window: ref=0.007 | usr=0.007
+    [PASS] param derivative_threshold: ref=100.0 | usr=100.0
+    [PASS] param zbp_probability_threshold: ref=0.6 | usr=0.6
+    [PASS] param average_over_cutter: ref=0 | usr=0
+    [PASS] param threshold_low: ref=0.005 | usr=0.005
+    [PASS] param threshold_high: ref=0.067 | usr=0.067
+    [PASS] param min_cluster_size: ref=7 | usr=7
+    [PASS] param cluster_gap_threshold: ref=0.005 | usr=0.005
+    [PASS] param cluster_percentage_boundary_threshold: ref=0.6 | usr=0.6
+    [PASS] param cluster_ncutter_threshold: ref=0.5 | usr=0.5
+    [PASS] param cluster_volume_threshold: ref=1.992616548359012e-06 | usr=1.992616548359012e-06
+  [PLOT] Generated side-by-side comparison plot: phase_diagram_comparison_device_7.png
+
+
+============================================================
+ SUMMARY: 8 / 8 files passed all equivalence checks.
+============================================================

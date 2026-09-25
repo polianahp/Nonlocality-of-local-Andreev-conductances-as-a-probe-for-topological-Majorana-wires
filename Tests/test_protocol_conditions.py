@@ -5,7 +5,7 @@ import os
 
 # Add parent directory to path so that helpers can be imported when running pytest directly from the Tests directory
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import helpers as hp
+import src.helpers as hp
 
 def make_didv_with_peaks(energies, peak_positions, peak_heights=1.0, peak_width=0.005, baseline=0.1):
     """Create synthetic dI/dV = baseline + sum of Lorentzians at peak_positions."""

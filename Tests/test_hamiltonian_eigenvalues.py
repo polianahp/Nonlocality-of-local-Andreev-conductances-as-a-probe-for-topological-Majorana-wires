@@ -5,7 +5,7 @@ import os
 
 # Add parent directory to path so that helpers can be imported when running pytest directly from the Tests directory
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import helpers as hp
+import src.helpers as hp
 
 def check_eigenvalues(t, mu, gamma, Delta0, V_z, alpha, Ls, Vdisx):
     """

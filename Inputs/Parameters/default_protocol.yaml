@@ -1,0 +1,89 @@
+# ==========================================
+# Azure Quantum TGP Post-Processing Protocol
+# Default Configuration Parameters
+#
+# These values replicate the official Microsoft
+# azure-quantum-tgp yield_analysis.py defaults.
+# ==========================================
+
+# --- Hardware / Experimental Corrections ---
+phase_shift_left: 0.0      # Left lock-in phase shift (experimental only, N/A for simulations).
+phase_shift_right: 0.0     # Right lock-in phase shift (experimental only, N/A for simulations).
+
+# --- Stage 0: Thermal Broadening ---
+GPU_broadening: false       # If true, uses GPU-accelerated thermal broadening (prepare_sim_gpu).
+T_mK_stage1: 30.0          # Electronic temperature (mK) for Stage 1 Fermi-Dirac broadening.
+T_mK_stage2: 40.0          # Electronic temperature (mK) for Stage 2 Fermi-Dirac broadening.
+
+# --- Stage 1: Gapless Region Identification (2w, 3w) ---
+roi1_pct_box: 10           # Percentage box parameter for ROI1 cluster_infos.
+roi1_min_margin_box: [0.003, 0.2] # Min margin box parameter for ROI1 cluster_infos.
+
+# The 2w noise floor is NOT a single parameter. It is derived from
+# data using one of three methods (B_max/V_max box, n_tiles auto, or th_2w override).
+
+### 3 Options for Determining Noise floor 
+
+######## Option 1: Pick a known trivial area in parameter space
+
+B_max: null                # Upper B bound of the "known trivial" region for 2w noise floor estimation.
+V_max: null
+B_max_stage2: null                # Upper V bound of the "known trivial" region.
+
+######## Option 2: Average over n_tiles and take the bottom percentile
+
+n_tiles: 100               # Number of tiles for automatic noise-floor detection (only used when B_max/V_max are null).
+percentile: 33             # Which percentile of sorted tile noise levels to use as threshold (only used with n_tiles).
+
+####### Option 3: Set threshold directly
+
+th_2w: null                # Explicit 2w threshold override. If null, auto-calculated from data via the methods above.
+
+
+th_2w_p: 0.5               # Fraction of cutter-pair 2w measurements that must exceed threshold to flag a pixel as gapless.
+
+### Curvature Thresholds and cutter fraction
+th_3w: 1000 #1e7              # Curvature threshold for the 3w non-local conductance to identify gap-closing boundaries.
+th_3w_tat: 0.7             # Fraction of cutter-gate configs that must independently detect a gap closing at a pixel.
+
+# --- Stage 2A: Transport Gap Extraction ---
+# These parameters control how the transport gap (in meV) is extracted
+# from the antisymmetrized non-local conductance vs bias traces.
+# Function: tgp.two.extract_gap() -> tgp.two.determine_gap()
+#
+# Algorithm:
+#   1. Antisymmetrize the non-local conductance G_antisym(bias).
+#   2. Compute dynamic threshold = max(gap_threshold_factor * min(max|G_antisym|, upper_conductance_threshold), noise_threshold).
+#   3. Starting from zero bias, the first bias where |G_antisym| > threshold is the gap edge.
+gap_threshold_factor: 0.001  # Fraction of peak antisymmetric conductance used as dynamic threshold. Official varies by surface_charge (0.001 for sc=0.0, 0.01 for sc=0.1, 0.05 for sc>=1.0). Using 0.001 for simulated nanowire (surface_charge=0.0).
+noise_threshold: 0.0001     # Absolute minimum conductance floor (in e2/h). Prevents threshold from vanishing in low-conductance traces. Official analyze_2 uses 1e-4.
+upper_conductance_threshold: null  # Clamp for peak conductance before applying gap_threshold_factor. null means infinity (no clamping). Official uses inf.
+
+# --- Stage 2B: Zero Bias Peak Detection ---
+# Function: tgp.two.zbp_dataset_derivative()
+bias_window: 0.003          # Bias window (V) around zero for ZBP analysis.
+derivative_threshold: 100.0  # Min magnitude of the 2nd derivative of local conductance at zero bias to qualify as a ZBP.
+zbp_probability_threshold: 0.6 #0.7  # Fraction of cutter-pairs that must independently detect a ZBP at a pixel.(see notebooks/stage-two-analysis.ipynb)
+average_over_cutter: false   # Whether to average ZBP detection across cutter-pairs before thresholding. Official analyze_2 explicitly sets False.
+
+# --- Stage 2C: Gap Magnitude Band-Pass Filter ---
+# After gap extraction, these pixel-level thresholds determine which
+# (B,V) pixels are considered "gapped" and which are noise or trivial.
+# Function: tgp.two.set_gap_threshold()
+threshold_low: 0.010       # Pixel-level filter (meV). Minimum extracted gap for a pixel to be marked "gapped". Official default 10e-3.
+threshold_high: 0.067      # Pixel-level filter (meV). Maximum extracted gap. Gaps above this are trivial (parent SC gap). Matches analyze_2 Thresholds class (function default is 0.07).
+
+# --- Stage 2D: Cluster Scoring and Filtering ---
+# After OPTICS clustering of gapped-ZBP pixels, these cluster-level
+# filters decide which clusters survive as topological candidates.
+# Function: tgp.two.cluster_and_score()
+min_cluster_size: 7        # Minimum number of (B,V) pixels for an OPTICS cluster to be valid.
+cluster_gap_threshold: 10.0  # Cluster median gap filter. Since your data is in meV, 10.0 * 1e-3 = 0.01 meV = 10 µeV filter.
+cluster_percentage_boundary_threshold: 0.6  # Min fraction of a cluster's boundary coinciding with gap-closing features (3w). Matches analyze_2 and function default.
+cluster_ncutter_threshold: 0.5  # Min fraction of cutter-pair configs in which a cluster must appear. Official default 0.5.
+
+# --- Plotting and Visualization Settings ---
+selected_cutter: 0         # Cutter pair index used for single-cutter visualizations.
+selected_clusters: []      # List of selected cluster numbers for ROI inspection.
+B_FIXED: 1.18              # Fixed Zeeman field coordinate for crosshair slices (x-axis).
+V_FIXED: 2.85              # Fixed chemical potential coordinate for crosshair slices (y-axis).
