@@ -88,7 +88,7 @@ class TGPAdapter:
 
     def to_netcdf(self, filename: str) -> None:
         """
-        Exports the dataset to a .nc file that perfectly matches the Microsoft 
+        Exports the dataset to a .nc file that matches the Microsoft 
         simulated data structure.
         """
         ds = self.to_xarray()
