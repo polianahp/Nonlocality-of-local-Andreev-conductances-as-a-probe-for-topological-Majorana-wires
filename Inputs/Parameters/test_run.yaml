@@ -1,0 +1,20 @@
+# test_run.yaml
+# Fast test configuration for HPC validation
+
+dirname: "test_run_results"
+realization_index: 0
+lambda_dis: 4.5
+
+# Sweep Ranges - Extremely coarse for speed (3x3 points = 9 points total)
+mu_max: 2.0
+mu_min: 0.0
+mu_dist: 1.0
+
+Vz_max: 1.0
+Vz_min: 0.0
+Vz_dist: 0.5
+
+# Simulation Resolution - Reduced sizes
+Upoints: 21
+num_engs: 21
+acceleration_type: "parallel"
