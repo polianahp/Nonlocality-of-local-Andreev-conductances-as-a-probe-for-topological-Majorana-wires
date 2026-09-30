@@ -159,12 +159,16 @@ class ConfigManager:
         yaml_dict = {}
         if config_path:
             config_file_path = PathConfigs.ROOT / config_path
+            inputs_config_file_path = PathConfigs.ROOT / "Inputs" / config_path
+            
             if config_file_path.exists():
                 yaml_dict = OmegaConf.to_container(OmegaConf.load(str(config_file_path)), resolve=True)
+            elif inputs_config_file_path.exists():
+                yaml_dict = OmegaConf.to_container(OmegaConf.load(str(inputs_config_file_path)), resolve=True)
             elif os.path.exists(config_path):
                 yaml_dict = OmegaConf.to_container(OmegaConf.load(config_path), resolve=True)
             else:
-                print(f"Warning: Config file {config_path} not found. Using defaults.")
+                raise FileNotFoundError(f"Config file '{config_path}' not found. Cannot proceed with defaults when a config file is explicitly specified.")
         
         return ProtocolConfig(**yaml_dict)
 
@@ -195,12 +199,16 @@ class ConfigManager:
         yaml_dict = {}
         if args.config_path:
             config_file_path = PathConfigs.ROOT / args.config_path
+            inputs_config_file_path = PathConfigs.ROOT / "Inputs" / args.config_path
+            
             if config_file_path.exists():
                 yaml_dict = OmegaConf.to_container(OmegaConf.load(str(config_file_path)), resolve=True)
+            elif inputs_config_file_path.exists():
+                yaml_dict = OmegaConf.to_container(OmegaConf.load(str(inputs_config_file_path)), resolve=True)
             elif os.path.exists(args.config_path):
                 yaml_dict = OmegaConf.to_container(OmegaConf.load(args.config_path), resolve=True)
             else:
-                print(f"Warning: Config file {args.config_path} not found. Using defaults/CLI.")
+                raise FileNotFoundError(f"Config file '{args.config_path}' not found. Cannot proceed with defaults when a config file is explicitly specified.")
 
         # 2. Extract CLI Overrides (only those explicitly set by user)
         cli_dict = {k: v for k, v in vars(args).items() if v is not None and k != "config_path"}
