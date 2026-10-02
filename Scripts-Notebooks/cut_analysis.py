@@ -2,12 +2,17 @@
 import os
 import sys
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import xarray as xr
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from pathlib import Path
+import argparse
+import logging
+import gc
 
 # Ensure local imports work
 sys.path.append(str(Path(__file__).parent.resolve()))
@@ -21,8 +26,7 @@ from src.gpu_broadening import _temp_kernel
 # ==========================================
 # USER CONFIGURATION
 # ==========================================
-DATA_DIR = PathConfigs.DATA / "Tdis_pfaff5" # Update this to your active data directory
-TPREP_PATH = DATA_DIR / "tprep.nc"          # Path to your processed xarray dataset
+DEFAULT_DATA_DIRS = ["Tdis_pfaff5"] # Add your default target folders here
 
 N_CUT_POINTS = 100                           # Number of points to sample along each cut
 BARRIER_SWEEP_SCALE = 70                    # Scale multiplier for barrier sweeps
@@ -83,8 +87,10 @@ FREESTANDING_POINTS = [
     {"coords": (0.852, 2.511), "color": "purple", "label": "Point 2D"},
 ]
 
-OUT_DIR = PathConfigs.DATA / "Cut_Analysis"
 # ==========================================
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 def generate_point_path(pdi_data, N, resl, mu_start, mu_end, Vz_start, Vz_end):
     pdi_params = pdi_data[:, 0:2]
@@ -190,29 +196,95 @@ def export_phase_map_pair(name_prefix, z_left, z_right, z_inv, B_vals, V_vals,
     plt.close(fig_map)
 
 
-def main():
-    print(f"Creating output directory: {OUT_DIR}")
+
+def export_phase_map_single(name_prefix, z_data, z_inv, B_vals, V_vals, 
+                            zmin, zmax, cmap_mpl, cmap_plotly, label, 
+                            cbar_label, resolved_cuts, freestanding_points, out_dir,
+                            contour_color='black', contour_dash='solid'):
+    # Interactive HTML
+    fig_html = go.Figure()
+    
+    hover_temp = "<b>B (Vz)</b>: %{x:.3f} meV<br><b>V (mu)</b>: %{y:.3f} meV<br><b>Value</b>: %{z:.3f}<extra></extra>"
+    fig_html.add_trace(go.Heatmap(z=z_data, x=B_vals, y=V_vals, zmin=zmin, zmax=zmax, colorscale=cmap_plotly, colorbar=dict(title=cbar_label), hovertemplate=hover_temp))
+
+    line_dict = dict(color=contour_color, width=2)
+    if contour_dash != 'solid':
+        line_dict['dash'] = contour_dash
+    fig_html.add_trace(go.Contour(z=z_inv, x=B_vals, y=V_vals, contours=dict(start=0, end=0, size=1), contours_coloring='lines', line=line_dict, showscale=False, hoverinfo='skip'))
+    
+    for rcut in resolved_cuts:
+        cut = rcut['config']
+        fig_html.add_trace(go.Scatter(x=[cut['start'][1], cut['end'][1]], y=[cut['start'][0], cut['end'][0]], mode='lines', line=dict(color=cut['color'], width=1.5), name=cut['label'], showlegend=True))
+        for sp in rcut['resolved_snaps']:
+            fig_html.add_trace(go.Scatter(x=[sp['raw_coords'][1]], y=[sp['raw_coords'][0]], mode='markers', marker=dict(symbol='circle-open', color=sp['color'], size=5, line=dict(width=1)), name=f"{sp['label']} (Raw)", showlegend=False))
+            fig_html.add_trace(go.Scatter(x=[sp['snapped_coords'][1]], y=[sp['snapped_coords'][0]], mode='markers', marker=dict(symbol='star', color=sp['color'], size=6), name=f"{sp['label']} (Snapped)", showlegend=False))
+            fig_html.add_trace(go.Scatter(x=[sp['raw_coords'][1], sp['snapped_coords'][1]], y=[sp['raw_coords'][0], sp['snapped_coords'][0]], mode='lines', line=dict(color=sp['color'], width=0.8, dash='dot'), showlegend=False, hoverinfo='skip'))
+    for fp in freestanding_points:
+        fig_html.add_trace(go.Scatter(x=[fp['coords'][1]], y=[fp['coords'][0]], mode='markers', marker=dict(symbol='star', color=fp['color'], size=6), name=fp['label'], showlegend=True))
+
+    fig_html.update_layout(title=f"Interactive Phase Map: {cbar_label}", xaxis_title="Zeeman Field Vz (B) [meV]", yaxis_title="Chemical Potential µ (V) [meV]", width=800, height=700, legend=dict(x=0.01, y=0.99, xanchor='left', yanchor='top', bgcolor='rgba(255,255,255,0.8)'))
+    fig_html.write_html(str(out_dir / f"{name_prefix}_phase_map.html"))
+
+    # Static PNG
+    fig_map, ax = plt.subplots(figsize=(8.5, 8.5), dpi=300, layout='constrained')
+    im1 = ax.pcolormesh(B_vals, V_vals, z_data, cmap=cmap_mpl, vmin=zmin, vmax=zmax, shading='nearest')
+    
+    ax.contour(B_vals, V_vals, z_inv, levels=[0], colors=contour_color, linewidths=1.5, linestyles='dashed' if contour_dash != 'solid' else 'solid')
+    for rcut in resolved_cuts:
+        cut = rcut['config']
+        ax.plot([cut['start'][1], cut['end'][1]], [cut['start'][0], cut['end'][0]], color=cut['color'], linewidth=1.2, label=cut['label'])
+        for sp in rcut['resolved_snaps']:
+            ax.plot(sp['raw_coords'][1], sp['raw_coords'][0], marker='o', markerfacecolor='none', markeredgecolor=sp['color'], markersize=4, linestyle='None')
+            ax.plot(sp['snapped_coords'][1], sp['snapped_coords'][0], marker='*', color=sp['color'], markersize=6, linestyle='None')
+            ax.plot([sp['raw_coords'][1], sp['snapped_coords'][1]], [sp['raw_coords'][0], sp['snapped_coords'][0]], color=sp['color'], linestyle=':', linewidth=0.8)
+    for fp in freestanding_points:
+        ax.plot(fp['coords'][1], fp['coords'][0], marker='*', color=fp['color'], markersize=6, label=fp['label'], linestyle='None')
+    
+    ax.set_xlabel(r"Zeeman Field $V_z$ (meV)")
+    ax.set_ylabel(r"Chemical Potential $\mu$ (meV)")
+    ax.set_title(label)
+    ax.legend(loc='upper left', framealpha=0.8)
+    fig_map.colorbar(im1, ax=ax, label=cbar_label)
+    fig_map.suptitle(f"Global Phase Map: {cbar_label}")
+    fig_map.savefig(out_dir / f"{name_prefix}_phase_map.png", bbox_inches='tight')
+    plt.close(fig_map)
+
+def process_data_dir(data_dir):
+    OUT_DIR = PathConfigs.PLOTS / f"{data_dir.name}_Plots"
+    logger.info(f"Creating output directory: {OUT_DIR}")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    TPREP_PATH = data_dir / "tprep.nc"
 
     # Convert all user inputs from (Vz, mu) to internal (mu, Vz) convention
-    for cut in CUTS:
+    # Make deep copies so we don't mutate the global config for subsequent runs
+    import copy
+    local_cuts = copy.deepcopy(CUTS)
+    local_freestanding = copy.deepcopy(local_freestanding)
+
+    for cut in local_cuts:
         cut['start'] = (cut['start'][1], cut['start'][0])
         cut['end'] = (cut['end'][1], cut['end'][0])
         for sp in cut.get('snap_points', []):
             sp['raw_coords'] = (sp['raw_coords'][1], sp['raw_coords'][0])
             
-    for fp in FREESTANDING_POINTS:
+    for fp in local_freestanding:
         fp['coords'] = (fp['coords'][1], fp['coords'][0])
 
     # 1. Load Data
-    params = np.load(DATA_DIR / "all_params.npz", allow_pickle=True)
-    pdi_data = np.load(DATA_DIR / "pdi_data.npy", allow_pickle=True)
+    params = np.load(data_dir / "all_params.npz", allow_pickle=True)
+    pdi_data = np.load(data_dir / "pdi_data.npy", allow_pickle=True)
 
     if not TPREP_PATH.exists():
-        print(f"ERROR: {TPREP_PATH} not found.")
-        print("Please save your tprep dataset from your notebook first:")
-        print("    tprep.to_netcdf('Data/Tdis_pfaff5/tprep.nc')")
-        sys.exit(1)
+        logger.info(f"tprep.nc not found in {data_dir}. Generating it now...")
+        from src.tgp_adapter import TGPAdapter
+        from src.gpu_broadening import prepare_sim_gpu
+        data = TGPAdapter(data_dir).to_xarray()
+        tprep = prepare_sim_gpu(data, p.T_mK)
+        
+        tmp_path = TPREP_PATH.with_suffix('.nc.tmp')
+        tprep.to_netcdf(tmp_path)
+        tmp_path.rename(TPREP_PATH)
+        logger.info("tprep.nc successfully generated.")
         
     tprep = xr.open_dataset(TPREP_PATH)
     
@@ -233,7 +305,7 @@ def main():
         gap_right_avg = tprep_right.gap.mean(dim='cutter_pair_index')
         has_tgp_gap = True
     except ImportError:
-        print("Warning: 'tgp' module not found. Transport gap will be plotted as zeros.")
+        logger.info("Warning: 'tgp' module not found. Transport gap will be plotted as zeros.")
         has_tgp_gap = False
 
     # Extract physics params
@@ -251,11 +323,11 @@ def main():
     Vdisx = params['Vdisx'] * V0
 
     # 2. Resolve Cut Paths and Snapped Points
-    print("Resolving cuts and snapping points...")
+    logger.info("Resolving cuts and snapping points...")
     resolved_cuts = []
     points_to_analyze = []
     
-    for cut in CUTS:
+    for cut in local_cuts:
         pts, sampled_indices = generate_point_path(pdi_data, N_CUT_POINTS, 0.02, cut['start'][0], cut['end'][0], cut['start'][1], cut['end'][1])
         actual_N = len(pts)
         
@@ -288,13 +360,13 @@ def main():
             "actual_N": actual_N
         })
 
-    for fp in FREESTANDING_POINTS:
+    for fp in local_freestanding:
         fp_dict = fp.copy()
         fp_dict['dir_path'] = OUT_DIR / "Freestanding_Points" / fp['label']
         points_to_analyze.append(fp_dict)
 
     # 3. Global Phase Maps (Plotly HTML & Matplotlib PNG)
-    print("Generating Global Phase Maps (HTML & PNG)...")
+    logger.info("Generating Global Phase Maps (HTML & PNG)...")
     
     B_vals = tprep['B'].values
     V_vals = tprep['V'].values
@@ -307,7 +379,7 @@ def main():
         tprep['R_2w_nl'].mean(dim='cutter_pair_index').transpose('V', 'B').values,
         z_inv, B_vals, V_vals, -2.0, 2.0, 'RdBu_r', 'RdBu_r',
         "Average Left 2ω", "Average Right 2ω", "2ω Conductance",
-        resolved_cuts, FREESTANDING_POINTS, OUT_DIR
+        resolved_cuts, local_freestanding, OUT_DIR
     )
 
     # B. 3w Phase Map
@@ -318,7 +390,7 @@ def main():
         tprep['R_3w'].mean(dim='cutter_pair_index').transpose('V', 'B').values,
         z_inv, B_vals, V_vals, -zrng, zrng, 'RdBu_r', 'RdBu_r',
         "Average Left 3ω", "Average Right 3ω", "3ω Curvature",
-        resolved_cuts, FREESTANDING_POINTS, OUT_DIR
+        resolved_cuts, local_freestanding, OUT_DIR
     )
 
     # C. Transport Gap Phase Map
@@ -329,12 +401,22 @@ def main():
             gap_right_avg.transpose('V', 'B').values,
             z_inv, B_vals, V_vals, 0.0, 0.05, 'gist_heat_r', 'hot_r',
             "Gap from G_RL (Left)", "Gap from G_LR (Right)", "Extracted Gap (µV)",
-            resolved_cuts, FREESTANDING_POINTS, OUT_DIR,
+            resolved_cuts, local_freestanding, OUT_DIR,
             contour_color='dimgray', contour_dash='dash'
         )
 
+    # D. Pfaffian Invariant Phase Map
+    export_phase_map_single(
+        "global_pfaffian",
+        z_inv,
+        z_inv, B_vals, V_vals, -1.1, 1.1, 'gray', 'gray',
+        "Pfaffian Invariant", "Pfaffian Sign",
+        resolved_cuts, local_freestanding, OUT_DIR,
+        contour_color='cyan'
+    )
+
     # 4. Cut Analysis (Multi-panel plotting)
-    print(f"Analyzing {len(resolved_cuts)} cuts...")
+    logger.info(f"Analyzing {len(resolved_cuts)} cuts...")
     L_2w_avg = tprep['L_2w_nl'].mean(dim='cutter_pair_index')
     invariant_avg = tprep['L_SI'].mean(dim='cutter_pair_index')
     
@@ -344,7 +426,7 @@ def main():
         pts = rcut['pts']
         
         if actual_N == 0:
-            print(f"  Skipping {cut['label']}: No points found along path.")
+            logger.info(f"  Skipping {cut['label']}: No points found along path.")
             continue
             
         cut_dir = OUT_DIR / "Cuts" / cut['label']
@@ -438,14 +520,14 @@ def main():
         plt.close(fig)
 
     # 5. Point Analysis (Unified loop)
-    print(f"Analyzing {len(points_to_analyze)} deep-dive points...")
+    logger.info(f"Analyzing {len(points_to_analyze)} deep-dive points...")
     for pt in points_to_analyze:
         pt_dir = pt['dir_path']
         pt_dir.mkdir(parents=True, exist_ok=True)
         mu_val, vz_val = pt['coords']
         
         # A. dI/dV
-        print(f"  Calculating dI/dV for {pt['label']}...")
+        logger.info(f"  Calculating dI/dV for {pt['label']}...")
         syst = hp.build_system(t_val, mu_val, mu_n, gamma, Delta0, vz_val, alpha, Ln, Lb, Ls, mu_leads, barrier_l_base, barrier_l_base, Vdisx)
         energies = np.linspace(-0.5, 0.5, 101)
         dIdV_left, dIdV_right, _, _, _ = hp.calc_dIdV(syst, energies)
@@ -481,7 +563,7 @@ def main():
         plt.close(fig)
 
         # B. Majorana Wave Functions
-        print(f"  Calculating Wavefunctions for {pt['label']}...")
+        logger.info(f"  Calculating Wavefunctions for {pt['label']}...")
         scl = hp.build_system_closed(t_val, mu_val, gamma, Delta0, vz_val, alpha, Ls, Vdisx, a=1)
         H_full = scl.hamiltonian_submatrix(sparse=False)
         evals_full, evecs_full = np.linalg.eigh(H_full)
@@ -499,7 +581,7 @@ def main():
         plt.close(fig)
 
         # C. Barrier Sweeps
-        print(f"  Calculating Barrier Sweeps for {pt['label']}...")
+        logger.info(f"  Calculating Barrier Sweeps for {pt['label']}...")
         barrier_sweep_vals = np.linspace(-BARRIER_SWEEP_SCALE * barrier_l_base, BARRIER_SWEEP_SCALE * barrier_l_base, 50)
         
         gL_varying_R, gR_varying_R = [], []
@@ -538,7 +620,40 @@ def main():
         fig.savefig(pt_dir / f"{pt['label']}_{pt['color']}_barrier_asymmetry.png", dpi=150)
         plt.close(fig)
 
-    print("Done!")
+    logger.info("Done!")
+
+    # Explicitly free memory for sequential processing
+    import cupy
+    cupy.get_default_memory_pool().free_all_blocks()
+    gc.collect()
+
+def main():
+    parser = argparse.ArgumentParser(description="Analyze cuts for a series of data_dir folders")
+    parser.add_argument("data_dirs", nargs="*", help="List of active data directory names (relative to PathConfigs.DATA) or absolute paths")
+    args = parser.parse_args()
+
+    if not args.data_dirs:
+        # Default behavior
+        data_dirs_to_process = DEFAULT_DATA_DIRS
+    else:
+        data_dirs_to_process = args.data_dirs
+
+    for d in data_dirs_to_process:
+        p_dir = Path(d)
+        if not p_dir.is_absolute():
+            p_dir = PathConfigs.DATA / d
+        
+        if not p_dir.exists():
+            logger.error(f"Directory {p_dir} does not exist. Skipping.")
+            continue
+            
+        try:
+            logger.info(f"--- Processing Directory: {p_dir} ---")
+            process_data_dir(p_dir)
+        except Exception as e:
+            logger.error(f"Failed processing {p_dir}: {e}", exc_info=True)
+            continue
 
 if __name__ == "__main__":
+
     main()
