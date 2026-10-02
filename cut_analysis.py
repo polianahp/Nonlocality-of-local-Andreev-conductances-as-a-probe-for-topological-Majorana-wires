@@ -15,7 +15,7 @@ import logging
 import gc
 
 # Ensure local imports work
-sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
+sys.path.insert(0, str(Path(__file__).parent.resolve()))
 from src.config import PathConfigs
 import src.helpers as hp
 from src.parameter_handler import ConfigManager
@@ -26,14 +26,7 @@ from src.gpu_broadening import _temp_kernel
 # ==========================================
 # USER CONFIGURATION
 # ==========================================
-DEFAULT_DATA_DIRS = [
-    "Tdis_pfaff5_V0_0_0",
-    "Tdis_pfaff5_V0_0_1",
-    "Tdis_pfaff5_V0_0_378",
-    "Tdis_pfaff5_V0_0_645",
-    "Tdis_pfaff5_V0_0_872",
-    "Tdis_pfaff5_V0_0_91",
-] # Add your default target folders here
+DEFAULT_DATA_DIRS = ["Tdis_pfaff5"] # Add your default target folders here
 
 N_CUT_POINTS = 100                           # Number of points to sample along each cut
 BARRIER_SWEEP_SCALE = 70                    # Scale multiplier for barrier sweeps
@@ -266,7 +259,7 @@ def process_data_dir(data_dir):
     # Make deep copies so we don't mutate the global config for subsequent runs
     import copy
     local_cuts = copy.deepcopy(CUTS)
-    local_freestanding = copy.deepcopy(local_freestanding)
+    local_freestanding = copy.deepcopy(FREESTANDING_POINTS)
 
     for cut in local_cuts:
         cut['start'] = (cut['start'][1], cut['start'][0])
@@ -630,8 +623,11 @@ def process_data_dir(data_dir):
     logger.info("Done!")
 
     # Explicitly free memory for sequential processing
-    import cupy
-    cupy.get_default_memory_pool().free_all_blocks()
+    try:
+        import cupy
+        cupy.get_default_memory_pool().free_all_blocks()
+    except ImportError:
+        pass
     gc.collect()
 
 def main():
