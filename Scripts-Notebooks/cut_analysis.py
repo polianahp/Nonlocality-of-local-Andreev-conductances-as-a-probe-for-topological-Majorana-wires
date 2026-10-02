@@ -15,7 +15,7 @@ import logging
 import gc
 
 # Ensure local imports work
-sys.path.append(str(Path(__file__).parent.resolve()))
+sys.path.append(str(Path(__file__).parent.parent.resolve()))
 from src.config import PathConfigs
 import src.helpers as hp
 from src.parameter_handler import ConfigManager
