@@ -5,28 +5,40 @@ import matplotlib.pyplot as plt
 import os
 import glob
 import tgp
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 from src.tgp_adapter import TGPAdapter
+import sys
+from pathlib import Path
+sys.path.append("/home/pseudonym/Documents/Code/azure-quantum-tgp/notebooks")
 from yield_analysis import analyze_2
 from src.parameter_handler import ConfigManager
+from src.config import PathConfigs
 
 # ---------------------------------------------------------
 # Parameters
 # ---------------------------------------------------------
 # Gather all disorder realization directories
-DATA_DIRS = glob.glob('Data/disorder_realization_*_results')
+DATA_DIRS = [str(p) for p in PathConfigs.DATA.glob('Tdis_pfaff5_V0_0_*')]
 # Add any additional directories you want to include here:
 ADDITIONAL_DIRS = []
 DATA_DIRS.extend(ADDITIONAL_DIRS)
 
 # Remove duplicates 
 def sort_key(x):
+    import re
+    m = re.search(r'V0_(\d+)_(\d+)', x)
+    if m:
+        try:
+            return float(f"{m.group(1)}.{m.group(2)}")
+        except:
+            return 999.0
     try:
         return int(x.split('_')[2])
     except:
-        return 999
+        return 999.0
 DATA_DIRS = sorted(list(set(DATA_DIRS)), key=sort_key)
 
-OUTPUT_DIR = 'Data/Transport_Gap_Analysis'
+OUTPUT_DIR = str(PathConfigs.DATA / 'Transport_Gap_Analysis')
 # Load protocol parameters
 p = ConfigManager.get_protocol_config('Parameters/default_protocol.yaml')
 

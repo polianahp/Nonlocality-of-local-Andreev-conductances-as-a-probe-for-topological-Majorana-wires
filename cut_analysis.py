@@ -26,7 +26,14 @@ from src.gpu_broadening import _temp_kernel
 # ==========================================
 # USER CONFIGURATION
 # ==========================================
-DEFAULT_DATA_DIRS = ["Tdis_pfaff5"] # Add your default target folders here
+DEFAULT_DATA_DIRS = [
+    "Tdis_pfaff5_V0_0_0",
+    "Tdis_pfaff5_V0_0_1",
+    "Tdis_pfaff5_V0_0_378",
+    "Tdis_pfaff5_V0_0_645",
+    "Tdis_pfaff5_V0_0_872",
+    "Tdis_pfaff5_V0_0_91"
+]
 
 N_CUT_POINTS = 100                           # Number of points to sample along each cut
 BARRIER_SWEEP_SCALE = 70                    # Scale multiplier for barrier sweeps
@@ -279,7 +286,7 @@ def process_data_dir(data_dir):
         from src.tgp_adapter import TGPAdapter
         from src.gpu_broadening import prepare_sim_gpu
         data = TGPAdapter(data_dir).to_xarray()
-        tprep = prepare_sim_gpu(data, p.T_mK)
+        tprep = prepare_sim_gpu(data, p.T_mK_stage1)
         
         tmp_path = TPREP_PATH.with_suffix('.nc.tmp')
         tprep.to_netcdf(tmp_path)
@@ -534,7 +541,7 @@ def process_data_dir(data_dir):
         
         # Apply Thermal Broadening if T_mK > 0
         k_B = physical_constants["Boltzmann constant in eV/K"][0]
-        T_meV = k_B * (p.T_mK * 1e-3) * 1e3
+        T_meV = k_B * (p.T_mK_stage1 * 1e-3) * 1e3
         if T_meV > 0.0:
             K = _temp_kernel(energies, T_meV)
             delta_bias = np.diff(energies)[0]

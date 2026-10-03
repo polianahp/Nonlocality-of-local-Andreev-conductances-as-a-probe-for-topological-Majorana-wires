@@ -80,7 +80,7 @@ def generate_point_path(pdi_data, N, resl, mu_start, mu_end, Vz_start, Vz_end):
 
 def main():
     parser = argparse.ArgumentParser(description="Calculate and plot energy spectra and observables along a cut.")
-    parser.add_argument("--dirname", type=str, default="Data/Tdis_pfaff3",
+    parser.add_argument("--dirname", type=str, default=str(PathConfigs.DATA / "Tdis_pfaff5"),
                         help="Directory name containing the simulation parameters and pdi data.")
     parser.add_argument("-N", type=int, default=50, help="Number of points to sample along the cut.")
 

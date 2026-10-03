@@ -5,8 +5,8 @@ V0: 0.1
 fname: "Tdis.npz"
 
 # Sweep Ranges
-mu_max: 4.5
-mu_min: 0.0
+mu_max: 2.0
+mu_min: -2.0
 mu_dist: 0.02
 
 Vz_max: 1.4
