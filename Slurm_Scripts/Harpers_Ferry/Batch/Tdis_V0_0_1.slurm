@@ -3,7 +3,7 @@
 #SBATCH -J Tdis_V0_0_1        # Job Name
 #SBATCH -N 1                  # Number of nodes (multiprocessing pool runs on a single node)
 #SBATCH -n 1                  # Number of tasks
-#SBATCH -c 40                 # Cores per task (Harpers Ferry standard nodes have 256 cores)
+#SBATCH -c 256                # Cores per task (Full 256 cores on Harpers Ferry node)
 #SBATCH -t 10:00:00           # Time limit (10 hours)
 #SBATCH -p day_3gb            # Partition (day_3gb: 1 day max limit, 3GB/core)
 #SBATCH --mail-type=END,FAIL,BEGIN # Email notifications
