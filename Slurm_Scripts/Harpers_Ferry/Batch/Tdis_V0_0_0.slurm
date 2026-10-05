@@ -10,6 +10,7 @@
 #SBATCH --mail-user=nos00002@mix.wvu.edu
 
 # Initialize Conda environment on Harpers Ferry
+#test comment
 if [ -f /shared/software/miniforge/26.3.2-3/etc/profile.d/conda.sh ]; then
     source /shared/software/miniforge/26.3.2-3/etc/profile.d/conda.sh
 elif [ -f /shared/software/conda/conda_init.sh ]; then
