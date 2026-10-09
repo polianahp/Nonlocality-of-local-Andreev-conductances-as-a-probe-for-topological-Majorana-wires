@@ -6,3 +6,7 @@ slides/
 *.pdf
 local_packages/
 msft_data/
+.trash/
+Scratch/
+scratch/test_*
+scratch/__pycache__/

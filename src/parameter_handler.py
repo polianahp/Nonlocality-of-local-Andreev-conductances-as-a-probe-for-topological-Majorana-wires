@@ -100,7 +100,7 @@ class SimulationConfig(BaseModel):
     qn: int = 20
     
     # Simulation Resolution
-    Upoints: PositiveInt = 75
+    Upoints: PositiveInt = 15
     num_engs: PositiveInt = 101
     num_eigenvalues: PositiveInt = 12
     eng_window_range: PositiveInt = 51
@@ -267,7 +267,7 @@ class SimulationState:
         ]
         
         # Constant coordinate arrays
-        self.barrier_arr = np.linspace(-60*config.barrier0, 60 * config.barrier0, config.Upoints)
+        self.barrier_arr = np.linspace(0.0, 60 * config.barrier0, config.Upoints)
         self.energies = np.linspace(-0.5, 0.5, config.num_engs)
         
         # Mapping acceleration type to Kwant solver type

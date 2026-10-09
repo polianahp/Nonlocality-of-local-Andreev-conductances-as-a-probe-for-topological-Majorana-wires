@@ -1,0 +1,96 @@
+# ==============================================================================
+# Azure Quantum TGP Post-Processing Protocol & Cut Analysis Parameters
+# Replicates Microsoft Azure Quantum TGP Protocol (PRL 130, 207001)
+# ==============================================================================
+
+protocol_metadata:
+  name: "Majorana Nanowire TGP Cut & Topological Island Protocol"
+  description: "Exact parameters used for Stage 1, Stage 2 ROI extraction, Gap Sensitivity Sweeps, and TGP Cut Analysis"
+  units:
+    energy: "meV"
+    bias: "V"
+    magnetic_field: "T / meV"
+    conductance: "e^2/h"
+
+# ------------------------------------------------------------------------------
+# Stage 0: Thermal Broadening
+# ------------------------------------------------------------------------------
+stage0_thermal_broadening:
+  GPU_broadening: false
+  T_mK_stage1: 30.0          # Electronic temperature (mK) for Stage 1 Fermi-Dirac convolution
+  T_mK_stage2: 40.0          # Electronic temperature (mK) for Stage 2 Fermi-Dirac convolution
+
+# ------------------------------------------------------------------------------
+# Stage 1: Gapless Region & Boundary Identification (2w, 3w)
+# ------------------------------------------------------------------------------
+stage1_gapless_boundaries:
+  roi1_pct_box: 10
+  roi1_min_margin_box: [0.003, 0.2]
+  n_tiles: 100
+  percentile: 33
+  th_2w: null                # Auto-computed from percentile of tile noise levels
+  th_2w_p: 0.5               # Cutter-pair fraction threshold for gapless pixel
+  th_3w: 1000                # Curvature threshold for non-local gap closing boundaries
+  th_3w_tat: 0.7             # Cutter agreement fraction for 3w boundaries
+
+# ------------------------------------------------------------------------------
+# Stage 2A: Transport Gap Extraction
+# ------------------------------------------------------------------------------
+stage2a_transport_gap:
+  # Mapped dynamic threshold factors based on wire disorder amplitude V0
+  # Matches Microsoft protocol: clean wires use 0.001, moderate 0.01, strong 0.05
+  gap_threshold_factor_mapping:
+    V0_0.0: 0.001            # Clean wire
+    V0_0.1: 0.01             # Low disorder
+    V0_0.378: 0.01           # Intermediate disorder
+    V0_0.645: 0.05           # Strong disorder
+    V0_0.872: 0.05           # Strong disorder
+    V0_0.91: 0.05            # Strong disorder
+    V0_1.2: 0.05             # Benchmark disorder (Tdis_pfaff5)
+  noise_threshold: 0.0001     # Absolute conductance floor (1e-4 e^2/h)
+  upper_conductance_threshold: null  # No clamping (inf)
+  median_filter_size: 2      # Median filter applied to antisymmetrized conductance
+
+# ------------------------------------------------------------------------------
+# Stage 2B: Zero-Bias Conductance Peak (ZBP) Detection
+# ------------------------------------------------------------------------------
+stage2b_zbp_detection:
+  bias_window: 0.003          # Energy window for zero-bias peak search (V / meV)
+  derivative_threshold: 100.0 # Curvature threshold for 2nd derivative of local conductance
+  zbp_probability_threshold: 0.6  # Agreement fraction across cutter pairs
+  average_over_cutter: false
+
+# ------------------------------------------------------------------------------
+# Stage 2C: Pixel Gap Magnitude Filtering
+# ------------------------------------------------------------------------------
+stage2c_gap_filtering:
+  threshold_low: 0.010       # Minimum transport gap (0.010 meV = 10.0 ueV)
+  threshold_high: 0.067      # Maximum transport gap (0.067 meV = 67.0 ueV)
+
+# ------------------------------------------------------------------------------
+# Stage 2D: OPTICS Clustering & Topological Island Validation
+# ------------------------------------------------------------------------------
+stage2d_clustering_and_scoring:
+  min_cluster_size: 7        # Minimum cluster size in pixels
+  cluster_gap_threshold: 10.0 # Cluster median gap filter (10.0 ueV = 0.01 meV)
+  cluster_percentage_boundary_threshold: 0.6 # 60% of cluster boundary must touch 3w closing
+  cluster_ncutter_threshold: 0.5 # Cluster must appear across >= 50% cutter configs
+
+# ------------------------------------------------------------------------------
+# Sensitivity Sweeps & Cut Protocol Configuration
+# ------------------------------------------------------------------------------
+sensitivity_sweeps:
+  relative_multipliers: [0.5, 0.7, 0.75, 0.85, 0.9, 1.0, 1.1, 1.15, 1.25, 1.3, 1.5]
+  absolute_noise_floors_e2h: [1.0e-5, 3.0e-5, 1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3, 1.0e-2]
+  contour_interpolation_reps: 2  # Accelerated polygon contour smoothing
+
+tgp_cuts_configuration:
+  num_points_per_cut: 100
+  minimum_zeeman_span_meV: 0.6
+  island_selection_criteria: "3 largest gapped_zbp clusters overlapping ground-truth Pfaffian Q = -1"
+  com_star_palette:
+    island_1: "#00E5FF"      # Cyan
+    island_2: "#FF007F"      # Magenta
+    island_3: "#FFD700"      # Gold
+  barrier_sweep_scale: 70
+  correlation_threshold: 0.85

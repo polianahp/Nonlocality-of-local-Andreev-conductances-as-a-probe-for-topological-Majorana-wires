@@ -5,8 +5,8 @@ V0: 0.645
 fname: "Tdis.npz"
 
 # Sweep Ranges
-mu_max: 4.5
-mu_min: 0.0
+mu_max: 3.5
+mu_min: -1.0
 mu_dist: 0.02
 
 Vz_max: 1.4
@@ -14,7 +14,7 @@ Vz_min: 0.0
 Vz_dist: 0.02
 
 # Simulation Resolution
-Upoints: 101
+Upoints: 15
 num_engs: 51
 acceleration_type: "parallel"
 weight_threshold: 0.8

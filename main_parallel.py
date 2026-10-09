@@ -1,4 +1,5 @@
 import os
+import time
 
 # 1. THREAD CONTROL: Must be set BEFORE importing numpy/scipy/kwant
 # Prevents oversubscription where each process tries to use all cores.
@@ -271,6 +272,7 @@ meVpK = 8.6173325e-2 # Kelvin into meV
 
 
 if __name__ == "__main__":
+    t_start = time.perf_counter()
     
     # Hardcoded Configuration Path 
     # Set this to a path like "Parameters/my_config.yaml" to use it as the default.
@@ -456,12 +458,33 @@ if __name__ == "__main__":
     hp.np_save_wrapped(tgp_barrier_arr,'tgp_barrier_arr', dirname)
 
     
+    t_end = time.perf_counter()
+    total_runtime_sec = t_end - t_start
+    total_runtime_min = total_runtime_sec / 60.0
+    total_runtime_hrs = total_runtime_sec / 3600.0
+
+    print("\n" + "=" * 65)
+    print(f"Simulation Complete for: {dirname}")
+    print(f"Total Runtime: {total_runtime_sec:.2f} s ({total_runtime_min:.2f} min / {total_runtime_hrs:.3f} hrs)")
+    print("=" * 65 + "\n")
+
     all_params = {
         **config.model_dump(),  # unpacks all input parameters from SimulationConfig
-        **static_params         # unpacks 't', 'mu_n', 'Delta', 'alpha', etc. (overrides None with calculated values)
+        **static_params,        # unpacks 't', 'mu_n', 'Delta', 'alpha', etc. (overrides None with calculated values)
+        'total_runtime_seconds': total_runtime_sec,
+        'total_runtime_minutes': total_runtime_min,
+        'total_runtime_hours': total_runtime_hrs
     }
     hp.np_savez_wrapped("all_params", dirname, **all_params)
     
-
+    # Write human-readable runtime log
+    out_dir = PathConfigs.DATA / dirname
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with open(out_dir / "runtime.txt", "w") as rf:
+        rf.write(f"Simulation Directory: {dirname}\n")
+        rf.write(f"Total Runtime Seconds: {total_runtime_sec:.4f}\n")
+        rf.write(f"Total Runtime Minutes: {total_runtime_min:.4f}\n")
+        rf.write(f"Total Runtime Hours: {total_runtime_hrs:.4f}\n")
+        rf.write(f"Formatted Runtime: {total_runtime_sec:.2f} s ({total_runtime_min:.2f} min / {total_runtime_hrs:.3f} hrs)\n")
 
     print("Done.")

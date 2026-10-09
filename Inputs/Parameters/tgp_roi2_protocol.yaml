@@ -1,0 +1,69 @@
+# ==============================================================================
+# Azure Quantum TGP Full Protocol Configuration (Stage 1 -> Stage 2 -> ROI 2)
+# Protocol: Microsoft Topological Gap Protocol (PRL 130, 207001 / arXiv:2207.02472)
+# ==============================================================================
+
+protocol_metadata:
+  name: "tgp_roi2_protocol"
+  description: "Exact parameter configuration used for Stage 1, Stage 2, and ROI2 topological island verification across all 7 disorder realizations."
+  date: "2026-10-07"
+  framework: "azure-quantum-tgp"
+
+# --- Stage 0: Thermal Broadening & Simulation Parameters ---
+stage0:
+  GPU_broadening: false
+  T_mK_stage1: 30.0          # Electronic temperature (mK) for Stage 1 Fermi-Dirac broadening
+  T_mK_stage2: 40.0          # Electronic temperature (mK) for Stage 2 Fermi-Dirac broadening
+
+# --- Stage 1: Candidate ZBP Region Identification (2w & 3w Conductance) ---
+stage1:
+  set_2w_th:
+    n_tiles: 25              # Number of parameter grid tiles for noise floor estimation
+    percentile: 50           # 50th percentile of local tile conductance
+  set_gapped:
+    th_2w_p: 0.5             # 50% cutter-pair agreement required to flag pixel as gapless
+    method: "structure"
+  set_3w_th:
+    th_3w: 0.001             # Curvature threshold for 3w conductance
+  set_3w_tat:
+    th_3w_tat: 0.5           # 50% cutter-gate agreement for gap-closing features
+  set_clusters:
+    min_samples: 3           # Minimum samples for OPTICS clustering
+    xi: 0.1                  # OPTICS steepness parameter
+    min_cluster_size: 0.01   # Minimum relative cluster size
+    max_eps: 10.0            # Maximum clustering epsilon distance
+
+# --- Stage 2A: Transport Gap Extraction (Dynamic Threshold & Noise Floor) ---
+stage2_gap_extraction:
+  noise_threshold: 0.0001     # Absolute noise floor theta_noise = 1e-4 e^2/h
+  upper_conductance_threshold: null  # No clamping on peak antisymmetric conductance
+  gap_threshold_factors:
+    clean_reference:
+      V0_0_0: 0.001          # Weak / Clean limit: 0.1% dynamic threshold
+    intermediate_disorder:
+      V0_0_1: 0.01           # 1.0% dynamic threshold
+      V0_0_378: 0.01         # 1.0% dynamic threshold
+    strong_disorder:
+      V0_0_645: 0.05         # 5.0% dynamic threshold
+      V0_0_872: 0.05         # 5.0% dynamic threshold
+      V0_0_91: 0.05          # 5.0% dynamic threshold
+      Tdis_pfaff5_V0_1_2: 0.05 # 5.0% dynamic threshold
+
+# --- Stage 2B: Local Differential Conductance & Zero-Bias Peak Detection ---
+stage2_zbp_detection:
+  bias_window: 0.003          # Energy window (+- 3 ueV) around zero bias
+  derivative_threshold: 100.0 # Curvature threshold for local d2I/dV2 peak
+  zbp_probability_threshold: 0.7 # 70% cutter-pair agreement for robust ZBP candidate
+  average_over_cutter: false  # Preserve per-cutter transparency measurements
+
+# --- Stage 2C: Pixel-Level Transport Gap Filtering (Gapped vs. Gapless Cutoff) ---
+stage2_gap_filtering:
+  threshold_low: 0.010       # 10 ueV (0.010 meV): Minimum transport gap defining gapless state (Delta <= 10 ueV)
+  threshold_high: 0.070      # 70 ueV (0.070 meV): Maximum allowable gap for candidate topological ZBPs
+
+# --- Stage 2D: Topological Island Clustering & Scoring (ROI 2 Formation) ---
+stage2_clustering_and_scoring:
+  min_cluster_size: 7        # Minimum cluster size in (Vz, mu) grid points
+  cluster_gap_threshold: 0.010 # 10 ueV: Minimum median transport gap across cluster
+  cluster_percentage_boundary_threshold: 0.60 # 60%: Minimum gapless boundary fraction ((GB%)_th >= 60%)
+  cluster_ncutter_threshold: 0.50 # 50%: Minimum cutter-gate overlap fraction required for ROI 2

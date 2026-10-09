@@ -214,25 +214,26 @@ def calculate_local_mp(evals, evecs):
     return M_profile, energy_0
 
 
-def calc_dIdV(syst, energies, solver_type='cpu'):
+def calc_dIdV(syst, energies, solver_type='cpu', calc_ldos: bool = False, show_progress: bool = True):
     num_engs = len(energies)
     
-    num_orbitals = syst.graph.num_nodes * 4
-    
-    ldos = np.zeros(shape = (num_engs, num_orbitals))
+    num_orbitals = syst.graph.num_nodes * 4 if calc_ldos else 0
+    ldos = np.zeros(shape=(num_engs, num_orbitals)) if calc_ldos else None
     dIdV_left = np.zeros_like(energies)
     dIdV_right = np.zeros_like(energies)
     dIdV_LR = np.zeros_like(energies)
     dIdV_RL = np.zeros_like(energies)
     
-    for k, eng in tqdm(enumerate(energies), total=num_engs, desc="Calculating dI/dV"):
+    it = tqdm(enumerate(energies), total=num_engs, desc="Calculating dI/dV") if show_progress else enumerate(energies)
+    for k, eng in it:
         Gmat = calc_conductance_matrix(syst, eng, solver_type=solver_type)
         dIdV_left[k] = Gmat[0, 0]
         dIdV_right[k] = Gmat[1, 1]
         dIdV_RL[k] = Gmat[1, 0]  # Current at Right due to Left
         dIdV_LR[k] = Gmat[0, 1]  # Current at Left due to Right
         
-        ldos[k,:] = kwant.ldos(syst, eng)
+        if calc_ldos:
+            ldos[k, :] = kwant.ldos(syst, eng)
         
     return dIdV_left, dIdV_right, dIdV_LR, dIdV_RL, ldos 
 
@@ -641,6 +642,18 @@ def calc_MZM_localization(rho_left, rho_right, pct_thresh = 80.0):
     return n
 
 
+def calc_mzm_boundary_confinement(rho_left, rho_right, Ls, pct_thresh=80.0):
+    """
+    Calculates the normalized boundary confinement ratio of the Majorana zero modes:
+    confinement = 1.0 - (n / Ls)
+    where n is the penetration depth (in sites from wire ends) that encloses pct_thresh of the weight.
+    Returns a value in [0, 1], where 1 indicates strict localization at the wire ends.
+    """
+    n = calc_MZM_localization(rho_left, rho_right, pct_thresh=pct_thresh)
+    confinement = 1.0 - (float(n) / float(Ls))
+    return float(np.clip(confinement, 0.0, 1.0))
+
+
 
 def solve_ham(syst, k, solver_type='cpu'):
     """
@@ -682,6 +695,52 @@ def solve_ham(syst, k, solver_type='cpu'):
 
 
 
+def _should_swap_mzm_modes(rho_1, rho_2):
+    """
+    Determines whether mode 1 and mode 2 should be swapped so that mode 1
+    is strictly the Left mode and mode 2 is strictly the Right mode.
+
+    Composite criterion:
+    1. Clear separation in center of mass (|com_1 - com_2| > 0.1 * L).
+    2. Peak position check (boundary modes peak at wire ends, defects inside wire).
+    3. Boundary weights check (first and last octiles) for long exponential tails.
+    """
+    sum_1 = np.sum(rho_1)
+    sum_2 = np.sum(rho_2)
+    if sum_1 <= 1e-15 or sum_2 <= 1e-15:
+        return False
+
+    p1 = rho_1 / sum_1
+    p2 = rho_2 / sum_2
+    L = len(p1)
+    x = np.arange(L)
+
+    com_1 = float(np.sum(x * p1))
+    com_2 = float(np.sum(x * p2))
+
+    # 1. Clear separation in center of mass
+    if abs(com_1 - com_2) > 0.1 * L:
+        return com_1 > com_2
+
+    # 2. Peak position: boundary modes peak at wire ends, defect modes inside wire
+    peak_1 = int(np.argmax(p1))
+    peak_2 = int(np.argmax(p2))
+    if peak_1 != peak_2:
+        return peak_1 > peak_2
+
+    # 3. Boundary weights (first and last octiles)
+    q = max(1, L // 8)
+    w_left_1 = float(np.sum(p1[:q]))
+    w_left_2 = float(np.sum(p2[:q]))
+    w_right_1 = float(np.sum(p1[-q:]))
+    w_right_2 = float(np.sum(p2[-q:]))
+    boundary_score = (w_left_1 - w_left_2) - (w_right_1 - w_right_2)
+    if abs(boundary_score) > 1e-4:
+        return boundary_score < 0.0
+
+    return com_1 > com_2
+
+
 def get_psiM_density(evals, evecs):
     """  
     Calculates the Majorana mode densities rho_M1 (Left) and rho_M2 (Right)
@@ -721,7 +780,11 @@ def get_psiM_density(evals, evecs):
     
     rho_M1 = np.sum(np.abs(g1_reshaped)**2, axis=1)
     rho_M2 = np.sum(np.abs(g2_reshaped)**2, axis=1)
-    
+
+    # Enforce spatial assignment: rho_M1 is strictly the Left mode and rho_M2 is strictly the Right mode
+    if _should_swap_mzm_modes(rho_M1, rho_M2):
+        rho_M1, rho_M2 = rho_M2, rho_M1
+
     return rho_M1, rho_M2, evals
                 
 
@@ -834,21 +897,29 @@ def calc_weight_localization(rho_M1, rho_M2, weight_threshold=0.9):
     Returns:
     - fraction: Percentage of the wire length (0 to 1).
     """
-    step = 0.00001
-    n = 0
-    
-    totrho = rho_M1 + rho_M2
-    totsum = sum(totrho)
-    wpct = 0.0
-    rgn_pct = 0.0
-    while wpct < weight_threshold:
-        thresh = np.max(totrho) - step * n
-        idx = np.where(totrho>=thresh)[0]
-        wpct = np.sum(totrho[idx])/totsum
-        rgn_pct = (np.max(idx) - np.min(idx))/len(totrho)
-        n +=1
-        
-    return rgn_pct
+    totrho = np.maximum(np.asarray(rho_M1, dtype=float) + np.asarray(rho_M2, dtype=float), 0.0)
+    totsum = np.sum(totrho)
+    if totsum <= 1e-15:
+        return 0.0
+    if weight_threshold >= 1.0:
+        return 1.0
+    T = weight_threshold * totsum
+    sort_idx = np.argsort(totrho)[::-1]
+    sorted_rho = totrho[sort_idx]
+    cum = np.cumsum(sorted_rho)
+    m = np.searchsorted(cum, T)
+    thresh = sorted_rho[min(m, len(sorted_rho) - 1)]
+    idx = np.where(totrho >= thresh)[0]
+    return float((np.max(idx) - np.min(idx)) / len(totrho))
+
+
+def calc_mzm_density_support_span(rho_M1, rho_M2, weight_threshold=0.9):
+    """
+    Calculates the percentage of the wire length that contains 
+    the specified weight threshold of the total Majorana density.
+    Alias/replacement for calc_weight_localization.
+    """
+    return calc_weight_localization(rho_M1, rho_M2, weight_threshold=weight_threshold)
 
 
 
@@ -858,7 +929,135 @@ def calc_overlap(rho1, rho2):
     overlap = sum(rho1 * rho2)
     """
     return np.sum(np.abs(rho1) * np.abs(rho2))
-    
+
+
+def calc_normalized_mzm_overlap(rho_M1, rho_M2):
+    """
+    Calculates the normalized MZM mode overlap using wave function amplitudes:
+        u_l = sqrt(|rho_M1|), u_r = sqrt(|rho_M2|)
+        I = int(u_l * u_r dx) / int((u_l + u_r) dx)
+    Returns:
+        float: Normalized overlap I in [0, 1].
+    """
+    u_l = np.sqrt(np.abs(rho_M1))
+    u_r = np.sqrt(np.abs(rho_M2))
+    num = np.trapz(u_l * u_r)
+    den = np.trapz(u_l + u_r)
+    if np.isclose(den, 0.0) or den < 1e-15:
+        return 0.0
+    return float(num / den)
+
+
+def calc_mzm_separability(rho_left, rho_right, continuous=True, auto_orient=True, rescale=False, return_cut=False):
+    """
+    Calculates the spatial separability metric of two Majorana zero modes (MZMs).
+
+    The separability metric S quantifies the maximum fraction of the Left MZM
+    that lies strictly to the left of a spatial partition line while simultaneously
+    at least the same fraction of the Right MZM lies strictly to the right of that line:
+        S = max_x min(CDF_L(x), CDF_R(x))
+
+    Parameters:
+    -----------
+    rho_left : array-like
+        Spatial density distribution of the first (or Left) Majorana mode.
+    rho_right : array-like
+        Spatial density distribution of the second (or Right) Majorana mode.
+    continuous : bool, optional (default=True)
+        If True, evaluates separability using continuous linear interpolation
+        between lattice sites, eliminating grid-parity artifacts and guaranteeing
+        S = 0.5 for identical distributions. If False, performs a discrete partition
+        search between lattice sites.
+    auto_orient : bool, optional (default=True)
+        If True (default), automatically checks whether the two modes should be
+        swapped so that the left mode is on the left and the right mode is on the
+        right, ensuring that spatial separability is symmetric under permutation of
+        the two modes. If False, strictly treats rho_left as the left mode and
+        rho_right as the right mode.
+    rescale : bool, optional (default=False)
+        If True, rescales the separability metric as S_rescaled = clip(2.0 * S - 1.0, 0.0, 1.0)
+        so that 0.0 represents completely unseparated/identical distributions and
+        1.0 represents completely separated modes. If False (default), returns the
+        raw percentage fraction S in [0.5, 1.0] (or [0.0, 1.0] if unoriented/zero).
+    return_cut : bool, optional (default=False)
+        If True, returns a tuple (S, x_cut) where x_cut is the continuous partition
+        coordinate in site units. If False (default), returns S.
+
+    Returns:
+    --------
+    float or tuple (float, float):
+        Separability metric S (or tuple (S, x_cut) if return_cut is True).
+        - S = 1.0: perfectly separated (e.g., non-overlapping delta peaks at opposite ends).
+        - S = 0.5: completely overlapping identical or uniform distributions (raw).
+        - S = 0.0: inverted/unseparated modes (with auto_orient=False) or zero density.
+    """
+    rho_l = np.asarray(rho_left, dtype=float).ravel()
+    rho_r = np.asarray(rho_right, dtype=float).ravel()
+
+    if len(rho_l) == 0 or len(rho_r) == 0 or len(rho_l) != len(rho_r):
+        return (0.0, np.nan) if return_cut else 0.0
+
+    if np.any(np.isnan(rho_l)) or np.any(np.isnan(rho_r)) or np.any(np.isinf(rho_l)) or np.any(np.isinf(rho_r)):
+        return (0.0, np.nan) if return_cut else 0.0
+
+    rho_l = np.maximum(rho_l, 0.0)
+    rho_r = np.maximum(rho_r, 0.0)
+
+    sum_l = float(np.sum(rho_l))
+    sum_r = float(np.sum(rho_r))
+
+    if sum_l <= 1e-15 or sum_r <= 1e-15:
+        return (0.0, np.nan) if return_cut else 0.0
+
+    if auto_orient and _should_swap_mzm_modes(rho_l, rho_r):
+        rho_l, rho_r = rho_r, rho_l
+        sum_l, sum_r = sum_r, sum_l
+
+    p_l = rho_l / sum_l
+    p_r = rho_r / sum_r
+
+    L = len(p_l)
+    cum_l = np.empty(L + 1, dtype=float)
+    cum_l[0] = 0.0
+    cum_l[1:] = np.cumsum(p_l)
+    cum_l[-1] = 1.0
+
+    cum_r = np.empty(L + 1, dtype=float)
+    cum_r[-1] = 0.0
+    cum_r[:-1] = np.cumsum(p_r[::-1])[::-1]
+    cum_r[0] = 1.0
+
+    min_cum = np.minimum(cum_l, cum_r)
+    best_k = int(np.argmax(min_cum))
+    discrete_sep = float(min_cum[best_k])
+    best_x = float(best_k)
+
+    if not continuous:
+        s_val = float(np.clip(discrete_sep, 0.0, 1.0))
+        if rescale:
+            s_val = float(np.clip(2.0 * s_val - 1.0, 0.0, 1.0))
+        return (s_val, best_x) if return_cut else s_val
+
+    # Continuous linear interpolation across lattice sites
+    D = cum_l - cum_r
+    s_cont = discrete_sep
+
+    for k in range(L):
+        if D[k] <= 0.0 and D[k + 1] >= 0.0:
+            denom = p_l[k] + p_r[k]
+            if denom > 1e-15:
+                t_star = (cum_r[k] - cum_l[k]) / denom
+                t_star = float(np.clip(t_star, 0.0, 1.0))
+                val = cum_l[k] + t_star * p_l[k]
+                if val > s_cont:
+                    s_cont = val
+                    best_x = float(k + t_star)
+
+    s_val = float(np.clip(s_cont, 0.0, 1.0))
+    if rescale:
+        s_val = float(np.clip(2.0 * s_val - 1.0, 0.0, 1.0))
+
+    return (s_val, best_x) if return_cut else s_val
 
 
 def generate_disorder_from_raw(vdk_vec, lambda_val, Ls):
@@ -1482,6 +1681,10 @@ def get_psiM_density_excited(evals, evecs, offset=1):
 
     rho_M1 = np.sum(np.abs(g1_reshaped)**2, axis=1)
     rho_M2 = np.sum(np.abs(g2_reshaped)**2, axis=1)
+
+    # Enforce spatial assignment: rho_M1 is strictly the Left mode and rho_M2 is strictly the Right mode
+    if _should_swap_mzm_modes(rho_M1, rho_M2):
+        rho_M1, rho_M2 = rho_M2, rho_M1
 
     return rho_M1, rho_M2, evals
 
