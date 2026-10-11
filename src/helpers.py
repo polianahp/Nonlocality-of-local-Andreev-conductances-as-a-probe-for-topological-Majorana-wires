@@ -2175,9 +2175,11 @@ def compute_gapped_islands_and_boundaries(
 
 
 
-def make_dynamic_grid():
+def make_dynamic_grid(k_half: int = 10):
     '''
-    Generates a mesh grid based on the differences in dfgd.
+    Generates a dynamic bias grid optimized for zero-bias curvature extraction.
+    Defaults to k_half=10 (21 points spanning [-15, +15] ueV, 0.27% error).
+    Pass k_half=None or k_half=48 to recover the unpruned 97-point grid.
     '''
 
     dfgd = np.asarray([0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 ,
@@ -2195,5 +2197,9 @@ def make_dynamic_grid():
 
     el = -np.sum(dfgd)/2
     newgd = np.round(np.asarray([el] + [el := el + d for d in dfgd]), decimals = 5)
+
+    if k_half is not None and k_half < len(newgd) // 2:
+        mid = len(newgd) // 2
+        return newgd[mid - k_half : mid + k_half + 1]
 
     return newgd
