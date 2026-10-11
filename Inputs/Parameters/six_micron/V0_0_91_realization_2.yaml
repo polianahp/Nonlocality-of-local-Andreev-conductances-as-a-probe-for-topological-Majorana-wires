@@ -10,7 +10,7 @@ mu_dist: 0.02
 Vz_max: 1.4
 Vz_min: 0.0
 Vz_dist: 0.02
-Upoints: 101
+Upoints: 15
 num_engs: 51
 acceleration_type: parallel
 weight_threshold: 0.8

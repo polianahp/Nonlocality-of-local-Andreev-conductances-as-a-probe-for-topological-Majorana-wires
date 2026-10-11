@@ -60,7 +60,7 @@ class ProtocolConfig(BaseModel):
     average_over_cutter: bool = False  # Official analyze_2 uses False
     
     # Stage 2D: Cluster Scoring
-    cluster_gap_threshold: float = 10.0
+    cluster_gap_threshold: float = 10.0 #mueV
     cluster_ncutter_threshold: float = 0.5
     cluster_percentage_boundary_threshold: float = 0.6
     min_cluster_size: int = 7

@@ -2,40 +2,64 @@
 # ==============================================================================
 # submit_all.sh
 # 
-# Submits disorder realization SLURM jobs for V0_0_1 to Harpers Ferry queue.
-# Default submissions: 50 jobs (disorder_realization_0 through 49).
+# Submits 6-micron nanowire simulation SLURM jobs to Harpers Ferry queue.
 #
 # Usage:
-#   ./submit_all.sh [NUM_JOBS]
+#   ./submit_all.sh             # Submits all 6-micron simulation jobs
+#   ./submit_all.sh [FILTER]    # Submits jobs matching pattern (e.g. V0_0_645)
+#   ./submit_all.sh [MAX_JOBS]  # Submits first N jobs (if integer)
+#
 # Examples:
-#   ./submit_all.sh      # Submits all 50 jobs (default)
-#   ./submit_all.sh 10   # Submits first 10 jobs
+#   ./submit_all.sh
+#   ./submit_all.sh V0_0_645
+#   ./submit_all.sh 10
 # ==============================================================================
-
-MAX_JOBS=${1:-50}
-COUNT=0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR" || exit 1
 
-V0_NAME="$(basename "$SCRIPT_DIR")"
+ARG="$1"
+COUNT=0
+MAX_JOBS=999
+FILTER=""
+
+if [[ "$ARG" =~ ^[0-9]+$ ]]; then
+    MAX_JOBS="$ARG"
+elif [ -n "$ARG" ]; then
+    FILTER="$ARG"
+fi
 
 echo "=========================================================="
-echo " Submitting Harpers Ferry Jobs for $V0_NAME (Target: $MAX_JOBS jobs)"
+echo " Submitting Harpers Ferry 6-Micron Wire Jobs"
+if [ -n "$FILTER" ]; then
+    echo " Filter: *$FILTER*"
+fi
 echo "=========================================================="
 
-for i in $(seq 0 $((MAX_JOBS - 1))); do
-    slurm_file="disorder_realization_${i}.slurm"
-    if [ ! -f "$slurm_file" ]; then
-        echo "Warning: $slurm_file not found, skipping."
-        continue
+shopt -s nullglob
+if [ -n "$FILTER" ]; then
+    FILES=(run_*${FILTER}*.slurm)
+else
+    FILES=(run_*.slurm)
+fi
+
+TOTAL_FOUND=${#FILES[@]}
+
+if [ "$TOTAL_FOUND" -eq 0 ]; then
+    echo "No matching SLURM files found in $SCRIPT_DIR for pattern: ${FILTER:-run_*.slurm}"
+    exit 1
+fi
+
+for slurm_file in "${FILES[@]}"; do
+    if [ "$COUNT" -ge "$MAX_JOBS" ]; then
+        break
     fi
-    echo "[$((COUNT + 1))/$MAX_JOBS] Submitting $slurm_file..."
+    echo "[$((COUNT + 1))/$TOTAL_FOUND] Submitting $slurm_file..."
     sbatch "$slurm_file"
     COUNT=$((COUNT + 1))
     sleep 0.2  # Throttle submissions slightly to protect scheduler socket
 done
 
 echo ""
-echo "Successfully queued $COUNT jobs for $V0_NAME to Harpers Ferry scheduler."
+echo "Successfully queued $COUNT jobs for 6-micron wires to Harpers Ferry scheduler."
 echo "Monitor queue with: squeue -u \$USER"
