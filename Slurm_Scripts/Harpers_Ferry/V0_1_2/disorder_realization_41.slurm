@@ -4,7 +4,7 @@
 #SBATCH -N 1                            # Number of nodes (single node parallel pool)
 #SBATCH -n 1                            # Number of tasks
 #SBATCH -c 256                          # Cores per task (256 cores on Harpers Ferry AMD EPYC node)
-#SBATCH -t 00:45:00                     # Time limit (45 minutes)
+#SBATCH -t 01:15:00                     # Time limit (1 hour 15 minutes)
 #SBATCH -p day_3gb                      # Partition (day_3gb: 1 day limit, 3GB RAM/core)
 #SBATCH --mail-type=END,FAIL            # Notifications
 #SBATCH --mail-user=nos00002@mix.wvu.edu

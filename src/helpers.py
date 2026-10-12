@@ -2175,11 +2175,10 @@ def compute_gapped_islands_and_boundaries(
 
 
 
-def make_dynamic_grid(k_half: int = 10):
+def make_dynamic_grid(k_half: int = None):
     '''
-    Generates a dynamic bias grid optimized for zero-bias curvature extraction.
-    Defaults to k_half=10 (21 points spanning [-15, +15] ueV, 0.27% error).
-    Pass k_half=None or k_half=48 to recover the unpruned 97-point grid.
+    Generates a dynamic bias grid. Defaults to k_half=None (unpruned 97-point grid
+    spanning [-134, +134] ueV) for physically valid transport gap extraction.
     '''
 
     dfgd = np.asarray([0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 ,
