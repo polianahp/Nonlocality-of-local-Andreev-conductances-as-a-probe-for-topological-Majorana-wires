@@ -287,6 +287,12 @@ if __name__ == "__main__":
     
     if config.realization_index is not None:
         fname = f"Raw_Disorders/raw_disorder_{config.realization_index}.npy"
+    elif config.fname and (PathConfigs.RUN_FILES / config.fname).exists():
+        fname = config.fname
+    elif config.fname and (PathConfigs.RUN_FILES / "New_Disorders" / config.fname).exists():
+        fname = f"New_Disorders/{config.fname}"
+    elif config.fname and Path(config.fname).exists():
+        fname = str(Path(config.fname).resolve())
     else:
         fname = f"New_Disorders/{config.fname}"
 
@@ -304,7 +310,7 @@ if __name__ == "__main__":
     
     # Initialize Disorder
     print(f"Run Files Path Exists: {os.path.exists(PathConfigs.RUN_FILES)}")
-    path = Path(PathConfigs.RUN_FILES / fname)
+    path = Path(fname) if Path(fname).is_absolute() else Path(PathConfigs.RUN_FILES / fname)
     Vdisx = hp.initialize_vdis_from_data(path, lambda_dis=config.lambda_dis, Ls=config.Ls)
 
     # Parameter Preparation
