@@ -153,23 +153,23 @@ def run_generation():
         ]
 
         for ax, mask, color, title, m_dict in panels:
-            ax.set_facecolor("#0b1120")  # deep dark background outside Pfaffian
+            ax.set_facecolor("#0b1120")  # deep dark background for unpassed trivial bulk
 
-            # Strict Pfaffian domain masking:
-            # - Outside Pfaffian (~gt): fully transparent/background color (dark)
-            # - Inside Pfaffian (gt) and NOT passed (~mask): dark slate (#1e293b)
-            # - Inside Pfaffian (gt) and passed (mask): theme color
+            # Full passing map representation:
+            # - Failed trivial bulk (~gt & ~mask): dark background [0.04, 0.07, 0.13, 1.0]
+            # - Failed topological bulk (gt & ~mask): dark slate [0.12, 0.16, 0.23, 0.95]
+            # - Passed pixels (mask): colored in theme color BOTH inside AND outside the Pfaffian!
             img_rgba = np.zeros((len(V_vals), len(B_vals), 4))
             
-            # Unpassed within Pfaffian: dark slate
+            # Default unpassed pixels outside Pfaffian
+            img_rgba[~gt & (~mask)] = [0.04, 0.07, 0.13, 1.0]
+
+            # Unpassed pixels within Pfaffian: dark slate
             img_rgba[gt & (~mask)] = [0.12, 0.16, 0.23, 0.95]
             
-            # Passed within Pfaffian: theme color
+            # All passed pixels (True Positives inside Pfaffian AND False Positives outside Pfaffian):
             rgb = mcolors.to_rgb(color)
-            img_rgba[gt & mask] = [rgb[0], rgb[1], rgb[2], 0.95]
-
-            # Areas outside Pfaffian (~gt) remain 0.0 alpha (or dark background)
-            img_rgba[~gt] = [0.04, 0.07, 0.13, 1.0]
+            img_rgba[mask] = [rgb[0], rgb[1], rgb[2], 0.95]
 
             ax.imshow(img_rgba, origin='lower', extent=extent, aspect='auto')
 
@@ -197,7 +197,7 @@ def run_generation():
         ]
         axes[0, 0].legend(handles=legend_elements, loc='upper left', fontsize=7.5, facecolor='#0f172a', edgecolor='#334155', labelcolor='white')
 
-        fig.suptitle(f"Protocol Comparison (Pfaffian Domain Only): {label}", fontsize=12.5, fontweight='bold', color='#38bdf8', y=0.99)
+        fig.suptitle(f"Protocol Comparison (Full Passing Map vs. Pfaffian Boundary): {label}", fontsize=12.5, fontweight='bold', color='#38bdf8', y=0.99)
         fig.tight_layout(rect=[0, 0, 1, 0.96])
 
         out_img1 = roi3_dir / "tgp_vs_3step_protocol_comparison.png"
