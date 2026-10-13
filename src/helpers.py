@@ -1076,10 +1076,10 @@ def generate_disorder_from_raw(vdk_vec, lambda_val, Ls):
     return vtp / np.sqrt(v2)
 
 
-def initialize_vdis_from_data(path, lambda_dis=None, Ls=None):
+def initialize_vdis_from_data(path, lambda_dis=None, Ls=None, is_real_space=False):
     path_str = str(path)
     
-    is_raw_disorder = "Raw_Disorders" in path_str
+    is_raw_disorder = ("Raw_Disorders" in path_str) and (not is_real_space)
     
     if is_raw_disorder and lambda_dis is None:
         raise ValueError("lambda_dis cannot be None when using a raw disorder file from Raw_Disorders.")
@@ -1092,7 +1092,13 @@ def initialize_vdis_from_data(path, lambda_dis=None, Ls=None):
             raise ValueError("Ls must be provided for raw disorder reconstruction.")
         return generate_disorder_from_raw(raw_vector, lambda_dis, Ls)
     else:
-        x = np.load(path_str)['Vdisx']
+        loaded = np.load(path_str)
+        if isinstance(loaded, np.lib.npyio.NpzFile):
+            x = loaded['Vdisx']
+        else:
+            x = loaded
+        if Ls is not None and len(x) != Ls:
+            raise ValueError(f"Disorder length mismatch: loaded disorder array has length {len(x)}, but Ls={Ls} was configured in parameters.")
         return x
 
 

@@ -311,7 +311,7 @@ if __name__ == "__main__":
     # Initialize Disorder
     print(f"Run Files Path Exists: {os.path.exists(PathConfigs.RUN_FILES)}")
     path = Path(fname) if Path(fname).is_absolute() else Path(PathConfigs.RUN_FILES / fname)
-    Vdisx = hp.initialize_vdis_from_data(path, lambda_dis=config.lambda_dis, Ls=config.Ls)
+    Vdisx = hp.initialize_vdis_from_data(path, lambda_dis=config.lambda_dis, Ls=config.Ls, is_real_space=getattr(config, 'is_real_space', False))
 
     # Parameter Preparation
     static_params = state.get_static_params(Vdisx, config)

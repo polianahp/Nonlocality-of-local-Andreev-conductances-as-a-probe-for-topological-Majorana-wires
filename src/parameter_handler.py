@@ -88,6 +88,7 @@ class SimulationConfig(BaseModel):
     # Disorder Parameters
     lambda_dis: Optional[PositiveFloat] = None
     realization_index: Optional[int] = None
+    is_real_space: bool = False
     
     # Physics Parameters
     ms: PositiveFloat = 0.023
