@@ -136,15 +136,16 @@ def calc_protocol_metrics(
     tn = int(np.sum((~pred_b) & (~gt_b)))
 
     tot_pass = tp + fp
-    tot_gt = tp + fn
+    tot_topological = int(np.sum(gt_b))  # Total points that are topological
 
-    tpr_pct = float((tp / tot_gt) * 100.0) if tot_gt > 0 else 0.0
+    # Pfaffian Area Passed: True Positives divided by Total Topological Points
+    pfaffian_passed_pct = float((tp / tot_topological) * 100.0) if tot_topological > 0 else 0.0
     fdr_pct = float((fp / tot_pass) * 100.0) if tot_pass > 0 else 0.0
     ppv_pct = float((tp / tot_pass) * 100.0) if tot_pass > 0 else 0.0
 
     # F1 score balancing precision (PPV) and recall (TPR)
     precision = tp / tot_pass if tot_pass > 0 else 0.0
-    recall = tp / tot_gt if tot_gt > 0 else 0.0
+    recall = tp / tot_topological if tot_topological > 0 else 0.0
     if (precision + recall) > 0:
         f1 = 2.0 * (precision * recall) / (precision + recall)
     else:
@@ -172,8 +173,9 @@ def calc_protocol_metrics(
         "false_positives": fp,
         "false_negatives": fn,
         "true_negatives": tn,
-        "total_pfaffian_area": tot_gt,
-        "pfaffian_passed_pct": round(tpr_pct, 4),
+        "total_topological_points": tot_topological,
+        "total_pfaffian_area": tot_topological,
+        "pfaffian_passed_pct": round(pfaffian_passed_pct, 4),
         "fdr_percent": round(fdr_pct, 4),
         "ppv_percent": round(ppv_pct, 4),
         "f1_score": round(float(f1), 4),
@@ -546,17 +548,27 @@ def plot_ensemble_figures(metrics_df: pd.DataFrame, figures_dir: Path):
     fig.savefig(figures_dir / "tpr_vs_fdr_scatter.png", dpi=200)
     plt.close(fig)
 
-    # 4. Realization Ranking Bar
+    # 4. Realization Ranking Bar (Ranked by False Discovery Rate FDR, then Pfaffian Area Passed)
     fig, ax = plt.subplots(figsize=(10, max(5, len(metrics_df) * 0.35)))
-    df_sorted = metrics_df.sort_values(by="step3_full_roi3_f1_score", ascending=True)
+    df_sorted = metrics_df.sort_values(
+        by=["step3_full_roi3_fdr_percent", "step3_full_roi3_pfaffian_passed_pct"],
+        ascending=[False, True]
+    )
     y_pos = np.arange(len(df_sorted))
-    f1_vals = df_sorted["step3_full_roi3_f1_score"].values
+    fdr_vals = df_sorted["step3_full_roi3_fdr_percent"].values
+    tpr_vals = df_sorted["step3_full_roi3_pfaffian_passed_pct"].values
     names = df_sorted["realization"].values
-    bars = ax.barh(y_pos, f1_vals, color="#2ca02c", alpha=0.75, edgecolor="black")
+    bars = ax.barh(y_pos, fdr_vals, color="#d62728", alpha=0.75, edgecolor="black")
     ax.set_yticks(y_pos)
     ax.set_yticklabels(names, fontsize=9)
-    ax.set_xlabel("Step 3 (ROI 3) $F_1$ Score", fontsize=11)
-    ax.set_title("Disorder Realizations Ranked by Step 3 Fidelity ($F_1$ Score)", fontsize=12, fontweight="bold")
+    ax.set_xlabel("Step 3 (ROI 3) False Discovery Rate FDR (%) [Lower is Better]", fontsize=11)
+    ax.set_title("Disorder Realizations Ranked by Step 3 FDR (Lower is Cleaner)", fontsize=12, fontweight="bold")
+    for bar, fdr, tpr in zip(bars, fdr_vals, tpr_vals):
+        ax.text(bar.get_width() + 0.3, bar.get_y() + bar.get_height() / 2,
+                f"FDR={fdr:.1f}%, Pfaffian Passed={tpr:.1f}%",
+                va="center", ha="left", fontsize=8, color="#333333")
+    max_fdr = np.nanmax(fdr_vals) if len(fdr_vals) > 0 and not np.all(np.isnan(fdr_vals)) else 10.0
+    ax.set_xlim(0, max(15.0, max_fdr * 1.35))
     ax.grid(axis="x", linestyle="--", alpha=0.5)
     plt.tight_layout()
     fig.savefig(figures_dir / "realization_ranking_bar.png", dpi=200)
@@ -632,9 +644,9 @@ def main():
     parser.add_argument(
         "--ranking_metric",
         type=str,
-        default="f1",
-        choices=["f1", "fdr", "tpr"],
-        help="Metric used to rank best and worst realizations (default: f1)."
+        default="fdr",
+        choices=["fdr", "tpr", "f1"],
+        help="Metric used to rank best and worst realizations (default: fdr, ranks by lowest FDR then highest Pfaffian area passed)."
     )
     parser.add_argument(
         "--max_realizations",
@@ -816,13 +828,25 @@ def main():
     logger.info(f"Generated ensemble diagnostic figures in {figures_dir}")
 
     # Identify Best and Worst Performing Realizations
-    # Default ranking: Step 3 F1 score descending
-    if args.ranking_metric == "f1":
-        ranked_df = metrics_df.sort_values(by=["step3_full_roi3_f1_score", "step3_full_roi3_fdr_percent"], ascending=[False, True])
-    elif args.ranking_metric == "fdr":
-        ranked_df = metrics_df.sort_values(by=["step3_full_roi3_fdr_percent", "step3_full_roi3_pfaffian_passed_pct"], ascending=[True, False])
-    else:  # tpr
-        ranked_df = metrics_df.sort_values(by=["step3_full_roi3_pfaffian_passed_pct", "step3_full_roi3_fdr_percent"], ascending=[False, True])
+    # Primary goal: Lowest False Discovery Rate (FDR) so passed predictions are reliably topological.
+    # Secondary goal: Highest Pfaffian Area Passed (maximizing detected topological phase space).
+    metrics_df["valid_passed"] = metrics_df["step3_full_roi3_tot_passed"] > 0
+
+    if args.ranking_metric == "fdr":
+        ranked_df = metrics_df.sort_values(
+            by=["valid_passed", "step3_full_roi3_fdr_percent", "step3_full_roi3_pfaffian_passed_pct"],
+            ascending=[False, True, False]
+        )
+    elif args.ranking_metric == "tpr":
+        ranked_df = metrics_df.sort_values(
+            by=["valid_passed", "step3_full_roi3_pfaffian_passed_pct", "step3_full_roi3_fdr_percent"],
+            ascending=[False, False, True]
+        )
+    else:  # f1
+        ranked_df = metrics_df.sort_values(
+            by=["step3_full_roi3_f1_score", "step3_full_roi3_fdr_percent"],
+            ascending=[False, True]
+        )
 
     best_name = ranked_df.iloc[0]["realization"]
     worst_name = ranked_df.iloc[-1]["realization"]
@@ -830,8 +854,8 @@ def main():
     best_res = next(r for r in successful_results if r["realization"] == best_name)
     worst_res = next(r for r in successful_results if r["realization"] == worst_name)
 
-    logger.info(f"Best Performing Realization: {best_name} (Step 3 F1={best_res['step3_full_roi3']['f1_score']}, FDR={best_res['step3_full_roi3']['fdr_percent']}%, TPR={best_res['step3_full_roi3']['pfaffian_passed_pct']}%)")
-    logger.info(f"Worst Performing Realization: {worst_name} (Step 3 F1={worst_res['step3_full_roi3']['f1_score']}, FDR={worst_res['step3_full_roi3']['fdr_percent']}%, TPR={worst_res['step3_full_roi3']['pfaffian_passed_pct']}%)")
+    logger.info(f"Best Performing Realization: {best_name} (Step 3 FDR={best_res['step3_full_roi3']['fdr_percent']}%, Pfaffian Passed={best_res['step3_full_roi3']['pfaffian_passed_pct']}%)")
+    logger.info(f"Worst Performing Realization: {worst_name} (Step 3 FDR={worst_res['step3_full_roi3']['fdr_percent']}%, Pfaffian Passed={worst_res['step3_full_roi3']['pfaffian_passed_pct']}%)")
 
     # Bundle Best and Worst
     best_and_worst = {
@@ -913,8 +937,8 @@ def main():
     print("-" * 70)
     print(summary_df.to_string(index=False))
     print("-" * 70)
-    print(f"Best Performing Realization:  {best_name} (ROI 3 F1={best_res['step3_full_roi3']['f1_score']})")
-    print(f"Worst Performing Realization: {worst_name} (ROI 3 F1={worst_res['step3_full_roi3']['f1_score']})")
+    print(f"Best Performing Realization:  {best_name} (ROI 3 FDR={best_res['step3_full_roi3']['fdr_percent']}%, Pfaffian Passed={best_res['step3_full_roi3']['pfaffian_passed_pct']}%)")
+    print(f"Worst Performing Realization: {worst_name} (ROI 3 FDR={worst_res['step3_full_roi3']['fdr_percent']}%, Pfaffian Passed={worst_res['step3_full_roi3']['pfaffian_passed_pct']}%)")
     print("=" * 70 + "\n")
 
 
