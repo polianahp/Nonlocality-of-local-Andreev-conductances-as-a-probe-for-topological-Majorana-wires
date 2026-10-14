@@ -65,6 +65,12 @@ def main():
         if cuts_deck.exists():
             targets.append(cuts_deck)
 
+    # Weekly research slides decks
+    weekly_slides_root = Path("Outputs/slides/weekly research slides").resolve()
+    if weekly_slides_root.exists():
+        for f in sorted(weekly_slides_root.glob("*/*.html")):
+            targets.append(f)
+
     print(f"Discovered {len(targets)} HTML slide decks to compile.")
     success_count = 0
     for t in targets:

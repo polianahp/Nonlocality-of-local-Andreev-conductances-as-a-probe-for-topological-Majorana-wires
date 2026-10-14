@@ -681,7 +681,7 @@ def export_phase_map_single(name_prefix, z_data, z_inv, B_vals, V_vals,
     plt.close(fig_map)
 
 
-def export_cut_conductance_plots(cut_dir, cut, pts, rcut, tprep, tprep_left, tprep_right, has_tgp_gap, selected_cutter=0, evals=None, pfaffians=None, corr_thresh=None, tgp_roi2=None):
+def export_cut_conductance_plots(cut_dir, cut, pts, rcut, tprep, tprep_left, tprep_right, has_tgp_gap, selected_cutter=0, evals=None, pfaffians=None, corr_thresh=None, tgp_roi2=None, tgp_roi3=None):
     """
     Exports 4 individual conductance plots along a cut (matching tgp.plot.paper.plot_conductance):
       1. G_LL vs (cut_coord, left_bias) with colormap 'viridis'
@@ -865,29 +865,41 @@ def export_cut_conductance_plots(cut_dir, cut, pts, rcut, tprep, tprep_left, tpr
         axes_multi[0].set_title(f"Spectra and Conductance along {cut['label']}\n{sub_title}", fontsize=11)
         caxes[0].axis('off')
 
-        # Highlight full TGP Island along bottom runner with red ticks on bottom axis
+        # Highlight Regular TGP ROI 2 (red ticks) and ROI 3 Protocol (green portion/runner)
+        ymin = np.min(evals) - 0.08 * (np.max(evals) - np.min(evals))
+        ymax = np.max(evals) + 0.08 * (np.max(evals) - np.min(evals))
+        axes_multi[0].set_ylim(ymin, ymax)
+        y_bar = ymin + 0.03 * (ymax - ymin)
+
+        # 1. Red ticks for Regular TGP ROI 2
         if tgp_roi2 is not None:
-            tgp_plotted = False
-            ymin = np.min(evals) - 0.08 * (np.max(evals) - np.min(evals))
-            ymax = np.max(evals) + 0.08 * (np.max(evals) - np.min(evals))
-            axes_multi[0].set_ylim(ymin, ymax)
-            y_bar = ymin + 0.03 * (ymax - ymin)
+            roi2_plotted = False
             for idx in range(actual_N):
                 if bool(tgp_roi2[idx]):
+                    x_center = idx if is_diagonal else x_coords[idx]
+                    axes_multi[0].plot(x_center, ymin, marker='|', color='red', markersize=8, markeredgewidth=1.8, zorder=6, label="Regular TGP (ROI 2)" if not roi2_plotted else "")
+                    roi2_plotted = True
+
+        # 2. Green portion for ROI 3
+        # If tgp_roi3 is provided, use it; if only tgp_roi2 is provided (legacy caller), use tgp_roi2 for backwards compatibility
+        roi3_arr = tgp_roi3 if tgp_roi3 is not None else (tgp_roi2 if tgp_roi2 is not None and tgp_roi3 is None else None)
+        if roi3_arr is not None:
+            roi3_plotted = False
+            for idx in range(actual_N):
+                if bool(roi3_arr[idx]):
                     if is_diagonal:
                         x_left = idx - 0.5
                         x_right = idx + 0.5
-                        x_center = idx
                     else:
                         dx = (x_coords[-1] - x_coords[0]) / (actual_N - 1) if actual_N > 1 else 1.0
                         x_left = x_coords[idx] - 0.5 * dx
                         x_right = x_coords[idx] + 0.5 * dx
-                        x_center = x_coords[idx]
-                    axes_multi[0].plot([x_left, x_right], [y_bar, y_bar], color='#2ca02c', linewidth=4.5, solid_capstyle='butt', zorder=5, label="TGP Island" if not tgp_plotted else "")
-                    axes_multi[0].plot(x_center, ymin, marker='|', color='red', markersize=8, markeredgewidth=1.8, zorder=6)
-                    tgp_plotted = True
-            if tgp_plotted:
-                axes_multi[0].legend(loc='upper right', fontsize=8, framealpha=0.8)
+                    axes_multi[0].plot([x_left, x_right], [y_bar, y_bar], color='#2ca02c', linewidth=4.5, solid_capstyle='butt', zorder=5, label="ROI 3 Protocol" if not roi3_plotted else "")
+                    roi3_plotted = True
+
+        handles, labels = axes_multi[0].get_legend_handles_labels()
+        if handles:
+            axes_multi[0].legend(loc='upper right', fontsize=8, framealpha=0.8)
 
         # Panel 2: G_LL
         pcm2 = axes_multi[1].pcolormesh(x_coords, bias_uV, g_ll_cut.T, shading='auto', vmin=0.0, vmax=g_local_max, cmap='viridis', rasterized=True)

@@ -96,56 +96,66 @@ def process_dataset(dataset_name: str, gap_th_factor: float):
     gap_right_mean = t_r.gap.mean(dim='cutter_pair_index').values if 'cutter_pair_index' in t_r.gap.dims else t_r.gap.values
     gap_2d = np.minimum(gap_left_mean, gap_right_mean)  # (V, B)
 
-    for th_u in BIAS_GAP_THRESHOLDS_UEV:
-        th_mev = th_u * 1e-3
-        out_png_legacy = sweeps_dir / f"stage2_bias_gap_{th_u:.1f}uev.png"
-        out_s2 = bias_sweep_dir / f"stage2_phase_map_{th_u:.1f}uev.png"
-        out_roi3 = bias_sweep_dir / f"ROI3_stage2_phase_map_{th_u:.1f}uev.png"
-        out_tg = bias_sweep_dir / f"transport_gap_phase_map_{th_u:.1f}uev.png"
-        try:
-            z_ds = z_ds_base.copy(deep=True)
-            tgp.two.set_gap_threshold(z_ds, threshold_low=th_mev, threshold_high=0.067)
-            s2 = tgp.two.cluster_and_score(
-                z_ds,
-                min_cluster_size=7,
-                cluster_gap_threshold=th_mev,
-                cluster_percentage_boundary_threshold=0.6,
-                cluster_ncutter_threshold=0.5
-            )
-            if pfaff_da is not None:
-                s2['pfaffian'] = pfaff_da
+    # Check if all bias threshold sweep figures already exist
+    all_sweeps_exist = all(
+        (bias_sweep_dir / f"stage2_phase_map_{th_u:.1f}uev.png").exists() and
+        (bias_sweep_dir / f"ROI3_stage2_phase_map_{th_u:.1f}uev.png").exists() and
+        (bias_sweep_dir / f"transport_gap_phase_map_{th_u:.1f}uev.png").exists()
+        for th_u in BIAS_GAP_THRESHOLDS_UEV
+    )
+    if all_sweeps_exist:
+        logger.info(f"[{dataset_name}] Bias threshold sweep diagrams already exist. Skipping to ROI 3 and cuts.")
+    else:
+        for th_u in BIAS_GAP_THRESHOLDS_UEV:
+            th_mev = th_u * 1e-3
+            out_png_legacy = sweeps_dir / f"stage2_bias_gap_{th_u:.1f}uev.png"
+            out_s2 = bias_sweep_dir / f"stage2_phase_map_{th_u:.1f}uev.png"
+            out_roi3 = bias_sweep_dir / f"ROI3_stage2_phase_map_{th_u:.1f}uev.png"
+            out_tg = bias_sweep_dir / f"transport_gap_phase_map_{th_u:.1f}uev.png"
+            try:
+                z_ds = z_ds_base.copy(deep=True)
+                tgp.two.set_gap_threshold(z_ds, threshold_low=th_mev, threshold_high=0.067)
+                s2 = tgp.two.cluster_and_score(
+                    z_ds,
+                    min_cluster_size=7,
+                    cluster_gap_threshold=th_mev,
+                    cluster_percentage_boundary_threshold=0.6,
+                    cluster_ncutter_threshold=0.5
+                )
+                if pfaff_da is not None:
+                    s2['pfaffian'] = pfaff_da
 
-            # 1a. Stage 2 standard phase map (no correlation mask)
-            fig_s2, _ = plot_stage2_diagram_clean(s2, draw_cut_lines=False, title_suffix=f"Bias Gap Th={th_u:.1f} ueV", correlation_mask=None)
-            fig_s2.savefig(out_s2, dpi=150, bbox_inches='tight')
-            fig_s2.savefig(out_png_legacy, dpi=150, bbox_inches='tight')
-            plt.close(fig_s2)
+                # 1a. Stage 2 standard phase map (no correlation mask)
+                fig_s2, _ = plot_stage2_diagram_clean(s2, draw_cut_lines=False, title_suffix=f"Bias Gap Th={th_u:.1f} ueV", correlation_mask=None)
+                fig_s2.savefig(out_s2, dpi=150, bbox_inches='tight')
+                fig_s2.savefig(out_png_legacy, dpi=150, bbox_inches='tight')
+                plt.close(fig_s2)
 
-            # 1b. ROI 3 Stage 2 phase map (grey shading for failed correlation)
-            fig_r3, _ = plot_stage2_diagram_clean(s2, draw_cut_lines=False, title_suffix=f"Bias Gap Th={th_u:.1f} ueV [ROI 3: Grey = Failed Corr]", correlation_mask=corr_both_2d)
-            fig_r3.savefig(out_roi3, dpi=150, bbox_inches='tight')
-            plt.close(fig_r3)
+                # 1b. ROI 3 Stage 2 phase map (grey shading for failed correlation)
+                fig_r3, _ = plot_stage2_diagram_clean(s2, draw_cut_lines=False, title_suffix=f"Bias Gap Th={th_u:.1f} ueV [ROI 3: Grey = Failed Corr]", correlation_mask=corr_both_2d)
+                fig_r3.savefig(out_roi3, dpi=150, bbox_inches='tight')
+                plt.close(fig_r3)
 
-            # 1c. Transport Gap Phase Map
-            fig_tg, ax_tg = plt.subplots(figsize=(6.5, 5.2))
-            im_tg = ax_tg.pcolormesh(B_vals, V_vals, gap_2d, cmap='hot_r', vmin=0.0, vmax=0.05, shading='nearest', rasterized=True)
-            if pfaff_vb is not None:
-                try:
-                    ax_tg.contour(B_vals, V_vals, pfaff_vb.astype(float), levels=[0.5], colors=['cyan'], linewidths=[1.2])
-                except Exception:
-                    pass
-            cb_tg = fig_tg.colorbar(im_tg, ax=ax_tg)
-            cb_tg.set_label("Transport Gap (meV)", fontsize=10)
-            ax_tg.set_xlabel(r"Zeeman Field $V_z$ (meV)", fontsize=10)
-            ax_tg.set_ylabel(r"Chemical Potential $\mu$ (meV)", fontsize=10)
-            ax_tg.set_title(r"Transport Gap Phase Map $\Delta_{\mathrm{transport}}$" + f"\n(Cutoff $\Delta_{{\mathrm{{low}}}} = {th_u:.1f}\ \mu\mathrm{{eV}}$, Cyan: Pfaffian $\mathcal{{Q}}=-1$)", fontsize=11)
-            fig_tg.tight_layout()
-            fig_tg.savefig(out_tg, dpi=150)
-            plt.close(fig_tg)
+                # 1c. Transport Gap Phase Map
+                fig_tg, ax_tg = plt.subplots(figsize=(6.5, 5.2))
+                im_tg = ax_tg.pcolormesh(B_vals, V_vals, gap_2d, cmap='hot_r', vmin=0.0, vmax=0.05, shading='nearest', rasterized=True)
+                if pfaff_vb is not None:
+                    try:
+                        ax_tg.contour(B_vals, V_vals, pfaff_vb.astype(float), levels=[0.5], colors=['cyan'], linewidths=[1.2])
+                    except Exception:
+                        pass
+                cb_tg = fig_tg.colorbar(im_tg, ax=ax_tg)
+                cb_tg.set_label("Transport Gap (meV)", fontsize=10)
+                ax_tg.set_xlabel(r"Zeeman Field $V_z$ (meV)", fontsize=10)
+                ax_tg.set_ylabel(r"Chemical Potential $\mu$ (meV)", fontsize=10)
+                ax_tg.set_title(r"Transport Gap Phase Map $\Delta_{\mathrm{transport}}$" + f"\n(Cutoff $\Delta_{{\mathrm{{low}}}} = {th_u:.1f}\ \mu\mathrm{{eV}}$, Cyan: Pfaffian $\mathcal{{Q}}=-1$)", fontsize=11)
+                fig_tg.tight_layout()
+                fig_tg.savefig(out_tg, dpi=150)
+                plt.close(fig_tg)
 
-            logger.info(f"Saved {out_s2.name}, {out_roi3.name}, and {out_tg.name}")
-        except Exception as e:
-            logger.warning(f"Failed bias sweep for {th_u} ueV: {e}")
+                logger.info(f"Saved {out_s2.name}, {out_roi3.name}, and {out_tg.name}")
+            except Exception as e:
+                logger.warning(f"Failed bias sweep for {th_u} ueV: {e}")
 
     # 1d. Global Bias Gap Sensitivity Phase Map (Difference between 2.0 ueV and 30.0 ueV)
     try:
@@ -401,6 +411,7 @@ def process_dataset(dataset_name: str, gap_th_factor: float):
         val_gap_right = np.zeros(actual_N)
         pfaffians = np.zeros(actual_N)
         val_corr_thresh = np.zeros(actual_N, dtype=bool)
+        val_tgp_roi2 = np.zeros(actual_N, dtype=bool)
         val_tgp_roi3 = np.zeros(actual_N, dtype=bool)
 
         for i in range(actual_N):
@@ -413,6 +424,7 @@ def process_dataset(dataset_name: str, gap_th_factor: float):
             v_i = np.argmin(np.abs(V_vals - mv))
             b_i = np.argmin(np.abs(B_vals - bv))
             val_corr_thresh[i] = bool(corr_both_2d[v_i, b_i])
+            val_tgp_roi2[i] = bool(roi2_passed[v_i, b_i])
             val_tgp_roi3[i] = bool(roi3_passed[v_i, b_i])
 
         # 6a. Export Conductance Multiplot
@@ -429,7 +441,8 @@ def process_dataset(dataset_name: str, gap_th_factor: float):
             evals=evals,
             pfaffians=pfaffians,
             corr_thresh=val_corr_thresh,
-            tgp_roi2=val_tgp_roi3
+            tgp_roi2=val_tgp_roi2,
+            tgp_roi3=val_tgp_roi3
         )
         # Copy / duplicate to ROI3_ prefixed files
         if (isl_dir / "multi_panel_conductance.png").exists():
@@ -462,18 +475,27 @@ def process_dataset(dataset_name: str, gap_th_factor: float):
         axes[0].set_ylabel("Energy (meV)")
         axes[0].set_title(f"ROI 3 Cut Analytics through Island {rank} [{star_name}]\n($\mu = {mu_com:.3f}$ meV, $V_z \in [{vz_start:.3f}, {vz_end:.3f}]$ meV)", fontsize=11)
         
-        # Highlight full ROI 3 Island along bottom runner with red ticks on bottom axis
+        # Highlight Regular TGP ROI 2 (red ticks) and ROI 3 Protocol (green portion/runner)
         ymin_an = np.min(evals) - 0.08 * (np.max(evals) - np.min(evals))
         ymax_an = np.max(evals) + 0.08 * (np.max(evals) - np.min(evals))
         axes[0].set_ylim(ymin_an, ymax_an)
         y_bar_an = ymin_an + 0.03 * (ymax_an - ymin_an)
-        isl_an_plotted = False
+
+        roi2_an_plotted = False
+        for idx in range(actual_N):
+            if val_tgp_roi2[idx]:
+                axes[0].plot(vz_pts[idx], ymin_an, marker='|', color='red', markersize=8, markeredgewidth=1.8, zorder=6, label="Regular TGP (ROI 2)" if not roi2_an_plotted else "")
+                roi2_an_plotted = True
+
+        roi3_an_plotted = False
         for idx in range(actual_N):
             if val_tgp_roi3[idx]:
-                axes[0].plot([vz_pts[idx] - 0.5*dx_val, vz_pts[idx] + 0.5*dx_val], [y_bar_an, y_bar_an], color='#2ca02c', linewidth=4.5, solid_capstyle='butt', zorder=5, label="ROI 3 Island" if not isl_an_plotted else "")
-                axes[0].plot(vz_pts[idx], ymin_an, marker='|', color='red', markersize=8, markeredgewidth=1.8, zorder=6)
-                isl_an_plotted = True
-        axes[0].legend(loc='upper right', fontsize=8)
+                axes[0].plot([vz_pts[idx] - 0.5*dx_val, vz_pts[idx] + 0.5*dx_val], [y_bar_an, y_bar_an], color='#2ca02c', linewidth=4.5, solid_capstyle='butt', zorder=5, label="ROI 3 Protocol" if not roi3_an_plotted else "")
+                roi3_an_plotted = True
+
+        handles, labels = axes[0].get_legend_handles_labels()
+        if handles:
+            axes[0].legend(loc='upper right', fontsize=8, framealpha=0.8)
 
         # Panel 2: 3w Measurement (Capped)
         cap_val = 140.0
@@ -532,13 +554,22 @@ def process_dataset(dataset_name: str, gap_th_factor: float):
         ymax_sp = np.max(evals) + 0.08 * (np.max(evals) - np.min(evals))
         ax_sp.set_ylim(ymin_sp, ymax_sp)
         y_bar_sp = ymin_sp + 0.03 * (ymax_sp - ymin_sp)
-        isl_sp_plotted = False
+
+        roi2_sp_plotted = False
+        for idx in range(actual_N):
+            if val_tgp_roi2[idx]:
+                ax_sp.plot(vz_pts[idx], ymin_sp, marker='|', color='red', markersize=8, markeredgewidth=1.8, zorder=6, label="Regular TGP (ROI 2)" if not roi2_sp_plotted else "")
+                roi2_sp_plotted = True
+
+        roi3_sp_plotted = False
         for idx in range(actual_N):
             if val_tgp_roi3[idx]:
-                ax_sp.plot([vz_pts[idx] - 0.5*dx_val, vz_pts[idx] + 0.5*dx_val], [y_bar_sp, y_bar_sp], color='#2ca02c', linewidth=4.5, solid_capstyle='butt', zorder=5, label="ROI 3 Island" if not isl_sp_plotted else "")
-                ax_sp.plot(vz_pts[idx], ymin_sp, marker='|', color='red', markersize=8, markeredgewidth=1.8, zorder=6)
-                isl_sp_plotted = True
-        ax_sp.legend(loc='upper right', fontsize=9)
+                ax_sp.plot([vz_pts[idx] - 0.5*dx_val, vz_pts[idx] + 0.5*dx_val], [y_bar_sp, y_bar_sp], color='#2ca02c', linewidth=4.5, solid_capstyle='butt', zorder=5, label="ROI 3 Protocol" if not roi3_sp_plotted else "")
+                roi3_sp_plotted = True
+
+        handles, labels = ax_sp.get_legend_handles_labels()
+        if handles:
+            ax_sp.legend(loc='upper right', fontsize=9, framealpha=0.8)
         fig_sp.tight_layout()
         fig_sp.savefig(isl_dir / "ROI3_spectra.png", dpi=200)
         fig_sp.savefig(isl_dir / "spectra.png", dpi=200)

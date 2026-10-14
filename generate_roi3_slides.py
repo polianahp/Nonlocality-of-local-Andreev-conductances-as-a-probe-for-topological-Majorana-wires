@@ -2,15 +2,11 @@
 """
 Generate an interactive, responsive HTML slide deck exclusively for ROI 3 Cuts.
 Contains plots and analytics from Outputs/Plots/<dataset>_Plots/ROI3_Cuts/:
-  - Section 1: Master Introduction & Global Overviews
-      * Slide 1: Master Three-Stage Progressive FDR Evolution Table across all 7 disorders
-      * Slide 2: Master Cross-Disorder ROI 2 vs ROI 3 Verification Table
-      * Slides 3–4: Spatial Localization Evolution (Separability & Boundary Confinement Groups A and B)
-      * Slides 5–11: 6-Panel Protocol Overviews (one per disorder, featuring Conductance Gap Sens. & Bias Gap Sens.)
-      * Slides 12–13: Cross-Disorder ROI 3 Phase Maps Grids (Groups 1 & 2)
-  - Section 2: Regular TGP vs. 3-Step Protocol Comparison (Grouped consecutively across all 7 disorders)
-      * 7 consecutive slides (V0 = 0.0 to 1.2) featuring:
-          - Left: 4-Panel Phase Map Comparison with strict Pfaffian masking (Q = -1 domain only)
+  - Section 1: Master Statistics Table
+      * Slide 1: Ensemble-Averaged Post-Processing Verification Statistics (V0 = 0.645, N = 8 realizations)
+  - Section 2: Regular TGP vs. 3-Step Protocol Comparison (Grouped consecutively across 6 active disorders)
+      * Slides 2–7: 6 consecutive slides (V0 = 0.0 to 0.91) featuring:
+          - Left: 4-Panel Phase Map Comparison showing FULL passing color both inside and outside Pfaffian boundary (Q = -1)
           - Right: Compact 2-Metric Table (% Pfaffian Area Passed & False Discovery Rate)
   - Section 3: Per-Disorder ROI 3 Island Cuts & Deep-Dives
       * ROI 3 Stage 2 Phase Map with Island COMs (★) + Verification Summary Table
@@ -25,10 +21,13 @@ Contains plots and analytics from Outputs/Plots/<dataset>_Plots/ROI3_Cuts/:
 import sys
 import os
 import argparse
+import subprocess
 from pathlib import Path
 import json
 
 from generate_html_slides import HTML_TEMPLATE, render_html_presentation
+
+BASE_DIR = Path(__file__).resolve().parent
 
 DISORDER_ORDER = [
     ("Tdis_pfaff5_V0_0_0_Plots", "V0 = 0.0 (Clean Wire)"),
@@ -97,7 +96,7 @@ def build_roi3_slides_for_directory(plot_dir: Path, base_rel_path: Path = None):
                 <div style="background:#0f172a; padding:18px 22px; border-radius:8px; border:1px solid #1e293b; height:100%; display:flex; flex-direction:column; justify-content:center; box-sizing:border-box;">
                   <h3 style="color:#38bdf8; font-size:16px; margin-bottom:8px; font-weight:700;">Protocol Verification: Regular TGP vs. 3-Step Protocol</h3>
                   <p style="color:#94a3b8; font-size:12px; margin-bottom:14px; line-height:1.4;">
-                    Benchmarking against ground truth Pfaffian invariant ($\mathcal{{Q}} = -1$) within the topological domain. Non-topological bulk regions are masked out in the phase map.
+                    Benchmarking protocol passing maps against ground truth Pfaffian invariant ($\mathcal{{Q}} = -1$, dashed cyan boundary). Full passing regions are shown in color both inside and outside the Pfaffian domain, visually displaying False Positives in the trivial bulk alongside True Positives.
                   </p>
                   <table class="data-table" style="font-size:12.5px; margin-bottom:14px;">
                     <thead>
@@ -136,7 +135,7 @@ def build_roi3_slides_for_directory(plot_dir: Path, base_rel_path: Path = None):
                     • <strong>Step 1:</strong> Isolates regions of high dual nonlocal barrier reflection correlation ($C_L, C_R \ge 0.85$).<br>
                     • <strong>Step 2:</strong> Enforces ZBP curvature agreement ($I_{{3\omega}} < -100$) across $\ge 50\%$ cutter pairs, eliminating bulk gapless crossings.<br>
                     • <strong>Step 3:</strong> Demands extracted transport gap $\Delta_{{\mathrm{{transport}}}} > 10\ \mu\mathrm{{eV}}$, suppressing trivial sub-gap crossings and driving FDR to a minimum.<br>
-                    • <em>Visual note:</em> Regions outside the Pfaffian invariant ($\mathcal{{Q}} = +1$) are suppressed; dashed cyan line indicates the topological boundary.
+                    • <em>Visual representation:</em> Colored regions inside the dashed cyan line represent True Positives (% Pfaffian Area Passed); colored regions outside represent False Positives (FDR).
                   </div>
                 </div>
                 """
@@ -281,16 +280,21 @@ def build_roi3_slides_for_directory(plot_dir: Path, base_rel_path: Path = None):
 
     return slides
 
-def build_tgp_vs_3step_section(plots_root: Path):
+def build_tgp_vs_3step_section(plots_root: Path, rel_root: Path = None):
     """
-    Build 7 consecutive slides comparing Regular TGP (without correlation mask)
+    Build 6 consecutive slides comparing Regular TGP (without correlation mask)
     vs. 3-Step Protocol (Step 1 Corr alone -> Step 2 Corr + 3w -> Step 3 Full ROI 3).
-    Strictly masks out non-Pfaffian regions and uses a compact 2-metric table:
+    Covers the 6 active disorder strengths (V0 = 0.0 to 0.91), omitting V0 = 1.2 (Slide 10 removed per user directive).
+    Shows FULL passing regions in color (both inside and outside the Pfaffian boundary)
+    accompanied by the compact 2-metric table:
       - % Pfaffian Area Passed (TPR)
       - False Discovery Rate (FDR)
     """
+    rel_root = rel_root if rel_root else plots_root
     slides = []
-    for dname, label in DISORDER_ORDER:
+    # User directive: Remove slide 10 (V0 = 1.2 / Tdis_pfaff5_Plots)
+    target_disorders = [d for d in DISORDER_ORDER if d[0] != "Tdis_pfaff5_Plots"]
+    for dname, label in target_disorders:
         pdir = plots_root / dname
         roi3_dir = pdir / "ROI3_Cuts"
         p_comp_img = roi3_dir / "tgp_vs_3step_protocol_comparison.png"
@@ -323,7 +327,7 @@ def build_tgp_vs_3step_section(plots_root: Path):
             <div style="background:#0f172a; padding:18px 22px; border-radius:8px; border:1px solid #1e293b; height:100%; display:flex; flex-direction:column; justify-content:center; box-sizing:border-box;">
               <h3 style="color:#38bdf8; font-size:16px; margin-bottom:8px; font-weight:700;">Protocol Verification: Regular TGP vs. 3-Step Protocol</h3>
               <p style="color:#94a3b8; font-size:12px; margin-bottom:14px; line-height:1.4;">
-                Benchmarking against ground truth Pfaffian invariant ($\mathcal{{Q}} = -1$) within the topological domain. Non-topological bulk regions are masked out in the phase map.
+                Benchmarking protocol passing maps against ground truth Pfaffian invariant ($\mathcal{{Q}} = -1$, dashed cyan boundary). Full passing regions are shown in color both inside and outside the Pfaffian domain, visually displaying False Positives in the trivial bulk alongside True Positives.
               </p>
               <table class="data-table" style="font-size:12.5px; margin-bottom:14px;">
                 <thead>
@@ -362,7 +366,7 @@ def build_tgp_vs_3step_section(plots_root: Path):
                 • <strong>Step 1:</strong> Isolates regions of high dual nonlocal barrier reflection correlation ($C_L, C_R \ge 0.85$).<br>
                 • <strong>Step 2:</strong> Enforces ZBP curvature agreement ($I_{{3\omega}} < -100$) across $\ge 50\%$ cutter pairs, eliminating bulk gapless crossings.<br>
                 • <strong>Step 3:</strong> Demands extracted transport gap $\Delta_{{\mathrm{{transport}}}} > 10\ \mu\mathrm{{eV}}$, suppressing trivial sub-gap crossings and driving FDR to a minimum.<br>
-                • <em>Visual note:</em> Regions outside the Pfaffian invariant ($\mathcal{{Q}} = +1$) are suppressed; dashed cyan line indicates the topological boundary.
+                • <em>Visual representation:</em> Colored regions inside the dashed cyan line represent True Positives (% Pfaffian Area Passed); colored regions outside represent False Positives (FDR).
               </div>
             </div>
             """
@@ -371,7 +375,7 @@ def build_tgp_vs_3step_section(plots_root: Path):
                 "dataset": "All Disorders",
                 "title": f"All Disorders | {label} — Protocol Comparison: Regular TGP vs. 3-Step Protocol",
                 "type": "side_by_side_html",
-                "img": os.path.relpath(p_comp_img, plots_root),
+                "img": os.path.relpath(p_comp_img, rel_root),
                 "html_card": table_card_html,
             })
         except Exception:
@@ -379,273 +383,109 @@ def build_tgp_vs_3step_section(plots_root: Path):
 
     return slides
 
-def build_roi3_master_intro_slides(plots_root: Path):
+def build_roi3_master_intro_slides(plots_root: Path, rel_root: Path = None):
     """
-    Build cross-disorder introductory slides for ROI 3 presentation.
+    Build cross-disorder introductory statistics table for ROI 3 presentation.
+    Slide 1: Ensemble-Averaged Post-Processing Statistics Table (N = 8 Realizations at V0 = 0.645)
+    (Old slides 1 and 2 removed per user directive).
     """
-    valid = []
-    for dname, label in DISORDER_ORDER:
-        pdir = plots_root / dname
-        roi3_dir = pdir / "ROI3_Cuts"
-        p_star = roi3_dir / "ROI3_stage2_phase_map.png"
-        if not p_star.exists(): p_star = roi3_dir / "stage2_phase_map.png"
-        p_2w = pdir / "global_2w_phase_map.png"
-        p_sep = pdir / "global_separability_phase_map.png"
-        p_fdr = roi3_dir / "ROI3_fdr_metrics.json"
-        if not p_fdr.exists(): p_fdr = roi3_dir / "fdr_metrics.json"
-
-        entry = {
-            "dir_name": dname,
-            "label": label,
-            "star": os.path.relpath(p_star, plots_root) if p_star.exists() else None,
-            "two_w": os.path.relpath(p_2w, plots_root) if p_2w.exists() else None,
-            "sep": os.path.relpath(p_sep, plots_root) if p_sep.exists() else None,
-            "fdr_file": p_fdr if p_fdr.exists() else None,
-        }
-        valid.append(entry)
-
+    rel_root = rel_root if rel_root else plots_root
     intro_slides = []
 
-    # 1a. Master Three-Stage Progressive False Discovery Rate Evolution Table
-    p_prog_summary = plots_root / "all_progressive_fdr_summary.json"
-    if p_prog_summary.exists():
+    # Ensemble-Averaged Post-Processing Statistics Table (Slide 1)
+    p_ens_summary = BASE_DIR / "Outputs/Postprocessing/Post_Process_Test/ensemble_summary.json"
+    if p_ens_summary.exists():
         try:
-            with open(p_prog_summary, "r", encoding="utf-8") as f:
-                prog_sum_data = json.load(f)
-            prog_rows = []
-            for dname, label in DISORDER_ORDER:
-                clean_name = dname.replace("_Plots", "")
-                if clean_name in prog_sum_data:
-                    d_metrics = prog_sum_data[clean_name]
-                    s1 = d_metrics.get("stage1_correlation", {})
-                    s2 = d_metrics.get("stage2_corr_plus_3w", {})
-                    s3 = d_metrics.get("stage3_full_roi3", {})
-                    fdr1 = s1.get("fdr_percent", 0.0)
-                    fdr2 = s2.get("fdr_percent", 0.0)
-                    fdr3 = s3.get("fdr_percent", 0.0)
-                    b1 = "badge-pass" if fdr1 < 5 else ("badge-warn" if fdr1 < 15 else "badge-fail")
-                    b2 = "badge-pass" if fdr2 < 5 else ("badge-warn" if fdr2 < 15 else "badge-fail")
-                    b3 = "badge-pass" if fdr3 < 5 else ("badge-warn" if fdr3 < 15 else "badge-fail")
-                    prog_rows.append(f"""
+            with open(p_ens_summary, "r", encoding="utf-8") as f:
+                ens_data = json.load(f)
+
+            steps_meta = [
+                ("regular_tgp", "Regular Microsoft TGP Stage 2", "#a855f7"),
+                ("step1_correlation", "Step 1: Dual Correlation (C_L, C_R ≥ 0.85)", "#0284c7"),
+                ("step2_corr_plus_3w", "Step 2: Corr + 3ω Curvature Consensus", "#f59e0b"),
+                ("step3_full_roi3", "Step 3 / ROI 3: Full Protocol (+ Transport Gap)", "#10b981"),
+            ]
+
+            ens_rows = []
+            for key, name, color in steps_meta:
+                if key in ens_data:
+                    sd = ens_data[key]
+                    tpr_m = sd.get("pfaffian_passed_pct", {}).get("mean", 0.0)
+                    tpr_s = sd.get("pfaffian_passed_pct", {}).get("std", 0.0)
+                    fdr_m = sd.get("fdr_percent", {}).get("mean", 0.0)
+                    fdr_s = sd.get("fdr_percent", {}).get("std", 0.0)
+                    fdr_pool = sd.get("fdr_percent", {}).get("pooled", 0.0)
+                    f1_m = sd.get("f1_score", {}).get("mean", 0.0)
+                    f1_s = sd.get("f1_score", {}).get("std", 0.0)
+                    conf_m = sd.get("mean_boundary_confinement", {}).get("mean", 0.0)
+                    conf_s = sd.get("mean_boundary_confinement", {}).get("std", 0.0)
+                    sep_m = sd.get("mean_separability", {}).get("mean", 0.0)
+                    sep_s = sd.get("mean_separability", {}).get("std", 0.0)
+
+                    b_fdr = "badge-pass" if fdr_m < 5.0 else ("badge-warn" if fdr_m < 20.0 else "badge-fail")
+                    b_pool = "badge-pass" if fdr_pool < 5.0 else ("badge-warn" if fdr_pool < 20.0 else "badge-fail")
+
+                    ens_rows.append(f"""
                     <tr>
-                      <td><strong>{label}</strong></td>
-                      <td>{s1.get('total_passed', 0):,}</td>
-                      <td><span class="{b1}">{fdr1:.2f}%</span></td>
-                      <td>{s2.get('total_passed', 0):,}</td>
-                      <td><span class="{b2}">{fdr2:.2f}%</span></td>
-                      <td><strong>{s3.get('total_passed', 0):,}</strong></td>
-                      <td><span class="{b3}">{fdr3:.2f}%</span></td>
-                      <td><strong>{s3.get('ppv_percent', 0.0):.2f}%</strong></td>
+                      <td><span style="color:{color}; font-weight:bold;">{name}</span></td>
+                      <td style="text-align:center;"><strong>{tpr_m:.2f}%</strong> <span style="color:#94a3b8; font-size:11px;">± {tpr_s:.2f}%</span></td>
+                      <td style="text-align:center;"><span class="{b_fdr}">{fdr_m:.2f}%</span> <span style="color:#94a3b8; font-size:11px;">± {fdr_s:.2f}%</span></td>
+                      <td style="text-align:center;"><span class="{b_pool}"><strong>{fdr_pool:.2f}%</strong></span></td>
+                      <td style="text-align:center;">{f1_m:.3f} <span style="color:#94a3b8; font-size:11px;">± {f1_s:.3f}</span></td>
+                      <td style="text-align:center;">{conf_m:.3f} <span style="color:#94a3b8; font-size:11px;">± {conf_s:.3f}</span></td>
+                      <td style="text-align:center;"><strong>{sep_m:.3f}</strong> <span style="color:#94a3b8; font-size:11px;">± {sep_s:.3f}</span></td>
                     </tr>
                     """)
-            if prog_rows:
-                master_prog_table_html = f"""
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>Disorder Realization</th>
-                      <th>Step 1 Passed (px)</th>
-                      <th>Step 1 FDR</th>
-                      <th>Step 2 Passed (px)</th>
-                      <th>Step 2 FDR</th>
-                      <th>Step 3 Passed (px)</th>
-                      <th>Step 3 FDR</th>
-                      <th>Step 3 PPV (Precision)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {"".join(prog_rows)}
-                  </tbody>
-                </table>
-                <div style="margin-top:16px; font-size:11px; color:#94a3b8; line-height:1.6;">
-                  <strong>Three-Stage Progressive Operational Filtering Evolution (Against Ground Truth Pfaffian $\mathcal{{Q}} = -1$):</strong><br>
-                  • <strong>Step 1 (Dual Barrier Correlation Alone):</strong> Captures all regions exhibiting strong nonlocal reflection correlation ($C_L, C_R \ge 0.85$). While sensitive, disorder-induced trivial sub-gap crossings yield FDR up to $21.13\%$.<br>
-                  • <strong>Step 2 (Corr + $3\omega$ Curvature Agreement):</strong> Curvature thresholding across $\ge 50\%$ cutter pairs eliminates bulk gapless trivial states, reducing FDR significantly ($17.38\% \to 5.48\%$ at $V_0=0.645$).<br>
-                  • <strong>Step 3 (Full ROI 3: Corr + $3\omega$ + Transport Gap $\Delta_{{ex}} > 10\ \mu\mathrm{{eV}}$):</strong> Extracted finite transport gap eliminates hybridized states, collapsing FDR to near zero ($3.31\%$ at $V_0=0.645$ and $0.00\%$ at $V_0=1.2$).
-                </div>
-                """
-                intro_slides.append({
-                    "dataset": "All Disorders",
-                    "title": "All Disorders | Three-Stage Progressive Protocol False Discovery Rate (FDR) Evolution",
-                    "type": "table_slide",
-                    "table_title": "Three-Stage Progressive Operational Filtering Benchmark",
-                    "table_subtitle": "Step 1 (Barrier Corr Alone) → Step 2 (+ 3ω Curvature Agreement) → Step 3 (Full ROI 3 + Transport Gap)",
-                    "html_table": master_prog_table_html
-                })
-        except Exception:
-            pass
 
-    # 1b. Master False Discovery Rate Comparison Table: ROI 2 vs ROI 3 Across All Disorders
-    fdr_rows = []
-    for v in valid:
-        if v["fdr_file"]:
-            try:
-                with open(v["fdr_file"], "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                gt = data.get("ground_truth_topological_pixels", 0)
-                s2 = data.get("stage2_roi2_metrics", {})
-                s3 = data.get("stage3_roi3_metrics", {})
+            meta_info = ens_data.get("metadata", {})
+            n_eval = meta_info.get("total_realizations_evaluated", 8)
+            v0_eval = meta_info.get("disorder_strength_V0", 0.645)
 
-                s2_passed = s2.get("total_passed", 0)
-                s2_ppv = s2.get("p_topological_given_passed_ppv", 0.0) * 100.0
-                s2_fdr = s2.get("false_discovery_rate_fdr", 0.0) * 100.0
-
-                s3_passed = s3.get("total_passed", 0)
-                s3_tp = s3.get("true_positives", 0)
-                s3_fp = s3.get("false_positives", 0)
-                s3_ppv = s3.get("p_topological_given_passed_ppv", 0.0) * 100.0
-                s3_fdr = s3.get("false_discovery_rate_fdr", 0.0) * 100.0
-                s3_tpr = s3.get("sensitivity_tpr", 0.0) * 100.0
-                s3_tnr = s3.get("specificity_tnr", 0.0) * 100.0
-
-                badge_s2_fdr = "badge-pass" if s2_fdr < 5.0 else ("badge-warn" if s2_fdr < 30.0 else "badge-fail")
-                badge_s3_fdr = "badge-pass" if s3_fdr < 5.0 else ("badge-warn" if s3_fdr < 15.0 else "badge-fail")
-                badge_s3_ppv = "badge-pass" if s3_ppv > 90.0 else ("badge-warn" if s3_ppv > 75.0 else "badge-fail")
-
-                fdr_rows.append(f"""
+            ens_table_html = f"""
+            <table class="data-table">
+              <thead>
                 <tr>
-                  <td><strong>{v['label']}</strong></td>
-                  <td>{gt:,}</td>
-                  <td>{s2_passed}</td>
-                  <td><span class="{badge_s2_fdr}">{s2_fdr:.2f}%</span></td>
-                  <td><strong>{s3_passed}</strong></td>
-                  <td>{s3_tp}</td>
-                  <td>{s3_fp}</td>
-                  <td><span class="{badge_s3_ppv}">{s3_ppv:.2f}%</span></td>
-                  <td><span class="{badge_s3_fdr}">{s3_fdr:.2f}%</span></td>
-                  <td>{s3_tpr:.2f}%</td>
-                  <td>{s3_tnr:.2f}%</td>
+                  <th>Protocol Step / Layer</th>
+                  <th style="text-align:center;">% Pfaffian Passed (TPR)</th>
+                  <th style="text-align:center;">Mean FDR (%)</th>
+                  <th style="text-align:center;">Pooled FDR (%)</th>
+                  <th style="text-align:center;">F1 Score</th>
+                  <th style="text-align:center;">Boundary Confinement</th>
+                  <th style="text-align:center;">MZM Separability (S)</th>
                 </tr>
-                """)
-            except Exception:
-                pass
+              </thead>
+              <tbody>
+                {"".join(ens_rows)}
+              </tbody>
+            </table>
+            <div style="margin-top:16px; font-size:11px; color:#94a3b8; line-height:1.6;">
+              <strong>Ensemble-Averaged Post-Processing Statistics (N = {n_eval} Disorder Realizations at V₀ = {v0_eval} meV):</strong><br>
+              • <strong>Regular Microsoft TGP:</strong> Severely restricted by the boundary gapless heuristic, capturing only $5.71\%$ of the topological domain with high mean FDR ($22.92\%$, max $42.15\%$).<br>
+              • <strong>Step 1 (Dual Correlation Alone):</strong> Broad topological coverage ($80.37\%$ passed) with $F_1 = 0.804$, providing a high-yield candidate pool.<br>
+              • <strong>Step 2 (+ 3ω Curvature Agreement):</strong> Curvature thresholding across cutter pairs cuts bulk gapless crossings, dropping mean FDR to $7.86\%$ ($92.14\%$ precision).<br>
+              • <strong>Step 3 (Full ROI 3 + Transport Gap):</strong> Extracted transport gap isolates pure unhybridized states, driving pooled FDR down to $3.75\%$ (median $2.88\%$) and maximizing MZM Separability ($S = 0.566$).
+            </div>
+            """
 
-    if fdr_rows:
-        master_table_html = f"""
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Disorder Realization</th>
-              <th>Ground Truth Top. (px)</th>
-              <th>ROI 2 Passed (px)</th>
-              <th>ROI 2 FDR</th>
-              <th>ROI 3 Passed (px)</th>
-              <th>ROI 3 TP</th>
-              <th>ROI 3 FP</th>
-              <th>ROI 3 PPV (P(Top|Pass))</th>
-              <th>ROI 3 FDR</th>
-              <th>ROI 3 Sensitivity (TPR)</th>
-              <th>ROI 3 Specificity (TNR)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {"".join(fdr_rows)}
-          </tbody>
-        </table>
-        <div style="margin-top:16px; font-size:11px; color:#94a3b8; line-height:1.6;">
-          <strong>ROI 3 Protocol Verification: Adding Dual Barrier Correlation Criterion ($C_L \ge 0.85$ & $C_R \ge 0.85$):</strong><br>
-          • <strong>Dramatic FDR Reduction:</strong> In strong disorder ($V_0 = 0.645$), False Discovery Rate collapses from $14.24\% \to 1.92\%$ ($FP$ drops from $48 \to 4$).<br>
-          • In severe disorder ($V_0 = 0.872$), FDR collapses from $35.65\% \to 11.86\%$ ($FP$ drops from $118 \to 14$).<br>
-          • In severe disorder ($V_0 = 0.91$), FDR collapses from $37.14\% \to 10.00\%$ ($FP$ drops from $104 \to 9$).<br>
-          • <strong>Physical Mechanism:</strong> While local/non-local conductance alone can mimic trivial Andreev bound state crossings, demanding simultaneous dual barrier reflection correlation prunes bulk trivial states and isolates genuine non-local Majorana modes.
-        </div>
-        """
-        intro_slides.append({
-            "dataset": "All Disorders",
-            "title": "All Disorders | Master ROI 2 vs. ROI 3 False Discovery Rate (FDR) Comparison",
-            "type": "table_slide",
-            "table_title": "Cross-Disorder ROI 2 vs. ROI 3 Protocol Verification Table",
-            "table_subtitle": "Demonstrating dramatic FDR reduction when intersecting Stage 2 with Dual Barrier Correlation >= 0.85",
-            "html_table": master_table_html
-        })
-
-    # 1c. Spatial Localization Evolution Slides (Separability & Boundary Confinement)
-    p_grp_a = plots_root / "separability_vs_confinement_group_A.png"
-    if p_grp_a.exists():
-        intro_slides.append({
-            "dataset": "All Disorders",
-            "title": "All Disorders | Spatial Localization Evolution vs. Disorder (Group A: Clean to Intermediate)",
-            "type": "single_centered",
-            "img": os.path.relpath(p_grp_a, plots_root),
-            "alt": "Separability vs Confinement Group A"
-        })
-
-    p_grp_b = plots_root / "separability_vs_confinement_group_B.png"
-    if p_grp_b.exists():
-        intro_slides.append({
-            "dataset": "All Disorders",
-            "title": "All Disorders | Spatial Localization Evolution vs. Disorder (Group B: Strong to Benchmark)",
-            "type": "single_centered",
-            "img": os.path.relpath(p_grp_b, plots_root),
-            "alt": "Separability vs Confinement Group B"
-        })
-
-    # 2. 6-Panel Disorder Overviews: Exactly 1 realization per slide
-    # Panels: 2w, 3w, Transport Gap (10 ueV), Excitation Gap (E1 - E0), Conductance Gap Sens, Bias Gap Sens
-    for dname, label in DISORDER_ORDER:
-        pdir = plots_root / dname
-        p_2w = pdir / "global_2w_phase_map.png"
-        p_3w = pdir / "global_3w_phase_map.png"
-        p_tg10 = pdir / "bias_threshold_sweep" / "transport_gap_phase_map_10.0uev.png"
-        if not p_tg10.exists():
-            p_tg10 = pdir / "global_transport_gap_phase_map.png"
-        p_ex = pdir / "global_excitation_gap_E1_minus_E0_phase_map.png"
-        p_sens_g = pdir / "global_gap_threshold_sensitivity_phase_map.png"
-        p_sens_b = pdir / "global_bias_gap_sensitivity_phase_map.png"
-
-        intro_slides.append({
-            "dataset": "All Disorders",
-            "title": f"All Disorders | {label} — 6-Panel Protocol Overview (2ω, 3ω, Transport Gap, Excitation Gap, Cond. Sens., Bias Sens.)",
-            "type": "six_panel_overview",
-            "p1": os.path.relpath(p_2w, plots_root) if p_2w.exists() else None,
-            "p1_alt": f"2ω Conductance ({label})",
-            "p2": os.path.relpath(p_3w, plots_root) if p_3w.exists() else None,
-            "p2_alt": f"3ω Curvature ({label})",
-            "p3": os.path.relpath(p_tg10, plots_root) if p_tg10.exists() else None,
-            "p3_alt": f"Transport Gap 10 μeV ({label})",
-            "p4": os.path.relpath(p_ex, plots_root) if p_ex.exists() else None,
-            "p4_alt": f"Excitation Gap E1 - E0 ({label})",
-            "p5": os.path.relpath(p_sens_g, plots_root) if p_sens_g.exists() else None,
-            "p5_alt": f"Conductance Gap Sensitivity ({label})",
-            "p6": os.path.relpath(p_sens_b, plots_root) if p_sens_b.exists() else None,
-            "p6_alt": f"Bias Gap Sensitivity ({label})",
-        })
-
-    # 3. Cross-Disorder ROI 3 Phase Maps Grids
-    valid_stars = [v for v in valid if v["star"]]
-    if len(valid_stars) >= 4:
-        sub1 = valid_stars[:4]
-        slides_dict1 = {
-            "dataset": "All Disorders",
-            "title": "All Disorders | Cross-Disorder ROI 3 Phase Maps with Island COMs (Group 1: Clean to Intermediate)",
-            "type": "global_summary",
-            "tl": sub1[0]["star"], "tl_alt": sub1[0]["label"],
-            "tr": sub1[1]["star"] if len(sub1) > 1 else sub1[0]["star"], "tr_alt": sub1[1]["label"] if len(sub1) > 1 else "",
-            "bl": sub1[2]["star"] if len(sub1) > 2 else sub1[0]["star"], "bl_alt": sub1[2]["label"] if len(sub1) > 2 else "",
-            "br": sub1[3]["star"] if len(sub1) > 3 else sub1[0]["star"], "br_alt": sub1[3]["label"] if len(sub1) > 3 else "",
-        }
-        intro_slides.append(slides_dict1)
-
-    if len(valid_stars) > 4:
-        sub2 = valid_stars[4:]
-        slides_dict2 = {
-            "dataset": "All Disorders",
-            "title": "All Disorders | Cross-Disorder ROI 3 Phase Maps with Island COMs (Group 2: Strong Disorders)",
-            "type": "global_summary",
-            "tl": sub2[0]["star"], "tl_alt": sub2[0]["label"],
-            "tr": sub2[1]["star"] if len(sub2) > 1 else sub2[0]["star"], "tr_alt": sub2[1]["label"] if len(sub2) > 1 else "",
-            "bl": sub2[2]["star"] if len(sub2) > 2 else sub2[0]["star"], "bl_alt": sub2[2]["label"] if len(sub2) > 2 else "",
-            "br": sub2[2]["star"] if len(sub2) > 2 else sub2[0]["star"], "br_alt": sub2[2]["label"] if len(sub2) > 2 else "",
-        }
-        intro_slides.append(slides_dict2)
+            intro_slides.append({
+                "dataset": "All Disorders",
+                "title": f"All Disorders | Ensemble-Averaged Post-Processing Verification Statistics (N = {n_eval} Realizations, V₀ = {v0_eval} meV)",
+                "type": "table_slide",
+                "table_title": "Ensemble Post-Processing Benchmark & Topological Verification",
+                "table_subtitle": "Statistical distribution of discovery rates, F1 scores, boundary confinement, and MZM separability across disorder realizations",
+                "html_table": ens_table_html
+            })
+        except Exception as e_ens:
+            pass
 
     return intro_slides
 
-def build_roi3_appendix_slides(plots_root: Path):
+def build_roi3_appendix_slides(plots_root: Path, rel_root: Path = None):
     """
     Appendix slides placed at the very end of the presentation:
     Cross-Disorder Bias Voltage Gap Threshold Sweep Evolution (2.0, 10.0, 30.0 μeV).
     """
+    rel_root = rel_root if rel_root else plots_root
     appendix_slides = []
     sweep_comparisons = [
         ("2.0uev", "Relaxed Gapless Threshold Δ_low = 2.0 μeV (Maximum Topological Yield)"),
@@ -662,7 +502,7 @@ def build_roi3_appendix_slides(plots_root: Path):
         ]:
             p_th = plots_root / dname / "bias_threshold_sweep" / f"ROI3_stage2_phase_map_{th_code}.png"
             if p_th.exists():
-                th_imgs.append((os.path.relpath(p_th, plots_root), label))
+                th_imgs.append((os.path.relpath(p_th, rel_root), label))
         if len(th_imgs) == 4:
             appendix_slides.append({
                 "dataset": "Appendix",
@@ -675,12 +515,66 @@ def build_roi3_appendix_slides(plots_root: Path):
             })
     return appendix_slides
 
+def build_all_roi3_slides(plots_root: Path, rel_root: Path = None):
+    """
+    Build the complete ordered slide sequence:
+      1. Master Statistics Tables (Slides 1–3)
+      2. Regular TGP vs 3-Step Protocol Comparison (Slides 4–10, grouped consecutively)
+      3. Per-Disorder ROI 3 Island Cuts & Deep-Dives
+      4. Appendix: Cross-Disorder Bias Threshold Sweeps
+    """
+    rel_root = rel_root if rel_root else plots_root
+    all_slides = []
+
+    # 1. Master Statistics Tables (Slides 1–3)
+    intro_slides = build_roi3_master_intro_slides(plots_root, rel_root=rel_root)
+    all_slides.extend(intro_slides)
+
+    # 2. Regular TGP vs 3-Step Protocol Comparison (Slides 4–10)
+    comp_slides = build_tgp_vs_3step_section(plots_root, rel_root=rel_root)
+    all_slides.extend(comp_slides)
+
+    # 3. Per-Disorder ROI 3 Island Cuts & Deep-Dives
+    for dname, label in DISORDER_ORDER:
+        pdir = plots_root / dname
+        if pdir.exists():
+            d_slides = build_roi3_slides_for_directory(pdir, base_rel_path=rel_root)
+            all_slides.extend(d_slides)
+
+    # 4. Appendix: Cross-Disorder Bias Threshold Sweeps (at the very back)
+    appendix_slides = build_roi3_appendix_slides(plots_root, rel_root=rel_root)
+    all_slides.extend(appendix_slides)
+
+    return all_slides
+
+def compile_to_pdf(html_path: Path) -> Path:
+    pdf_path = html_path.with_suffix(".pdf")
+    file_url = f"file://{html_path.resolve()}"
+    cmd = [
+        "google-chrome",
+        "--headless=new",
+        "--disable-gpu",
+        "--no-pdf-header-footer",
+        f"--print-to-pdf={pdf_path.resolve()}",
+        file_url
+    ]
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if res.returncode == 0 and pdf_path.exists():
+        size_mb = pdf_path.stat().st_size / (1024 * 1024)
+        print(f"[OK] Compiled PDF: {pdf_path.name} ({size_mb:.2f} MB)")
+        return pdf_path
+    else:
+        print(f"[ERROR] Failed to compile PDF for {html_path}: {res.stderr}")
+        return None
+
 def main():
     parser = argparse.ArgumentParser(description="Generate ROI 3 HTML slide presentations.")
     parser.add_argument("--dir", type=str, default=None, help="Specific dataset directory under Outputs/Plots to generate slides for.")
+    parser.add_argument("--weekly-date", type=str, default="2026-10-13", help="Date string for weekly research slides (default: 2026-10-13).")
+    parser.add_argument("--no-pdf", action="store_true", help="Skip headless Chrome PDF compilation.")
     args = parser.parse_args()
 
-    plots_root = Path("Outputs/Plots").resolve()
+    plots_root = (BASE_DIR / "Outputs/Plots").resolve()
 
     if args.dir:
         target_dir = Path(args.dir).resolve()
@@ -688,40 +582,21 @@ def main():
         out_file = target_dir / "ROI3_Cuts" / "slides.html"
         render_html_presentation(slides, out_file, title=f"ROI 3 Cuts Slides - {target_dir.name}")
         print(f"Generated standalone ROI 3 slides at {out_file}")
+        if not args.no_pdf:
+            compile_to_pdf(out_file)
         return
 
-    # Master Presentation across all disorders
-    all_slides = []
+    # 1. Weekly Research Slides in Outputs/slides/weekly research slides/<date>/
+    weekly_dir = (BASE_DIR / "Outputs/slides/weekly research slides" / args.weekly_date).resolve()
+    weekly_dir.mkdir(parents=True, exist_ok=True)
+    weekly_slides = build_all_roi3_slides(plots_root, rel_root=weekly_dir)
+    weekly_out_dated = weekly_dir / f"slides-{args.weekly_date}.html"
+    
+    render_html_presentation(weekly_slides, weekly_out_dated, title=f"Weekly Research Slides - {args.weekly_date}")
+    print(f"Generated Weekly Research Slides at {weekly_out_dated} ({len(weekly_slides)} slides total).")
 
-    # 1. Master Introduction & Global Overviews
-    intro_slides = build_roi3_master_intro_slides(plots_root)
-    all_slides.extend(intro_slides)
-
-    # 2. Regular TGP vs 3-Step Protocol Comparison (All 7 Disorders Grouped Consecutively)
-    comp_slides = build_tgp_vs_3step_section(plots_root)
-    all_slides.extend(comp_slides)
-
-    # 3. Per-Disorder ROI 3 Island Cuts & Deep-Dives
-    for dname, label in DISORDER_ORDER:
-        pdir = plots_root / dname
-        if pdir.exists():
-            d_slides = build_roi3_slides_for_directory(pdir, base_rel_path=plots_root)
-            all_slides.extend(d_slides)
-
-            # Standalone per-disorder deck in ROI3_Cuts/
-            standalone_slides = build_roi3_slides_for_directory(pdir, base_rel_path=pdir / "ROI3_Cuts")
-            if standalone_slides:
-                out_standalone = pdir / "ROI3_Cuts" / "slides.html"
-                render_html_presentation(standalone_slides, out_standalone, title=f"ROI 3 Cuts Presentation - {label}")
-                print(f"Generated {out_standalone}")
-
-    # 4. Appendix: Cross-Disorder Bias Threshold Sweeps (Moved to the very back)
-    appendix_slides = build_roi3_appendix_slides(plots_root)
-    all_slides.extend(appendix_slides)
-
-    master_out = plots_root / "roi3_slides.html"
-    render_html_presentation(all_slides, master_out, title="Master Majorana ROI 3 Protocol & Cuts Presentation (Dual Barrier Corr >= 0.85)")
-    print(f"Generated Master ROI 3 HTML Presentation at {master_out} ({len(all_slides)} slides total).")
+    if not args.no_pdf:
+        compile_to_pdf(weekly_out_dated)
 
 if __name__ == "__main__":
     main()
