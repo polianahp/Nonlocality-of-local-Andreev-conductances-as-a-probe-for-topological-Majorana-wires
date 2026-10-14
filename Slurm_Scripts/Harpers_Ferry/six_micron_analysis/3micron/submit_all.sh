@@ -4,7 +4,7 @@
 # Submits simulation SLURM jobs to Harpers Ferry queue.
 # ==============================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR" || exit 1
 
 ARG="$1"
@@ -27,19 +27,19 @@ echo "=========================================================="
 
 shopt -s nullglob
 if [ -n "$FILTER" ]; then
-    FILES=(run_*${{FILTER}}*.slurm)
+    FILES=(run_*${FILTER}*.slurm)
 else
     FILES=(run_*.slurm)
 fi
 
-TOTAL_FOUND=${{#FILES[@]}}
+TOTAL_FOUND=${#FILES[@]}
 
 if [ "$TOTAL_FOUND" -eq 0 ]; then
-    echo "No matching SLURM files found in $SCRIPT_DIR for pattern: ${{FILTER:-run_*.slurm}}"
+    echo "No matching SLURM files found in $SCRIPT_DIR for pattern: ${FILTER:-run_*.slurm}"
     exit 1
 fi
 
-for slurm_file in "${{FILES[@]}}"; do
+for slurm_file in "${FILES[@]}"; do
     if [ "$COUNT" -ge "$MAX_JOBS" ]; then
         break
     fi

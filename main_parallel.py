@@ -285,16 +285,39 @@ if __name__ == "__main__":
     
     dirname = config.dirname
     
+    resolved_path = None
     if config.realization_index is not None:
-        fname = f"Raw_Disorders/raw_disorder_{config.realization_index}.npy"
-    elif config.fname and (PathConfigs.RUN_FILES / config.fname).exists():
-        fname = config.fname
-    elif config.fname and (PathConfigs.RUN_FILES / "New_Disorders" / config.fname).exists():
-        fname = f"New_Disorders/{config.fname}"
-    elif config.fname and Path(config.fname).exists():
-        fname = str(Path(config.fname).resolve())
+        resolved_path = PathConfigs.RUN_FILES / f"Raw_Disorders/raw_disorder_{config.realization_index}.npy"
+    elif config.fname:
+        raw_p = Path(config.fname)
+        candidates = [
+            PathConfigs.RUN_FILES / config.fname,
+            raw_p.resolve() if raw_p.is_absolute() else None,
+            Path(config.fname).resolve() if Path(config.fname).exists() else None,
+            PathConfigs.RUN_FILES / "New_Disorders" / config.fname,
+            PathConfigs.RUN_FILES / "six_micron_analysis" / "6micron" / "New_Disorders" / raw_p.name,
+            PathConfigs.RUN_FILES / "six_micron_analysis" / "3micron" / "New_Disorders" / raw_p.name,
+            PathConfigs.RUN_FILES / "six_micron" / "New_Disorders" / raw_p.name,
+        ]
+        for c in candidates:
+            if c and c.exists():
+                resolved_path = c.resolve()
+                break
+
+        if resolved_path is None:
+            # Fallback: search recursively for filename under RUN_FILES
+            matches = list(PathConfigs.RUN_FILES.glob(f"**/{raw_p.name}"))
+            if matches:
+                resolved_path = matches[0].resolve()
+            else:
+                resolved_path = PathConfigs.RUN_FILES / config.fname
     else:
-        fname = f"New_Disorders/{config.fname}"
+        resolved_path = PathConfigs.RUN_FILES / "New_Disorders/Tdis.npz"
+
+    try:
+        fname = str(resolved_path.relative_to(PathConfigs.RUN_FILES))
+    except (ValueError, Exception):
+        fname = str(resolved_path)
 
     print(f"--- Starting Simulation ---")
     print(f"Output Directory: {dirname}")
@@ -310,7 +333,7 @@ if __name__ == "__main__":
     
     # Initialize Disorder
     print(f"Run Files Path Exists: {os.path.exists(PathConfigs.RUN_FILES)}")
-    path = Path(fname) if Path(fname).is_absolute() else Path(PathConfigs.RUN_FILES / fname)
+    path = resolved_path
     Vdisx = hp.initialize_vdis_from_data(path, lambda_dis=config.lambda_dis, Ls=config.Ls, is_real_space=getattr(config, 'is_real_space', False))
 
     # Parameter Preparation
