@@ -244,6 +244,14 @@ def process_single_dataset(args_tuple: Tuple) -> Dict[str, Any]:
     # Average extracted transport gap map in ueV
     gap_uev = (z_ds["gap"].mean(dim="cutter_pair_index").transpose("V", "B").values) * 1000.0
 
+    # Extract individual physical measurements for comparative phase maps
+    L_3w = tprep['L_3w'].mean(dim='cutter_pair_index').transpose('V', 'B').values if 'cutter_pair_index' in tprep['L_3w'].dims else tprep['L_3w'].transpose('V', 'B').values
+    R_3w = tprep['R_3w'].mean(dim='cutter_pair_index').transpose('V', 'B').values if 'cutter_pair_index' in tprep['R_3w'].dims else tprep['R_3w'].transpose('V', 'B').values
+    L_2w = tprep['L_2w_nl'].mean(dim='cutter_pair_index').transpose('V', 'B').values if 'cutter_pair_index' in tprep['L_2w_nl'].dims else tprep['L_2w_nl'].transpose('V', 'B').values
+    R_2w = tprep['R_2w_nl'].mean(dim='cutter_pair_index').transpose('V', 'B').values if 'cutter_pair_index' in tprep['R_2w_nl'].dims else tprep['R_2w_nl'].transpose('V', 'B').values
+    gap_L = t_l['gap'].mean(dim='cutter_pair_index').transpose('V', 'B').values if 'cutter_pair_index' in t_l['gap'].dims else t_l['gap'].transpose('V', 'B').values
+    gap_R = t_r['gap'].mean(dim='cutter_pair_index').transpose('V', 'B').values if 'cutter_pair_index' in t_r['gap'].dims else t_r['gap'].transpose('V', 'B').values
+
     # Load Confinement and Separability
     conf_2d = load_boundary_confinement(data_dir, Nmu, Nvz, Ls=Ls)
     sep_2d = load_separability(data_dir, Nmu, Nvz)
@@ -254,8 +262,16 @@ def process_single_dataset(args_tuple: Tuple) -> Dict[str, Any]:
     metrics_s2 = calc_protocol_metrics(m2, gt_2d, conf_2d, sep_2d)
     metrics_s3 = calc_protocol_metrics(m3, gt_2d, conf_2d, sep_2d)
 
-    elapsed = time.perf_counter() - t0
-    logger.info(f"Done {wire_len_tag} {v0_tag} in {elapsed:.1f}s (TGP FDR: {metrics_tgp['fdr_percent']}%, Step 3 FDR: {metrics_s3['fdr_percent']}%)")
+    # Load BdG spectrum for E0 and E1 - E0
+    spec_file = data_dir / "spectrum_arr.npy"
+    if spec_file.exists():
+        spec_arr = np.load(spec_file)
+        E0 = spec_arr[:, 2].reshape(Nmu, Nvz)
+        E1 = spec_arr[:, 3].reshape(Nmu, Nvz)
+        E_diff = (E1 - E0).reshape(Nmu, Nvz)
+    else:
+        E0 = np.zeros((Nmu, Nvz))
+        E_diff = np.zeros((Nmu, Nvz))
 
     return {
         "wire_len_tag": wire_len_tag,
@@ -277,6 +293,16 @@ def process_single_dataset(args_tuple: Tuple) -> Dict[str, Any]:
         "metrics_s1": metrics_s1,
         "metrics_s2": metrics_s2,
         "metrics_s3": metrics_s3,
+        "L_3w": np.nan_to_num(L_3w, nan=0.0),
+        "R_3w": np.nan_to_num(R_3w, nan=0.0),
+        "L_2w": np.nan_to_num(L_2w, nan=0.0),
+        "R_2w": np.nan_to_num(R_2w, nan=0.0),
+        "gap_L": np.nan_to_num(gap_L, nan=0.0),
+        "gap_R": np.nan_to_num(gap_R, nan=0.0),
+        "cL": np.nan_to_num(cL, nan=0.0),
+        "cR": np.nan_to_num(cR, nan=0.0),
+        "E0": np.nan_to_num(E0, nan=0.0),
+        "E_diff": np.nan_to_num(E_diff, nan=0.0),
     }
 
 
@@ -326,8 +352,7 @@ def render_4panel_phase_map(
         # Informative badge in upper-left corner
         tpr = m_dict.get("pfaffian_passed_pct", 0.0)
         fdr = m_dict.get("fdr_percent", 0.0)
-        tot = m_dict.get("tot_passed", 0)
-        text_badge = f"Passed: {tot} px | TPR: {tpr:.1f}% | FDR: {fdr:.1f}%"
+        text_badge = f"TPR: {tpr:.1f}% | FDR: {fdr:.1f}%"
         ax.text(0.03, 0.94, text_badge, transform=ax.transAxes, fontsize=9.2,
                 fontweight="bold", color="#ffffff",
                 bbox=dict(boxstyle="round,pad=0.35", facecolor="#0f172a", edgecolor="#475569", alpha=0.9))
@@ -371,12 +396,12 @@ def render_4panel_transition_map(
     ]
 
     # Colors for transition map:
-    # Gained at 6um: Emerald #10b981
+    # Gained at 6um: Vibrant Amber #f59e0b
     # Lost at 6um: Crimson #ef4444
-    # Preserved at both: Cyan #06b6d4
-    c_gained = [0.06, 0.72, 0.51, 0.95]
+    # Preserved at both: Royal Blue #2563eb
+    c_gained = [0.96, 0.62, 0.04, 0.95]
     c_lost = [0.94, 0.27, 0.27, 0.95]
-    c_kept = [0.02, 0.71, 0.83, 0.95]
+    c_kept = [0.15, 0.39, 0.92, 0.95]
 
     for idx, (ax, (s_title, m3_b, m6_b, m3_met, m6_met)) in enumerate(zip(axes.flat[:3], steps_cfg)):
         ax.set_facecolor("#070d1a")
@@ -403,7 +428,7 @@ def render_4panel_transition_map(
         d_sign = "+" if delta_fdr >= 0 else ""
         t_sign = "+" if delta_tpr >= 0 else ""
 
-        badge = f"3um: {m3_met['tot_passed']} px | 6um: {m6_met['tot_passed']} px\nΔTPR: {t_sign}{delta_tpr:.1f}% | ΔFDR: {d_sign}{delta_fdr:.1f}%"
+        badge = f"3um: TPR {m3_met['pfaffian_passed_pct']:.1f}%, FDR {m3_met['fdr_percent']:.1f}%\n6um: TPR {m6_met['pfaffian_passed_pct']:.1f}%, FDR {m6_met['fdr_percent']:.1f}%\nΔTPR: {t_sign}{delta_tpr:.1f}% | ΔFDR: {d_sign}{delta_fdr:.1f}%"
         ax.text(0.03, 0.94, badge, transform=ax.transAxes, fontsize=8.8,
                 fontweight="bold", color="#ffffff", va="top",
                 bbox=dict(boxstyle="round,pad=0.35", facecolor="#0f172a", edgecolor="#475569", alpha=0.9))
@@ -444,18 +469,19 @@ def render_4panel_transition_map(
     for spine in ax4.spines.values():
         spine.set_color("#38bdf8")
 
-    n_kept = int(np.sum(kept_f))
-    n_lost = int(np.sum(lost_f))
-    n_gained = int(np.sum(gained_f))
-    badge_f = f"Preserved: {n_kept} px | Gained: {n_gained} px | Lost: {n_lost} px"
+    total_topo = max(int(np.sum(gt)), 1)
+    pct_kept = (int(np.sum(kept_f)) / total_topo) * 100
+    pct_gained = (int(np.sum(gained_f)) / total_topo) * 100
+    pct_lost = (int(np.sum(lost_f)) / total_topo) * 100
+    badge_f = f"Preserved: {pct_kept:.1f}% | Gained: {pct_gained:.1f}% | Lost: {pct_lost:.1f}%"
     ax4.text(0.03, 0.94, badge_f, transform=ax4.transAxes, fontsize=8.8,
              fontweight="bold", color="#ffffff", va="top",
              bbox=dict(boxstyle="round,pad=0.35", facecolor="#0f172a", edgecolor="#0284c7", alpha=0.9))
 
     # Global legend
     legend_elements = [
-        mpatches.Patch(facecolor="#06b6d4", edgecolor="none", label="Preserved Across Lengths (3um & 6um)"),
-        mpatches.Patch(facecolor="#10b981", edgecolor="none", label="Gained at 6um (Stabilized by Length)"),
+        mpatches.Patch(facecolor="#2563eb", edgecolor="none", label="Preserved Across Lengths (3um & 6um)"),
+        mpatches.Patch(facecolor="#f59e0b", edgecolor="none", label="Gained at 6um (Stabilized by Length)"),
         mpatches.Patch(facecolor="#ef4444", edgecolor="none", label="Lost at 6um (Suppressed by Length/Disorder)"),
         plt.Line2D([0], [0], color="#ffffff", linestyle="--", linewidth=1.5, label="Pfaffian Boundary (Q = -1)"),
     ]
@@ -464,6 +490,210 @@ def render_4panel_transition_map(
 
     fig.suptitle(title, fontsize=14, fontweight="bold", color="#38bdf8", y=1.005)
     fig.tight_layout(rect=[0.02, 0.02, 0.98, 0.95])
+    fig.savefig(out_path, dpi=220, facecolor=fig.get_facecolor(), edgecolor="none")
+    plt.close(fig)
+
+
+def render_measurement_comparison_2x2(
+    z_3_left: np.ndarray,
+    z_3_right: np.ndarray,
+    z_6_left: np.ndarray,
+    z_6_right: np.ndarray,
+    gt_3: np.ndarray,
+    gt_6: np.ndarray,
+    extent: List[float],
+    vmin: float,
+    vmax: float,
+    cmap: str,
+    cbar_label: str,
+    title: str,
+    subtitle_left: str,
+    subtitle_right: str,
+    out_path: Path,
+):
+    """
+    Renders a 2x2 comparative phase map on #0b1120 dark background:
+      Row 1: 3 μm Wire (Left Lead vs. Right Lead)
+      Row 2: 6 μm Wire (Left Lead vs. Right Lead)
+    Overlays only the ground truth topological boundary (cyan dashed).
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(14.0, 10.2), facecolor="#0b1120")
+    
+    gt3_b = gt_3.astype(bool)
+    gt6_b = gt_6.astype(bool)
+
+    panels = [
+        (axes[0, 0], z_3_left, gt3_b, f"3 μm Wire: {subtitle_left}"),
+        (axes[0, 1], z_3_right, gt3_b, f"3 μm Wire: {subtitle_right}"),
+        (axes[1, 0], z_6_left, gt6_b, f"6 μm Wire: {subtitle_left}"),
+        (axes[1, 1], z_6_right, gt6_b, f"6 μm Wire: {subtitle_right}"),
+    ]
+
+    im_ref = None
+    for ax, data, gt_mask, p_title in panels:
+        ax.set_facecolor("#070d1a")
+        
+        im = ax.imshow(
+            data,
+            origin="lower",
+            extent=extent,
+            aspect="auto",
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            interpolation="nearest"
+        )
+        if im_ref is None:
+            im_ref = im
+
+        # Overlay Pfaffian ground truth topological boundary
+        if np.sum(gt_mask) > 0:
+            ax.contour(
+                gt_mask,
+                levels=[0.5],
+                extent=extent,
+                colors=["#38bdf8"],
+                linestyles=["--"],
+                linewidths=[1.8],
+                origin="lower"
+            )
+
+        ax.set_title(p_title, fontsize=12, fontweight="bold", color="#f1f5f9", pad=8)
+        ax.set_xlabel(r"$V_z\ [\mathrm{T}]$", fontsize=10.5, color="#cbd5e1")
+        ax.set_ylabel(r"$\mu\ [\mathrm{meV}]$", fontsize=10.5, color="#cbd5e1")
+        ax.tick_params(colors="#94a3b8", labelsize=9.5)
+        for spine in ax.spines.values():
+            spine.set_color("#334155")
+
+    # Unified legend at the top: only Pfaffian boundary
+    legend_elements = [
+        plt.Line2D([0], [0], color="#38bdf8", linestyle="--", linewidth=1.8, label="Pfaffian Boundary (Q = -1)"),
+    ]
+
+    fig.legend(
+        handles=legend_elements,
+        loc="upper center",
+        ncol=1,
+        bbox_to_anchor=(0.48, 0.98),
+        fontsize=10,
+        facecolor="#0f172a",
+        edgecolor="#334155",
+        labelcolor="#e2e8f0"
+    )
+
+    # Shared colorbar on the right
+    cbar_ax = fig.add_axes([0.915, 0.12, 0.02, 0.76])
+    cbar = fig.colorbar(im_ref, cax=cbar_ax)
+    cbar.set_label(cbar_label, color="#e2e8f0", fontsize=11, fontweight="bold")
+    cbar.ax.yaxis.set_tick_params(color="#94a3b8")
+    plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color="#cbd5e1", fontsize=9.5)
+    cbar.outline.set_edgecolor("#334155")
+
+    fig.suptitle(title, fontsize=14, fontweight="bold", color="#38bdf8", y=1.01)
+    fig.subplots_adjust(left=0.07, right=0.895, bottom=0.08, top=0.92, wspace=0.18, hspace=0.25)
+    fig.savefig(out_path, dpi=220, facecolor=fig.get_facecolor(), edgecolor="none")
+    plt.close(fig)
+
+
+def render_energy_comparison_2x2(
+    extent: List[float],
+    gt_3: np.ndarray,
+    gt_6: np.ndarray,
+    e0_3: np.ndarray,
+    diff_3: np.ndarray,
+    e0_6: np.ndarray,
+    diff_6: np.ndarray,
+    title: str,
+    out_path: Path,
+):
+    """
+    Renders a 2x2 comparative phase map on #0b1120 dark background:
+      Row 1: 3 μm Wire: Lowest Positive Energy State E_0 (Left) vs. Excited State Difference E_1 - E_0 (Right)
+      Row 2: 6 μm Wire: Lowest Positive Energy State E_0 (Left) vs. Excited State Difference E_1 - E_0 (Right)
+    Overlays only the ground truth topological boundary (cyan dashed).
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(15.0, 10.2), facecolor="#0b1120")
+    
+    gt3_b = gt_3.astype(bool)
+    gt6_b = gt_6.astype(bool)
+
+    panels = [
+        (axes[0, 0], e0_3, gt3_b, r"3 μm Wire: Lowest Positive Energy $E_0$", "magma", 0.0, 0.06),
+        (axes[0, 1], diff_3, gt3_b, r"3 μm Wire: Quasiparticle Gap $(E_1 - E_0)$", "viridis", 0.0, 0.05),
+        (axes[1, 0], e0_6, gt6_b, r"6 μm Wire: Lowest Positive Energy $E_0$", "magma", 0.0, 0.06),
+        (axes[1, 1], diff_6, gt6_b, r"6 μm Wire: Quasiparticle Gap $(E_1 - E_0)$", "viridis", 0.0, 0.05),
+    ]
+
+    im_e0, im_diff = None, None
+    for (ax, data, gt_mask, p_title, cmap, vmin, vmax) in panels:
+        ax.set_facecolor("#070d1a")
+        
+        im = ax.imshow(
+            data,
+            origin="lower",
+            extent=extent,
+            aspect="auto",
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            interpolation="nearest"
+        )
+        if cmap == "magma" and im_e0 is None:
+            im_e0 = im
+        elif cmap == "viridis" and im_diff is None:
+            im_diff = im
+
+        # Overlay Pfaffian ground truth topological boundary
+        if np.sum(gt_mask) > 0:
+            ax.contour(
+                gt_mask,
+                levels=[0.5],
+                extent=extent,
+                colors=["#38bdf8"],
+                linestyles=["--"],
+                linewidths=[1.8],
+                origin="lower"
+            )
+
+        ax.set_title(p_title, fontsize=12, fontweight="bold", color="#f1f5f9", pad=8)
+        ax.set_xlabel(r"$V_z\ [\mathrm{T}]$", fontsize=10.5, color="#cbd5e1")
+        ax.set_ylabel(r"$\mu\ [\mathrm{meV}]$", fontsize=10.5, color="#cbd5e1")
+        ax.tick_params(colors="#94a3b8", labelsize=9.5)
+        for spine in ax.spines.values():
+            spine.set_color("#334155")
+
+    # Unified legend at the top
+    legend_elements = [
+        plt.Line2D([0], [0], color="#38bdf8", linestyle="--", linewidth=1.8, label="Pfaffian Boundary (Q = -1)"),
+    ]
+    fig.legend(
+        handles=legend_elements,
+        loc="upper center",
+        ncol=1,
+        bbox_to_anchor=(0.50, 0.93),
+        fontsize=10,
+        facecolor="#0f172a",
+        edgecolor="#334155",
+        labelcolor="#e2e8f0"
+    )
+
+    # Colorbars: one for column 0 (E0) and one for column 1 (E1 - E0)
+    cbar_ax0 = fig.add_axes([0.455, 0.08, 0.015, 0.77])
+    cbar0 = fig.colorbar(im_e0, cax=cbar_ax0)
+    cbar0.set_label(r"Lowest Positive Energy $E_0$ (meV)", color="#e2e8f0", fontsize=10.5, fontweight="bold")
+    cbar0.ax.yaxis.set_tick_params(color="#94a3b8")
+    plt.setp(plt.getp(cbar0.ax.axes, 'yticklabels'), color="#cbd5e1", fontsize=9.0)
+    cbar0.outline.set_edgecolor("#334155")
+
+    cbar_ax1 = fig.add_axes([0.935, 0.08, 0.015, 0.77])
+    cbar1 = fig.colorbar(im_diff, cax=cbar_ax1)
+    cbar1.set_label(r"Excited State Difference $E_1 - E_0$ (meV)", color="#e2e8f0", fontsize=10.5, fontweight="bold")
+    cbar1.ax.yaxis.set_tick_params(color="#94a3b8")
+    plt.setp(plt.getp(cbar1.ax.axes, 'yticklabels'), color="#cbd5e1", fontsize=9.0)
+    cbar1.outline.set_edgecolor("#334155")
+
+    fig.suptitle(title, fontsize=14, fontweight="bold", color="#38bdf8", y=0.985)
+    fig.subplots_adjust(left=0.06, right=0.915, bottom=0.08, top=0.88, wspace=0.42, hspace=0.25)
     fig.savefig(out_path, dpi=220, facecolor=fig.get_facecolor(), edgecolor="none")
     plt.close(fig)
 
@@ -584,8 +814,8 @@ def main():
         # Slide A: Protocol Comparison (4 large panels)
         # Top-Left: 3um TGP; Top-Right: 6um TGP; Bottom-Left: 3um Step 3; Bottom-Right: 6um Step 3
         slideA_panels = [
-            (d3["m_tgp"], "#f43f5e", "3 μm Wire: Microsoft TGP Stage 2 (ROI 2)", d3["metrics_tgp"]),
-            (d6["m_tgp"], "#f43f5e", "6 μm Wire: Microsoft TGP Stage 2 (ROI 2)", d6["metrics_tgp"]),
+            (d3["m_tgp"], "#10b981", "3 μm Wire: Microsoft TGP Stage 2 (ROI 2)", d3["metrics_tgp"]),
+            (d6["m_tgp"], "#10b981", "6 μm Wire: Microsoft TGP Stage 2 (ROI 2)", d6["metrics_tgp"]),
             (d3["m3"], "#10b981", "3 μm Wire: 3-Step Protocol (Full ROI 3)", d3["metrics_s3"]),
             (d6["m3"], "#10b981", "6 μm Wire: 3-Step Protocol (Full ROI 3)", d6["metrics_s3"]),
         ]
@@ -597,6 +827,105 @@ def main():
         slideB_title = f"Protocol Steps Length Sensitivity & Spatial Transition: {desc}"
         slideB_path = FIGURES_DIR / f"{tag}_slideB_step_sensitivity.png"
         render_4panel_transition_map(d3, d6, slideB_title, slideB_path)
+
+        # Measurement 1: 3w Peak Curvature Comparison (3um vs 6um)
+        m1_title = f"3ω Peak Curvature Comparison (3μm vs. 6μm): {desc}"
+        m1_path = FIGURES_DIR / f"{tag}_comparison_3w.png"
+        render_measurement_comparison_2x2(
+            z_3_left=np.clip(d3["L_3w"], -130.0, 130.0),
+            z_3_right=np.clip(d3["R_3w"], -130.0, 130.0),
+            z_6_left=np.clip(d6["L_3w"], -130.0, 130.0),
+            z_6_right=np.clip(d6["R_3w"], -130.0, 130.0),
+            gt_3=d3["gt_mask"],
+            gt_6=d6["gt_mask"],
+            extent=extent,
+            vmin=-130.0,
+            vmax=130.0,
+            cmap="RdBu_r",
+            cbar_label=r"3ω Peak Curvature $d^2G/dV^2$",
+            title=m1_title,
+            subtitle_left="Average Left Lead 3ω",
+            subtitle_right="Average Right Lead 3ω",
+            out_path=m1_path,
+        )
+
+        # Measurement 2: Extracted Transport Gap Comparison (3um vs 6um)
+        m2_title = f"Extracted Transport Gap Comparison (3μm vs. 6μm): {desc}"
+        m2_path = FIGURES_DIR / f"{tag}_comparison_transport_gap.png"
+        render_measurement_comparison_2x2(
+            z_3_left=d3["gap_L"],
+            z_3_right=d3["gap_R"],
+            z_6_left=d6["gap_L"],
+            z_6_right=d6["gap_R"],
+            gt_3=d3["gt_mask"],
+            gt_6=d6["gt_mask"],
+            extent=extent,
+            vmin=0.0,
+            vmax=0.05,
+            cmap="gist_heat_r",
+            cbar_label=r"Extracted Transport Gap $\Delta_{\mathrm{transport}}$ (meV)",
+            title=m2_title,
+            subtitle_left=r"Gap from Nonlocal $G_{RL}$ (Left Injection)",
+            subtitle_right=r"Gap from Nonlocal $G_{LR}$ (Right Injection)",
+            out_path=m2_path,
+        )
+
+        # Measurement 3: 2w Conductance Comparison (3um vs 6um)
+        m3_title = f"2ω Zero-Bias Conductance Comparison (3μm vs. 6μm): {desc}"
+        m3_path = FIGURES_DIR / f"{tag}_comparison_2w.png"
+        render_measurement_comparison_2x2(
+            z_3_left=d3["L_2w"],
+            z_3_right=d3["R_2w"],
+            z_6_left=d6["L_2w"],
+            z_6_right=d6["R_2w"],
+            gt_3=d3["gt_mask"],
+            gt_6=d6["gt_mask"],
+            extent=extent,
+            vmin=-2.0,
+            vmax=2.0,
+            cmap="RdBu_r",
+            cbar_label=r"Average $2\omega$ Conductance ($e^2/h$)",
+            title=m3_title,
+            subtitle_left="Average Left Lead 2ω Conductance",
+            subtitle_right="Average Right Lead 2ω Conductance",
+            out_path=m3_path,
+        )
+
+        # Measurement 4: Barrier Reflection Correlation Comparison (3um vs 6um)
+        m4_title = f"Barrier Reflection Correlation Comparison (3μm vs. 6μm): {desc}"
+        m4_path = FIGURES_DIR / f"{tag}_comparison_barrier_correlation.png"
+        render_measurement_comparison_2x2(
+            z_3_left=d3["cL"],
+            z_3_right=d3["cR"],
+            z_6_left=d6["cL"],
+            z_6_right=d6["cR"],
+            gt_3=d3["gt_mask"],
+            gt_6=d6["gt_mask"],
+            extent=extent,
+            vmin=0.0,
+            vmax=1.0,
+            cmap="Blues",
+            cbar_label=r"Reflection Correlation $C(f_1, f_2)$",
+            title=m4_title,
+            subtitle_left="Left Barrier Reflection Correlation (C_L)",
+            subtitle_right="Right Barrier Reflection Correlation (C_R)",
+            out_path=m4_path,
+        )
+
+        # Measurement 5: BdG Ground State Energy (E0) & Quasiparticle Gap (E1 - E0) Comparison (3um vs 6um)
+        m5_title = f"BdG Energy ($E_0$) & Quasiparticle Excitation Gap ($E_1 - E_0$): {desc}"
+        m5_path = FIGURES_DIR / f"{tag}_comparison_energy_diff.png"
+        render_energy_comparison_2x2(
+            extent=extent,
+            gt_3=d3["gt_mask"],
+            gt_6=d6["gt_mask"],
+            e0_3=d3["E0"],
+            diff_3=d3["E_diff"],
+            e0_6=d6["E0"],
+            diff_6=d6["E_diff"],
+            title=m5_title,
+            out_path=m5_path,
+        )
 
         # Summary Record
         summary_record = {

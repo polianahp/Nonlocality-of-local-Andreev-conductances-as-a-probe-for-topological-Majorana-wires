@@ -223,6 +223,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     width: 100%;
   }}
 
+  /* Side-by-Side: Dominant Plot (left) + Compact Statistics Table Card (right) */
+  .layout-side-by-side-html {{
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 12px;
+    min-height: 0;
+    height: 100%;
+    width: 100%;
+    padding: 4px;
+    box-sizing: border-box;
+  }}
+  .side-stats-card {{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+  }}
+
   /* Stacked Two-Row Layout: Top Row vs Bottom Row */
   .layout-two-row {{
     flex: 1;
@@ -1118,11 +1139,11 @@ def render_html_presentation(slides, output_file: Path, title: str):
             """
         elif stype == "side_by_side_html":
             content = f"""
-            <div class="layout-side-by-side">
+            <div class="layout-side-by-side-html">
               <div class="img-card">
                 {f'<img src="{slide["img"]}" alt="Phase Map">' if slide.get("img") else '<p>Image missing</p>'}
               </div>
-              <div style="flex:1; height:100%; min-height:0; overflow-y:auto;">
+              <div class="side-stats-card">
                 {slide.get("html_card", "")}
               </div>
             </div>
