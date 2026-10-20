@@ -4,7 +4,7 @@
 #SBATCH -N 1                        # Number of nodes (single node parallel pool)
 #SBATCH -n 1                        # Number of tasks
 #SBATCH -c 256                      # Cores per task (256 cores on Harpers Ferry AMD EPYC node)
-#SBATCH -t 03:00:00                 # Time limit (3 hours: ample buffer for ~1.2-1.4h run)
+#SBATCH -t 06:00:00                 # Time limit (6 hours: ample buffer)
 #SBATCH -p day_3gb                  # Partition (day_3gb: 1 day limit, 3GB RAM/core)
 #SBATCH -o Tdispfaff5_40mK_%j.out   # Standard output log
 #SBATCH -e Tdispfaff5_40mK_%j.err   # Standard error log
