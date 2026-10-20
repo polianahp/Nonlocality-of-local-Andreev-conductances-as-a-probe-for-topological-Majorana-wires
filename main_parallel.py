@@ -136,7 +136,8 @@ def worker_simulation_step(iter_data, static_params):
     if use_finite_T:
         q_energies, q_weights = hp.get_thermal_quadrature_nodes(
             T_mK=static_params['barrier_T_mK'],
-            n_nodes=static_params.get('barrier_quadrature_nodes', 8)
+            n_nodes=static_params.get('barrier_quadrature_nodes', 8),
+            bias_meV=0.0  # Barrier sweeps are conducted at zero bias
         )
     else:
         q_energies, q_weights = None, None

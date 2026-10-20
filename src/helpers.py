@@ -150,21 +150,38 @@ def calc_conductance_matrix(syst, eng, solver_type='cpu'):
     return G_matrix
 
 
-def get_thermal_quadrature_nodes(T_mK: float, n_nodes: int = 10) -> Tuple[np.ndarray, np.ndarray]:
+def get_thermal_quadrature_nodes(
+    T_mK: float, 
+    n_nodes: int = 10, 
+    bias_meV: float = 0.0
+) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Computes bipolar Gauss-Legendre quadrature nodes and weights (both +E and -E)
-    incorporating the Fermi derivative kernel -df/dE.
-    
+    Computes Gauss-Legendre quadrature nodes and weights incorporating the
+    Fermi derivative thermal kernel -df(E - eV, T)/dE at an arbitrary bias voltage V.
+
+    Formula:
+        G(V, T) = (e^2/h) * int_{-inf}^{inf} dE T(E) * [-df(E - eV, T)/dE]
+                = (e^2/h) * int_{-W}^{+W} d(Delta E) T(eV + Delta E) * [-df(Delta E, T)/d(Delta E)]
+                ~= sum_j w_j * T(E_j)
+
+    where:
+        - eV = bias_meV (the bias energy offset in meV)
+        - W = 10 * k_B * T (thermal window cut-off, in meV)
+        - Delta E_j are bipolar Gauss-Legendre nodes in [-W, +W]
+        - E_j = bias_meV + Delta E_j (quadrature energy points centered at bias)
+        - w_j are integration weights incorporating -df/d(Delta E)
+
     Parameters:
     - T_mK: Electronic temperature in mK.
-    - n_nodes: Total number of quadrature points (default 10, i.e. 5 positive and 5 negative).
-    
+    - n_nodes: Total number of quadrature points (default 10, i.e. 5 positive and 5 negative offsets).
+    - bias_meV: Bias voltage / energy offset in meV (default 0.0 for zero bias).
+
     Returns:
-    - energies: 1D array of energy evaluation points in meV (bipolar: -E and +E).
+    - energies: 1D array of energy evaluation points in meV, centered around bias_meV.
     - weights: 1D array of integration weights normalized such that sum(weights) = 1 for a flat transmission.
     """
     if T_mK <= 0.0:
-        return np.array([0.0]), np.array([1.0])
+        return np.array([bias_meV]), np.array([1.0])
     
     k_B = 8.617333262145e-5  # eV/K
     T_eV = (T_mK * 1e-3) * k_B
@@ -174,21 +191,24 @@ def get_thermal_quadrature_nodes(T_mK: float, n_nodes: int = 10) -> Tuple[np.nda
     # We use n_pos = max(1, n_nodes // 2) positive nodes mapped from [0, W_meV]
     n_pos = max(1, n_nodes // 2)
     xi, wi = np.polynomial.legendre.leggauss(n_pos)
-    pos_energies = 0.5 * W_meV * (xi + 1.0)
+    pos_offsets = 0.5 * W_meV * (xi + 1.0)
     
-    # Numerically stable Fermi derivative: -df/dE = beta / (4 * cosh^2(beta * E / 2))
+    # Numerically stable Fermi derivative: -df/dE = beta / (4 * cosh^2(beta * Delta_E / 2))
     beta = 1.0 / T_meV
-    u = 0.5 * beta * pos_energies
+    u = 0.5 * beta * pos_offsets
     u_clipped = np.clip(u, -50.0, 50.0)
     sech = 2.0 / (np.exp(u_clipped) + np.exp(-u_clipped))
     dfdE = 0.25 * beta * (sech ** 2)
     
-    # Each node (+E and -E) gets half the folded weight
+    # Each node (+Delta_E and -Delta_E) gets half the folded weight
     pos_weights = wi * (0.5 * W_meV) * dfdE
     
-    # Combine -E and +E into a symmetric bipolar grid
-    energies = np.concatenate([-pos_energies[::-1], pos_energies])
+    # Combine -Delta_E and +Delta_E into symmetric offsets around 0
+    delta_energies = np.concatenate([-pos_offsets[::-1], pos_offsets])
     weights = np.concatenate([pos_weights[::-1], pos_weights])
+    
+    # Physical energy nodes are centered at the bias energy: E = bias_meV + Delta_E
+    energies = bias_meV + delta_energies
     return energies, weights
 
 
@@ -199,8 +219,8 @@ def calc_conductance_matrix_finite_T(
     solver_type: str = 'cpu'
 ) -> np.ndarray:
     """
-    Computes thermally averaged 2x2 conductance matrix using precomputed
-    quadrature nodes and weights.
+    Computes thermally averaged 2x2 conductance matrix G(V, T) using precomputed
+    quadrature nodes and weights (from get_thermal_quadrature_nodes).
     """
     G_total = np.zeros((2, 2))
     for eng, wt in zip(energies, weights):

@@ -102,6 +102,60 @@ class TestBarrierThermalConductance(unittest.TestCase):
         )
         print(f"  [PASS] Quadrature Convergence: exact = {exact_val:.6f}, quad = {quad_val:.6f}, rel_err = {rel_error:.2e}")
 
+    def test_arbitrary_bias_t0_rollback(self):
+        """Verify that T=0 quadrature at an arbitrary bias collapses to the exact bias point with weight 1.0."""
+        for v_bias in [0.0, 0.025, -0.04, 0.1]:
+            q_engs, q_wts = hp.get_thermal_quadrature_nodes(T_mK=0.0, n_nodes=10, bias_meV=v_bias)
+            self.assertEqual(len(q_engs), 1)
+            self.assertEqual(q_engs[0], v_bias)
+            self.assertEqual(q_wts[0], 1.0)
+        print(f"  [PASS] Arbitrary Bias T=0 Rollback: correctly returns [bias_meV] with weight 1.0")
+
+    def test_arbitrary_bias_quadrature_parity(self):
+        """
+        Verify that Gauss-Legendre quadrature at arbitrary bias voltages V != 0 matches
+        the exact numerical integral of T(E) * [-df(E - eV)/dE] via scipy.integrate.quad.
+        """
+        def g_kernel(E):
+            return 0.3 + 0.5 * (E**2) / (E**2 + 0.015**2) + 0.2 * np.sin(20.0 * E)
+
+        beta = 1.0 / self.T_meV
+        test_biases = [-0.035, -0.01, 0.0, 0.02, 0.05]
+
+        for v_bias in test_biases:
+            def integrand(E):
+                u = 0.5 * beta * (E - v_bias)
+                u_clipped = np.clip(u, -50.0, 50.0)
+                sech = 2.0 / (np.exp(u_clipped) + np.exp(-u_clipped))
+                return g_kernel(E) * 0.25 * beta * (sech**2)
+
+            exact_val, _ = quad(integrand, v_bias - 0.5, v_bias + 0.5)
+            q_engs, q_wts = hp.get_thermal_quadrature_nodes(
+                T_mK=self.T_mK, n_nodes=10, bias_meV=v_bias
+            )
+            # Verify nodes are centered at v_bias
+            self.assertAlmostEqual(np.mean(q_engs), v_bias, places=7)
+
+            quad_val = np.sum(q_wts * g_kernel(q_engs))
+            rel_error = abs(exact_val - quad_val) / exact_val
+            self.assertLess(
+                rel_error, 1e-2,
+                f"Arbitrary bias quadrature (n=10) at V={v_bias} meV rel_error {rel_error:.2e} exceeds threshold 1e-2"
+            )
+
+            # High-precision verification with 16 nodes
+            q_engs16, q_wts16 = hp.get_thermal_quadrature_nodes(
+                T_mK=self.T_mK, n_nodes=16, bias_meV=v_bias
+            )
+            quad_val16 = np.sum(q_wts16 * g_kernel(q_engs16))
+            rel_error16 = abs(exact_val - quad_val16) / exact_val
+            self.assertLess(
+                rel_error16, 1e-3,
+                f"Arbitrary bias quadrature (n=16) at V={v_bias} meV rel_error {rel_error16:.2e} exceeds threshold 1e-3"
+            )
+
+            print(f"  [PASS] Arbitrary Bias Quadrature (V = {v_bias:+.3f} meV): exact = {exact_val:.6f}, quad10 = {quad_val:.6f} (err: {rel_error:.2e}), quad16 = {quad_val16:.6f} (err: {rel_error16:.2e})")
+
     def test_parity_with_broadened_bias_trace(self):
         """
         Cross-Parity Validation:
