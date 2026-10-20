@@ -4,8 +4,10 @@ import xarray as xr
 import sys
 import os
 
-# Add parent directory to path so that helpers can be imported when running pytest directly from the Tests directory
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from pathlib import Path
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 import src.helpers as hp
 
 def test_gpu_broadening():
