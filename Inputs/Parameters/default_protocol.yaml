@@ -87,3 +87,17 @@ selected_cutter: 0         # Cutter pair index used for single-cutter visualizat
 selected_clusters: []      # List of selected cluster numbers for ROI inspection.
 B_FIXED: 1.18              # Fixed Zeeman field coordinate for crosshair slices (x-axis).
 V_FIXED: 2.85              # Fixed chemical potential coordinate for crosshair slices (y-axis).
+
+# =============================================================================
+# Barrier Sweep Conductance & Thermal Broadening Configuration
+# =============================================================================
+# Mode options:
+#   - "zero_temperature"   : Legacy method (Kwant smatrix at strictly E = 0.0)
+#   - "finite_temperature" : Thermal average via Gauss-Legendre quadrature
+barrier_conductance_mode: "zero_temperature"  # Default: legacy E=0
+
+# Temperature in mK (used only when mode is "finite_temperature")
+barrier_T_mK: 30.0
+
+# Number of quadrature energy points (8 achieves <0.05% error)
+barrier_quadrature_nodes: 8

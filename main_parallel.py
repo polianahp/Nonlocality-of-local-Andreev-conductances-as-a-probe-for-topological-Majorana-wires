@@ -129,14 +129,28 @@ def worker_simulation_step(iter_data, static_params):
 
     Gmat = 0
 
-    
+    use_finite_T = (
+        static_params.get('barrier_conductance_mode') == 'finite_temperature'
+        and static_params.get('barrier_T_mK', 0.0) > 0.0
+    )
+    if use_finite_T:
+        q_energies, q_weights = hp.get_thermal_quadrature_nodes(
+            T_mK=static_params['barrier_T_mK'],
+            n_nodes=static_params.get('barrier_quadrature_nodes', 8)
+        )
+    else:
+        q_energies, q_weights = None, None
+
     if static_params['conductance_flag']:
         syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma, V_z=vz, 
                            alpha=alpha, Ln=Ln, Lb=Lb, 
                            Ls=Ls, mu_leads=mu_leads,
                            barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
                            
-        Gmat = hp.calc_conductance_matrix(syst, 0.0, solver_type=solver_type)
+        if use_finite_T:
+            Gmat = hp.calc_conductance_matrix_finite_T(syst, q_energies, q_weights, solver_type=solver_type)
+        else:
+            Gmat = hp.calc_conductance_matrix(syst, 0.0, solver_type=solver_type)
         
         for k in range(points):
             barrier_var_tot = barrier_arr[k] #+ mu
@@ -147,7 +161,10 @@ def worker_simulation_step(iter_data, static_params):
                                     Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
                                     barrier_r=barrier_var_tot, Vdisx=Vdisx)
             
-            Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0, solver_type=solver_type)
+            if use_finite_T:
+                Gmat_UR = hp.calc_conductance_matrix_finite_T(syst_UR, q_energies, q_weights, solver_type=solver_type)
+            else:
+                Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0, solver_type=solver_type)
             b_right_cond_left[k] = Gmat_UR[0, 0]
             b_right_cond_right[k] = Gmat_UR[1, 1]
             b_right_GRL[k] = Gmat_UR[1, 0]
@@ -159,7 +176,10 @@ def worker_simulation_step(iter_data, static_params):
                                     Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot,
                                     barrier_r=barrier_tot, Vdisx=Vdisx)
             
-            Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0, solver_type=solver_type)
+            if use_finite_T:
+                Gmat_UL = hp.calc_conductance_matrix_finite_T(syst_UL, q_energies, q_weights, solver_type=solver_type)
+            else:
+                Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0, solver_type=solver_type)
             b_left_cond_left[k] = Gmat_UL[0, 0]
             b_left_cond_right[k] = Gmat_UL[1, 1]
         

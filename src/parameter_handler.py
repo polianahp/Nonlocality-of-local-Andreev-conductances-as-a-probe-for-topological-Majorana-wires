@@ -143,6 +143,11 @@ class SimulationConfig(BaseModel):
     calc_pfaffian: bool = False
     pfaffian_delta_N: int = 0
 
+    # Barrier Sweep Thermal Broadening
+    barrier_conductance_mode: str = "zero_temperature"
+    barrier_T_mK: float = Field(0.0, ge=0.0)
+    barrier_quadrature_nodes: PositiveInt = 8
+
     class Config:
         arbitrary_types_allowed = True
 
@@ -306,5 +311,8 @@ class SimulationState:
             'localization_flag': config.localization_flag,
             'solver_type': self.solver_type,
             'calc_pfaffian': config.calc_pfaffian,
-            'pfaffian_delta_N': config.pfaffian_delta_N
+            'pfaffian_delta_N': config.pfaffian_delta_N,
+            'barrier_conductance_mode': config.barrier_conductance_mode,
+            'barrier_T_mK': config.barrier_T_mK,
+            'barrier_quadrature_nodes': config.barrier_quadrature_nodes
         }

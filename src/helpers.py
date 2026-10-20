@@ -1,3 +1,4 @@
+from typing import Tuple, Optional
 from tqdm import tqdm
 import kwant
 import tinyarray
@@ -147,6 +148,65 @@ def calc_conductance_matrix(syst, eng, solver_type='cpu'):
     G_matrix[0,1] = TA_LR - T_LR # Current at Left (0) due to Right (1)    
     
     return G_matrix
+
+
+def get_thermal_quadrature_nodes(T_mK: float, n_nodes: int = 10) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Computes bipolar Gauss-Legendre quadrature nodes and weights (both +E and -E)
+    incorporating the Fermi derivative kernel -df/dE.
+    
+    Parameters:
+    - T_mK: Electronic temperature in mK.
+    - n_nodes: Total number of quadrature points (default 10, i.e. 5 positive and 5 negative).
+    
+    Returns:
+    - energies: 1D array of energy evaluation points in meV (bipolar: -E and +E).
+    - weights: 1D array of integration weights normalized such that sum(weights) = 1 for a flat transmission.
+    """
+    if T_mK <= 0.0:
+        return np.array([0.0]), np.array([1.0])
+    
+    k_B = 8.617333262145e-5  # eV/K
+    T_eV = (T_mK * 1e-3) * k_B
+    T_meV = T_eV * 1e3
+    W_meV = 10.0 * T_meV  # Upper integration limit at 10 k_B T
+    
+    # We use n_pos = max(1, n_nodes // 2) positive nodes mapped from [0, W_meV]
+    n_pos = max(1, n_nodes // 2)
+    xi, wi = np.polynomial.legendre.leggauss(n_pos)
+    pos_energies = 0.5 * W_meV * (xi + 1.0)
+    
+    # Numerically stable Fermi derivative: -df/dE = beta / (4 * cosh^2(beta * E / 2))
+    beta = 1.0 / T_meV
+    u = 0.5 * beta * pos_energies
+    u_clipped = np.clip(u, -50.0, 50.0)
+    sech = 2.0 / (np.exp(u_clipped) + np.exp(-u_clipped))
+    dfdE = 0.25 * beta * (sech ** 2)
+    
+    # Each node (+E and -E) gets half the folded weight
+    pos_weights = wi * (0.5 * W_meV) * dfdE
+    
+    # Combine -E and +E into a symmetric bipolar grid
+    energies = np.concatenate([-pos_energies[::-1], pos_energies])
+    weights = np.concatenate([pos_weights[::-1], pos_weights])
+    return energies, weights
+
+
+def calc_conductance_matrix_finite_T(
+    syst, 
+    energies: np.ndarray, 
+    weights: np.ndarray, 
+    solver_type: str = 'cpu'
+) -> np.ndarray:
+    """
+    Computes thermally averaged 2x2 conductance matrix using precomputed
+    quadrature nodes and weights.
+    """
+    G_total = np.zeros((2, 2))
+    for eng, wt in zip(energies, weights):
+        G_mat = calc_conductance_matrix(syst, eng=eng, solver_type=solver_type)
+        G_total += wt * G_mat
+    return G_total
 
 
 def calculate_gamma_squared(evals, evecs):

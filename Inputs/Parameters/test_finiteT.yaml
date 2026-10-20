@@ -1,0 +1,30 @@
+# =============================================================================
+# Fast HPC Validation Test Configuration: Finite-Temperature Barrier Conductance
+# =============================================================================
+dirname: "test_finiteT"
+fname: "Tdis.npz"
+
+# Sweep Ranges: Fast 5x5 test grid (25 points total, ~1-2 minutes on 256 cores)
+mu_max: 4.0
+mu_min: 0.0
+mu_dist: 1.0
+
+Vz_max: 1.2
+Vz_min: 0.0
+Vz_dist: 0.3
+
+# Simulation Resolution
+Upoints: 101
+num_engs: 51
+acceleration_type: "parallel"
+weight_threshold: 0.8
+separation_threshold: 0.65
+
+calc_pfaffian: True
+
+# =============================================================================
+# Barrier Sweep Conductance & Thermal Broadening Configuration
+# =============================================================================
+barrier_conductance_mode: "finite_temperature"
+barrier_T_mK: 30.0
+barrier_quadrature_nodes: 10
