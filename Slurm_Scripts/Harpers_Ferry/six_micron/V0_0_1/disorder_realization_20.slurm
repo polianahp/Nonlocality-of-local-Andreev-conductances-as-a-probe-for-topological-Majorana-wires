@@ -1,47 +1,34 @@
 #!/bin/bash
-#SBATCH -N 1
-#SBATCH -c 256
-#SBATCH -t 02:00:00
-#SBATCH -p compute
-#SBATCH --job-name=6um_V0_0_1_r20
-#SBATCH --output=6um_V0_0_1_r20_%j.out
-#SBATCH --error=6um_V0_0_1_r20_%j.err
 
-# ==============================================================================
-# Harpers Ferry SLURM Job Script: 6 μm Nanowire Full Finite-T Pipeline
-# Realization: 20 | Strength: V0_0_1
-# Temperatures: 30.0 mK and 40.0 mK (Unified Execution Engine)
-# Asymmetry Grid: 43 points (a in [-60, -20..20, 60], delta_G_asym at index -1)
-# ==============================================================================
+#SBATCH -J dis_6um_V0_0_1_20  # Job Name
+#SBATCH -N 1                            # Number of nodes (single node parallel pool)
+#SBATCH -n 1                            # Number of tasks
+#SBATCH -c 256                          # Cores per task (256 cores on Harpers Ferry AMD EPYC node)
+#SBATCH -t 02:00:00                     # Time limit (2 hours for 6um multi-T full pipeline)
+#SBATCH -p day_3gb                      # Partition (day_3gb: 1 day limit, 3GB RAM/core)
+#SBATCH --mail-type=END,FAIL            # Notifications
+#SBATCH --mail-user=nos00002@mix.wvu.edu
 
-echo "=================================================================="
-echo " Job ID: $SLURM_JOB_ID"
-echo " Node: $SLURM_NODELIST"
-echo " Cores: $SLURM_CPUS_PER_TASK"
-echo " Realization: 20 (V0_0_1)"
-echo " Start Time: $(date)"
-echo "=================================================================="
+# Initialize Conda environment on Harpers Ferry
+if [ -f /shared/software/miniforge/26.3.2-3/etc/profile.d/conda.sh ]; then
+    source /shared/software/miniforge/26.3.2-3/etc/profile.d/conda.sh
+elif [ -f /shared/software/conda/conda_init.sh ]; then
+    source /shared/software/conda/conda_init.sh
+else
+    source ~/.bashrc
+fi
 
-# Move to Harpers Ferry working directory
-cd /scratch/nos00002/nonlocalcond || exit 1
+conda activate kwant_fresh
+cd $SCRATCH/nonlocalcond
 
-# Activate Conda environment
-source ~/.bashrc
-conda activate kwant_fresh || conda activate base || source activate /home/nos00002/.conda/envs/kwant_fresh
-
-# Enforce MKL/OpenMP thread control
+# Thread Pinning: 1 thread per worker to prevent CPU oversubscription
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
 
-# Execute Python Simulation
-python main_parallel.py --config_path Inputs/Parameters/six_micron/V0_0_1/disorder_realization_20.yaml
+echo "Starting simulation for 6um disorder realization 20 (V0 = 0.1 meV) on Harpers Ferry..."
+python -u main_parallel.py --config_path Parameters/six_micron/V0_0_1/disorder_realization_20.yaml
 
-EXIT_CODE=$?
-echo ""
-echo "=================================================================="
-echo " Python exited with code: $EXIT_CODE"
-echo " End Time: $(date)"
-echo "=================================================================="
-
-exit $EXIT_CODE
+echo "Realization 20 finished!"
+conda deactivate

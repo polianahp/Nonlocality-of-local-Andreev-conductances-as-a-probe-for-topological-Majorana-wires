@@ -148,61 +148,47 @@ echo "=================================================================="
 
 def generate_slurm_script(
     v0_tag: str,
+    v0_val: float,
     realization_idx: int,
     yaml_rel_path: str,
 ) -> str:
     """Generates the SLURM batch submission script for a 3 μm unified barrier sweep job."""
-    job_name = f"3um_{v0_tag}_r{realization_idx}"
-    log_name = f"3um_{v0_tag}_r{realization_idx}_%j"
-
     return f"""#!/bin/bash
-#SBATCH -N 1
-#SBATCH -c 256
-#SBATCH -t 01:15:00
-#SBATCH -p compute
-#SBATCH --job-name={job_name}
-#SBATCH --output={log_name}.out
-#SBATCH --error={log_name}.err
 
-# ==============================================================================
-# Harpers Ferry SLURM Job Script: 3 μm Nanowire Finite-T Barrier Sweep
-# Realization: {realization_idx} | Strength: {v0_tag}
-# Temperatures: 30.0 mK and 40.0 mK (Unified Execution Engine)
-# Asymmetry Grid: 43 points (a in [-60, -20..20, 60], delta_G_asym at index -1)
-# ==============================================================================
+#SBATCH -J dis_hf_{v0_tag}_{realization_idx:02d}  # Job Name
+#SBATCH -N 1                            # Number of nodes (single node parallel pool)
+#SBATCH -n 1                            # Number of tasks
+#SBATCH -c 256                          # Cores per task (256 cores on Harpers Ferry AMD EPYC node)
+#SBATCH -t 01:15:00                     # Time limit (1 hour 15 minutes)
+#SBATCH -p day_3gb                      # Partition (day_3gb: 1 day limit, 3GB RAM/core)
+#SBATCH --mail-type=END,FAIL            # Notifications
+#SBATCH --mail-user=nos00002@mix.wvu.edu
 
-echo "=================================================================="
-echo " Job ID: $SLURM_JOB_ID"
-echo " Node: $SLURM_NODELIST"
-echo " Cores: $SLURM_CPUS_PER_TASK"
-echo " Realization: {realization_idx} ({v0_tag})"
-echo " Start Time: $(date)"
-echo "=================================================================="
+# Initialize Conda environment on Harpers Ferry
+if [ -f /shared/software/miniforge/26.3.2-3/etc/profile.d/conda.sh ]; then
+    source /shared/software/miniforge/26.3.2-3/etc/profile.d/conda.sh
+elif [ -f /shared/software/conda/conda_init.sh ]; then
+    source /shared/software/conda/conda_init.sh
+else
+    source ~/.bashrc
+fi
 
-# Move to Harpers Ferry working directory
-cd /scratch/nos00002/nonlocalcond || exit 1
+conda activate kwant_fresh
+cd $SCRATCH/nonlocalcond
 
-# Activate Conda environment
-source ~/.bashrc
-conda activate kwant_fresh || conda activate base || source activate /home/nos00002/.conda/envs/kwant_fresh
-
-# Enforce MKL/OpenMP thread control
+# Thread Pinning: 1 thread per worker to prevent CPU oversubscription
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
 
-# Execute Python Simulation
-python main_parallel.py --config_path {yaml_rel_path}
+echo "Starting simulation for disorder realization {realization_idx} (V0 = {v0_val:g} meV) on Harpers Ferry..."
+python -u main_parallel.py --config_path {yaml_rel_path}
 
-EXIT_CODE=$?
-echo ""
-echo "=================================================================="
-echo " Python exited with code: $EXIT_CODE"
-echo " End Time: $(date)"
-echo "=================================================================="
-
-exit $EXIT_CODE
+echo "Realization {realization_idx} finished!"
+conda deactivate
 """
+
 
 
 def main():
@@ -269,9 +255,10 @@ def main():
                 yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
             total_yaml_count += 1
 
-            rel_yaml_path = f"Inputs/Parameters/Disorder_Realizations/{v0_tag}/disorder_realization_{i}.yaml"
+            rel_yaml_path = f"Parameters/Disorder_Realizations/{v0_tag}/disorder_realization_{i}.yaml"
             slurm_content = generate_slurm_script(
                 v0_tag=v0_tag,
+                v0_val=v0_val,
                 realization_idx=i,
                 yaml_rel_path=rel_yaml_path,
             )
