@@ -87,103 +87,142 @@ def worker_simulation_step(iter_data, static_params):
     topological_gap = 0.0
 
     
-    # BdG Eigenvalues
-    syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
-    evals, evecs = hp.solve_ham(syst_closed, solver_type=solver_type, k=num_eigenvalues)
-    
-    if static_params['spectra_flag']:
-        spectrum = hp.sort_spectrum(evals, evecs)
-        if len(spectrum) >= 4:
-            idx_closest = np.argsort(np.abs(spectrum))[:4]
-            spectrum = np.sort(spectrum[idx_closest])
-            
-    pos_evals = np.sort(evals[evals >= 0])
-    if len(pos_evals) > 0:
-        energy_0 = pos_evals[0]
-    else:
-        energy_0 = np.nan
+    barrier_sweep_only = static_params.get('barrier_sweep_only', False)
+
+    if not barrier_sweep_only:
+        # BdG Eigenvalues
+        syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
+        evals, evecs = hp.solve_ham(syst_closed, solver_type=solver_type, k=num_eigenvalues)
         
-    if len(pos_evals) > 1:
-        topological_gap = pos_evals[1]
-    else:
-        topological_gap = np.nanc
-
-
-    tgp_barrier_arr = np.array([4.3548, 3.6774, 3.0000, 2.3710, 1.6935])
-    tgp_energies = hp.make_dynamic_grid()
-    tgp_stage1_dIdVl   = np.zeros((5, len(tgp_energies)))
-    tgp_stage1_dIdVr   = np.zeros((5, len(tgp_energies)))
-    tgp_stage1_dIdV_LR = np.zeros((5, len(tgp_energies)))
-    tgp_stage1_dIdV_RL = np.zeros((5, len(tgp_energies)))
-    
-    for idx, b_val in enumerate(tgp_barrier_arr):
-        syst_tgp = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz, 
-                                   alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
-                                   barrier_l=b_val, barrier_r=b_val, Vdisx=Vdisx)
-        dL, dR, dLR, dRL, _ = hp.calc_dIdV(syst_tgp, tgp_energies, solver_type=solver_type)
-        tgp_stage1_dIdVl[idx, :] = dL
-        tgp_stage1_dIdVr[idx, :] = dR
-        tgp_stage1_dIdV_LR[idx, :] = dLR
-        tgp_stage1_dIdV_RL[idx, :] = dRL
-    
-
-    Gmat = 0
-
-    use_finite_T = (
-        static_params.get('barrier_conductance_mode') == 'finite_temperature'
-        and static_params.get('barrier_T_mK', 0.0) > 0.0
-    )
-    if use_finite_T:
-        q_energies, q_weights = hp.get_thermal_quadrature_nodes(
-            T_mK=static_params['barrier_T_mK'],
-            n_nodes=static_params.get('barrier_quadrature_nodes', 8),
-            bias_meV=0.0  # Barrier sweeps are conducted at zero bias
-        )
-    else:
-        q_energies, q_weights = None, None
-
-    if static_params['conductance_flag']:
-        syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma, V_z=vz, 
-                           alpha=alpha, Ln=Ln, Lb=Lb, 
-                           Ls=Ls, mu_leads=mu_leads,
-                           barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
-                           
-        if use_finite_T:
-            Gmat = hp.calc_conductance_matrix_finite_T(syst, q_energies, q_weights, solver_type=solver_type)
+        if static_params['spectra_flag']:
+            spectrum = hp.sort_spectrum(evals, evecs)
+            if len(spectrum) >= 4:
+                idx_closest = np.argsort(np.abs(spectrum))[:4]
+                spectrum = np.sort(spectrum[idx_closest])
+                
+        pos_evals = np.sort(evals[evals >= 0])
+        if len(pos_evals) > 0:
+            energy_0 = pos_evals[0]
         else:
-            Gmat = hp.calc_conductance_matrix(syst, 0.0, solver_type=solver_type)
+            energy_0 = np.nan
+            
+        if len(pos_evals) > 1:
+            topological_gap = pos_evals[1]
+        else:
+            topological_gap = np.nanc
+
+
+        tgp_barrier_arr = np.array([4.3548, 3.6774, 3.0000, 2.3710, 1.6935])
+        tgp_energies = hp.make_dynamic_grid()
+        tgp_stage1_dIdVl   = np.zeros((5, len(tgp_energies)))
+        tgp_stage1_dIdVr   = np.zeros((5, len(tgp_energies)))
+        tgp_stage1_dIdV_LR = np.zeros((5, len(tgp_energies)))
+        tgp_stage1_dIdV_RL = np.zeros((5, len(tgp_energies)))
         
+        for idx, b_val in enumerate(tgp_barrier_arr):
+            syst_tgp = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz, 
+                                       alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
+                                       barrier_l=b_val, barrier_r=b_val, Vdisx=Vdisx)
+            dL, dR, dLR, dRL, _ = hp.calc_dIdV(syst_tgp, tgp_energies, solver_type=solver_type)
+            tgp_stage1_dIdVl[idx, :] = dL
+            tgp_stage1_dIdVr[idx, :] = dR
+            tgp_stage1_dIdV_LR[idx, :] = dLR
+            tgp_stage1_dIdV_RL[idx, :] = dRL
+    else:
+        tgp_barrier_arr = None
+
+    t_list = static_params.get('barrier_T_mK_list')
+    if t_list and len(t_list) > 0:
+        target_temps = [float(t) for t in t_list]
+    elif static_params.get('barrier_conductance_mode') == 'finite_temperature' and static_params.get('barrier_T_mK', 0.0) > 0.0:
+        target_temps = [float(static_params['barrier_T_mK'])]
+    else:
+        target_temps = [0.0]
+
+    q_nodes = {}
+    for T_val in target_temps:
+        if T_val > 0.0:
+            q_e, q_w = hp.get_thermal_quadrature_nodes(
+                T_mK=T_val,
+                n_nodes=static_params.get('barrier_quadrature_nodes', 8),
+                bias_meV=0.0  # Barrier sweeps are conducted at zero bias
+            )
+            q_nodes[T_val] = (q_e, q_w)
+        else:
+            q_nodes[T_val] = (None, None)
+
+    b_data = {}
+    for T_val in target_temps:
+        b_data[T_val] = {
+            'Gmat': np.zeros((2, 2)),
+            'b_right_cond_left': np.zeros(points),
+            'b_right_cond_right': np.zeros(points),
+            'b_right_GLR': np.zeros(points),
+            'b_right_GRL': np.zeros(points),
+            'b_left_cond_left': np.zeros(points),
+            'b_left_cond_right': np.zeros(points),
+        }
+
+    if static_params.get('conductance_flag', True) or barrier_sweep_only:
+        syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz, 
+                               alpha=alpha, Ln=Ln, Lb=Lb, 
+                               Ls=Ls, mu_leads=mu_leads,
+                               barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
+        for T_val in target_temps:
+            if T_val > 0.0:
+                qe, qw = q_nodes[T_val]
+                b_data[T_val]['Gmat'] = hp.calc_conductance_matrix_finite_T(syst, qe, qw, solver_type=solver_type)
+            else:
+                b_data[T_val]['Gmat'] = hp.calc_conductance_matrix(syst, 0.0, solver_type=solver_type)
+
         for k in range(points):
             barrier_var_tot = barrier_arr[k] #+ mu
             
             # Varying Right Barrier (UR)
-            syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma,
-                                    V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
-                                    Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
-                                    barrier_r=barrier_var_tot, Vdisx=Vdisx)
-            
-            if use_finite_T:
-                Gmat_UR = hp.calc_conductance_matrix_finite_T(syst_UR, q_energies, q_weights, solver_type=solver_type)
-            else:
-                Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0, solver_type=solver_type)
-            b_right_cond_left[k] = Gmat_UR[0, 0]
-            b_right_cond_right[k] = Gmat_UR[1, 1]
-            b_right_GRL[k] = Gmat_UR[1, 0]
-            b_right_GLR[k] = Gmat_UR[0, 1]
+            syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
+                                      V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
+                                      Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
+                                      barrier_r=barrier_var_tot, Vdisx=Vdisx)
+            for T_val in target_temps:
+                if T_val > 0.0:
+                    qe, qw = q_nodes[T_val]
+                    Gmat_UR = hp.calc_conductance_matrix_finite_T(syst_UR, qe, qw, solver_type=solver_type)
+                else:
+                    Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0, solver_type=solver_type)
+                b_data[T_val]['b_right_cond_left'][k] = Gmat_UR[0, 0]
+                b_data[T_val]['b_right_cond_right'][k] = Gmat_UR[1, 1]
+                b_data[T_val]['b_right_GRL'][k] = Gmat_UR[1, 0]
+                b_data[T_val]['b_right_GLR'][k] = Gmat_UR[0, 1]
             
             # Varying Left Barrier (UL)
-            syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma = gamma,
-                                    V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
-                                    Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot,
-                                    barrier_r=barrier_tot, Vdisx=Vdisx)
-            
-            if use_finite_T:
-                Gmat_UL = hp.calc_conductance_matrix_finite_T(syst_UL, q_energies, q_weights, solver_type=solver_type)
-            else:
-                Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0, solver_type=solver_type)
-            b_left_cond_left[k] = Gmat_UL[0, 0]
-            b_left_cond_right[k] = Gmat_UL[1, 1]
-        
+            syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
+                                      V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
+                                      Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot,
+                                      barrier_r=barrier_tot, Vdisx=Vdisx)
+            for T_val in target_temps:
+                if T_val > 0.0:
+                    qe, qw = q_nodes[T_val]
+                    Gmat_UL = hp.calc_conductance_matrix_finite_T(syst_UL, qe, qw, solver_type=solver_type)
+                else:
+                    Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0, solver_type=solver_type)
+                b_data[T_val]['b_left_cond_left'][k] = Gmat_UL[0, 0]
+                b_data[T_val]['b_left_cond_right'][k] = Gmat_UL[1, 1]
+
+    T_default = target_temps[0]
+
+    if barrier_sweep_only:
+        return {
+            'i': i,
+            'Gmat': b_data[T_default]['Gmat'],
+            'b_right_cond_left': b_data[T_default]['b_right_cond_left'],
+            'b_right_cond_right': b_data[T_default]['b_right_cond_right'],
+            'b_right_GLR': b_data[T_default]['b_right_GLR'],
+            'b_right_GRL': b_data[T_default]['b_right_GRL'],
+            'b_left_cond_left': b_data[T_default]['b_left_cond_left'],
+            'b_left_cond_right': b_data[T_default]['b_left_cond_right'],
+            'b_data': b_data,
+        }
+
     # --- Conditional Heavy Calculations ---
     if energy_0 <= 0.1:
         if static_params['localization_flag']:
@@ -193,26 +232,27 @@ def worker_simulation_step(iter_data, static_params):
             
     
     results = {
-        'i':i,
+        'i': i,
         'tgp_stage1_dIdVl': tgp_stage1_dIdVl,
         'tgp_stage1_dIdVr': tgp_stage1_dIdVr,
         'tgp_stage1_dIdV_LR': tgp_stage1_dIdV_LR,
         'tgp_stage1_dIdV_RL': tgp_stage1_dIdV_RL,
-        'Gmat': Gmat,
+        'Gmat': b_data[T_default]['Gmat'],
         'gamma_sq': gamma_sq,
         'energy_0': energy_0,
         'topological_gap': topological_gap,
         'M_profile': M_profile,
-        'b_right_cond_left': b_right_cond_left,
-        'b_right_cond_right': b_right_cond_right,
-        'b_right_GLR': b_right_GLR,
-        'b_right_GRL': b_right_GRL,
-        'b_left_cond_left': b_left_cond_left,
-        'b_left_cond_right': b_left_cond_right,
-        'spectrum':spectrum,
+        'b_right_cond_left': b_data[T_default]['b_right_cond_left'],
+        'b_right_cond_right': b_data[T_default]['b_right_cond_right'],
+        'b_right_GLR': b_data[T_default]['b_right_GLR'],
+        'b_right_GRL': b_data[T_default]['b_right_GRL'],
+        'b_left_cond_left': b_data[T_default]['b_left_cond_left'],
+        'b_left_cond_right': b_data[T_default]['b_left_cond_right'],
+        'spectrum': spectrum,
         'weight_localization': weight_localization,
         'mzm_separation': mzm_separation,
-        'tgp_barrier_arr':tgp_barrier_arr
+        'tgp_barrier_arr': tgp_barrier_arr,
+        'b_data': b_data,
     }
     return results
 
@@ -387,12 +427,26 @@ if __name__ == "__main__":
     dIdVs_LR_arr = np.zeros(shape = (len(params_list), len(energies)))
     dIdVs_RL_arr = np.zeros(shape = (len(params_list), len(energies)))
 
-    barrier_right_conductance_left_arr  = np.zeros(shape=(len(params_list), config.Upoints))
-    barrier_right_conductance_right_arr = np.zeros_like(barrier_right_conductance_left_arr)
-    barrier_right_GLR_arr = np.zeros_like(barrier_right_conductance_left_arr)
-    barrier_right_GRL_arr = np.zeros_like(barrier_right_conductance_left_arr)
-    barrier_left_conductance_left_arr   = np.zeros_like(barrier_right_conductance_left_arr)
-    barrier_left_conductance_right_arr  = np.zeros_like(barrier_right_conductance_left_arr)
+    t_list = config.barrier_T_mK_list
+    if t_list and len(t_list) > 0:
+        target_temps = [float(t) for t in t_list]
+    elif config.barrier_conductance_mode == "finite_temperature" and config.barrier_T_mK > 0.0:
+        target_temps = [float(config.barrier_T_mK)]
+    else:
+        target_temps = [0.0]
+
+    num_barrier_points = len(barrier_arr)
+    conductance_data_by_temp = {}
+    for T_val in target_temps:
+        conductance_data_by_temp[T_val] = {
+            'Conductance_matrix': np.zeros((len(params_list), 2, 2)),
+            'barrier_right_conductance_left_arr': np.zeros((len(params_list), num_barrier_points)),
+            'barrier_right_conductance_right_arr': np.zeros((len(params_list), num_barrier_points)),
+            'barrier_right_GLR_arr': np.zeros((len(params_list), num_barrier_points)),
+            'barrier_right_GRL_arr': np.zeros((len(params_list), num_barrier_points)),
+            'barrier_left_conductance_left_arr': np.zeros((len(params_list), num_barrier_points)),
+            'barrier_left_conductance_right_arr': np.zeros((len(params_list), num_barrier_points)),
+        }
 
     spectrum_arr = np.zeros(shape=(len(params_list), 4))
 
@@ -402,7 +456,6 @@ if __name__ == "__main__":
     mp_eng_arr = np.zeros_like(params_list)
     lenw = config.Ls #+ 2*(Lb + Ln)
     mp_arr = np.zeros(shape= (len(params_list), lenw))
-    Conductance_matrix = np.zeros(shape=(len(params_list),2, 2))
     topological_gap_arr = np.zeros(shape=(len(params_list)))
     
     results = []
@@ -422,37 +475,75 @@ if __name__ == "__main__":
         for pms in tqdm(params_list, desc="mu/Vz Sweep"):
             results.append(worker_simulation_step(pms, static_params))
 
-    for res in results:
-        tgp_barrier_arr = res['tgp_barrier_arr']
-        idx = res['i']
-        
-        tgp_stage1_dIdVl[idx, :, :] = res['tgp_stage1_dIdVl']
-        tgp_stage1_dIdVr[idx, :, :] = res['tgp_stage1_dIdVr']
-        tgp_stage1_dIdV_LR[idx, :, :] = res['tgp_stage1_dIdV_LR']
-        tgp_stage1_dIdV_RL[idx, :, :] = res['tgp_stage1_dIdV_RL']
-        gamma_sq_arr[idx] = res['gamma_sq']
-        mp_eng_arr[idx] = res['energy_0']
-        topological_gap_arr[idx] = res['topological_gap']
-        mp_arr[idx, :] = res['M_profile']
-        
-        barrier_right_conductance_left_arr[idx, :] = res['b_right_cond_left']
-        barrier_right_conductance_right_arr[idx, :] = res['b_right_cond_right']
-        barrier_right_GLR_arr[idx, :] = res['b_right_GLR']
-        barrier_right_GRL_arr[idx, :] = res['b_right_GRL']
-        barrier_left_conductance_left_arr[idx, :] = res['b_left_cond_left']
-        barrier_left_conductance_right_arr[idx, :] = res['b_left_cond_right']
-        
-        if res['spectrum'] is not None:
-            spectrum_arr[idx, :] = res['spectrum']
-        
-        weight_localization_arr[idx] = res['weight_localization']
-        mzm_separation_arr[idx] = res['mzm_separation']
-        
+    if config.barrier_sweep_only:
+        for res in results:
+            idx = res['i']
+            if 'b_data' in res:
+                for T_val in target_temps:
+                    td = res['b_data'][T_val]
+                    cd = conductance_data_by_temp[T_val]
+                    cd['Conductance_matrix'][idx, :, :] = td['Gmat']
+                    cd['barrier_right_conductance_left_arr'][idx, :] = td['b_right_cond_left']
+                    cd['barrier_right_conductance_right_arr'][idx, :] = td['b_right_cond_right']
+                    cd['barrier_right_GLR_arr'][idx, :] = td['b_right_GLR']
+                    cd['barrier_right_GRL_arr'][idx, :] = td['b_right_GRL']
+                    cd['barrier_left_conductance_left_arr'][idx, :] = td['b_left_cond_left']
+                    cd['barrier_left_conductance_right_arr'][idx, :] = td['b_left_cond_right']
+            else:
+                T_val = target_temps[0]
+                cd = conductance_data_by_temp[T_val]
+                cd['Conductance_matrix'][idx, :, :] = res['Gmat']
+                cd['barrier_right_conductance_left_arr'][idx, :] = res['b_right_cond_left']
+                cd['barrier_right_conductance_right_arr'][idx, :] = res['b_right_cond_right']
+                cd['barrier_right_GLR_arr'][idx, :] = res['b_right_GLR']
+                cd['barrier_right_GRL_arr'][idx, :] = res['b_right_GRL']
+                cd['barrier_left_conductance_left_arr'][idx, :] = res['b_left_cond_left']
+                cd['barrier_left_conductance_right_arr'][idx, :] = res['b_left_cond_right']
+    else:
+        for res in results:
+            tgp_barrier_arr = res['tgp_barrier_arr']
+            idx = res['i']
+            if 'b_data' in res:
+                for T_val in target_temps:
+                    td = res['b_data'][T_val]
+                    cd = conductance_data_by_temp[T_val]
+                    cd['Conductance_matrix'][idx, :, :] = td['Gmat']
+                    cd['barrier_right_conductance_left_arr'][idx, :] = td['b_right_cond_left']
+                    cd['barrier_right_conductance_right_arr'][idx, :] = td['b_right_cond_right']
+                    cd['barrier_right_GLR_arr'][idx, :] = td['b_right_GLR']
+                    cd['barrier_right_GRL_arr'][idx, :] = td['b_right_GRL']
+                    cd['barrier_left_conductance_left_arr'][idx, :] = td['b_left_cond_left']
+                    cd['barrier_left_conductance_right_arr'][idx, :] = td['b_left_cond_right']
+            else:
+                T_val = target_temps[0]
+                cd = conductance_data_by_temp[T_val]
+                cd['Conductance_matrix'][idx, :, :] = res['Gmat']
+                cd['barrier_right_conductance_left_arr'][idx, :] = res['b_right_cond_left']
+                cd['barrier_right_conductance_right_arr'][idx, :] = res['b_right_cond_right']
+                cd['barrier_right_GLR_arr'][idx, :] = res['b_right_GLR']
+                cd['barrier_right_GRL_arr'][idx, :] = res['b_right_GRL']
+                cd['barrier_left_conductance_left_arr'][idx, :] = res['b_left_cond_left']
+                cd['barrier_left_conductance_right_arr'][idx, :] = res['b_left_cond_right']
+            
+            tgp_stage1_dIdVl[idx, :, :] = res['tgp_stage1_dIdVl']
+            tgp_stage1_dIdVr[idx, :, :] = res['tgp_stage1_dIdVr']
+            tgp_stage1_dIdV_LR[idx, :, :] = res['tgp_stage1_dIdV_LR']
+            tgp_stage1_dIdV_RL[idx, :, :] = res['tgp_stage1_dIdV_RL']
+            gamma_sq_arr[idx] = res['gamma_sq']
+            mp_eng_arr[idx] = res['energy_0']
+            topological_gap_arr[idx] = res['topological_gap']
+            mp_arr[idx, :] = res['M_profile']
+            
+            if res['spectrum'] is not None:
+                spectrum_arr[idx, :] = res['spectrum']
+            
+            weight_localization_arr[idx] = res['weight_localization']
+            mzm_separation_arr[idx] = res['mzm_separation']
         
         
     pdi_data = np.array([])
 
-    if config.pdi_flag:
+    if config.pdi_flag and not config.barrier_sweep_only:
         print("\nStarting PDI Calculation Loop.")
         pdi_results = []
         if config.acceleration_type == 'gpu':
@@ -475,37 +566,58 @@ if __name__ == "__main__":
 
 
     
-    #dIdVl, dIdVr, dIdV_LR, dIdV_RL, ldos = hp.calc_dIdV(syst, energies, solver_type=solver_type)
     # -------------------------------------------------------------------------
     # Saving Results
     # -------------------------------------------------------------------------
     print(f"\nSaving data to: {dirname}")
 
-    hp.np_save_wrapped(Vdisx, "Vdisx", dirname)
-    hp.np_save_wrapped(pdi_data, "pdi_data", dirname)
-    hp.np_save_wrapped(energies, "energies", dirname)
-    hp.np_save_wrapped(tgp_stage1_dIdVl, "tgp_stage1_dIdVl", dirname)
-    hp.np_save_wrapped(tgp_stage1_dIdVr, "tgp_stage1_dIdVr", dirname)
-    hp.np_save_wrapped(tgp_stage1_dIdV_LR, "tgp_stage1_dIdV_LR", dirname)
-    hp.np_save_wrapped(tgp_stage1_dIdV_RL, "tgp_stage1_dIdV_RL", dirname)
-    #hp.np_save_wrapped(ldos_arr, "LDOS", dirname)
-    hp.np_save_wrapped(topological_gap_arr, "topological_gap", dirname)
-    hp.np_save_wrapped(barrier_right_conductance_left_arr, "barrier_right_conductance_left_arr", dirname)
-    hp.np_save_wrapped(barrier_right_conductance_right_arr, "barrier_right_conductance_right_arr", dirname)
-    hp.np_save_wrapped(barrier_right_GLR_arr, "barrier_right_GLR", dirname)
-    hp.np_save_wrapped(barrier_right_GRL_arr, "barrier_right_GRL", dirname)
-    hp.np_save_wrapped(barrier_left_conductance_left_arr, "barrier_left_conductance_left_arr", dirname)    
-    hp.np_save_wrapped(barrier_left_conductance_right_arr, "barrier_left_conductance_right_arr", dirname)
-    hp.np_save_wrapped(barrier_arr,"barrier_arr", dirname)
+    for T_val in target_temps:
+        temp_suffix = ""
+        if T_val > 0.0:
+            t_str = f"{int(T_val)}mK" if T_val == int(T_val) else f"{T_val:.1f}mK"
+            temp_suffix = f"_{t_str}"
+        cd = conductance_data_by_temp[T_val]
+        Gmat_arr = cd['Conductance_matrix']
+        b_r_l = cd['barrier_right_conductance_left_arr']
+        b_r_r = cd['barrier_right_conductance_right_arr']
+        b_r_glr = cd['barrier_right_GLR_arr']
+        b_r_grl = cd['barrier_right_GRL_arr']
+        b_l_l = cd['barrier_left_conductance_left_arr']
+        b_l_r = cd['barrier_left_conductance_right_arr']
 
-    hp.np_save_wrapped(mp_arr, "mp_arr", dirname)
-    hp.np_save_wrapped(params_list, "params_list", dirname) 
-    
-    hp.np_save_wrapped(spectrum_arr,"spectrum_arr", dirname)
+        delta_G_asym_R_LL = Gmat_arr[:, 0, 0] - b_r_l[:, -1]
+        delta_G_asym_L_RR = Gmat_arr[:, 1, 1] - b_l_r[:, -1]
 
-    hp.np_save_wrapped(weight_localization_arr, "weight_localization_arr", dirname)
-    hp.np_save_wrapped(mzm_separation_arr, "mzm_separation_arr", dirname)
-    hp.np_save_wrapped(tgp_barrier_arr,'tgp_barrier_arr', dirname)
+        hp.np_save_wrapped(Gmat_arr, f"conductance_matrix{temp_suffix}", dirname)
+        hp.np_save_wrapped(delta_G_asym_R_LL, f"delta_G_asym_R_LL{temp_suffix}", dirname)
+        hp.np_save_wrapped(delta_G_asym_L_RR, f"delta_G_asym_L_RR{temp_suffix}", dirname)
+        hp.np_save_wrapped(b_r_l, f"barrier_right_conductance_left_arr{temp_suffix}", dirname)
+        hp.np_save_wrapped(b_r_r, f"barrier_right_conductance_right_arr{temp_suffix}", dirname)
+        hp.np_save_wrapped(b_r_glr, f"barrier_right_GLR_arr{temp_suffix}", dirname)
+        hp.np_save_wrapped(b_r_grl, f"barrier_right_GRL_arr{temp_suffix}", dirname)
+        hp.np_save_wrapped(b_l_l, f"barrier_left_conductance_left_arr{temp_suffix}", dirname)
+        hp.np_save_wrapped(b_l_r, f"barrier_left_conductance_right_arr{temp_suffix}", dirname)
+
+    if hasattr(state, 'asym_ratios'):
+        hp.np_save_wrapped(state.asym_ratios, "asym_ratios", dirname)
+    hp.np_save_wrapped(barrier_arr, "barrier_arr", dirname)
+    hp.np_save_wrapped(params_list, "params_list", dirname)
+
+    if not config.barrier_sweep_only:
+        hp.np_save_wrapped(Vdisx, "Vdisx", dirname)
+        hp.np_save_wrapped(pdi_data, "pdi_data", dirname)
+        hp.np_save_wrapped(energies, "energies", dirname)
+        hp.np_save_wrapped(tgp_stage1_dIdVl, "tgp_stage1_dIdVl", dirname)
+        hp.np_save_wrapped(tgp_stage1_dIdVr, "tgp_stage1_dIdVr", dirname)
+        hp.np_save_wrapped(tgp_stage1_dIdV_LR, "tgp_stage1_dIdV_LR", dirname)
+        hp.np_save_wrapped(tgp_stage1_dIdV_RL, "tgp_stage1_dIdV_RL", dirname)
+        hp.np_save_wrapped(topological_gap_arr, "topological_gap", dirname)
+        hp.np_save_wrapped(mp_arr, "mp_arr", dirname)
+        hp.np_save_wrapped(spectrum_arr, "spectrum_arr", dirname)
+        hp.np_save_wrapped(weight_localization_arr, "weight_localization_arr", dirname)
+        hp.np_save_wrapped(mzm_separation_arr, "mzm_separation_arr", dirname)
+        if 'tgp_barrier_arr' in locals() and tgp_barrier_arr is not None:
+            hp.np_save_wrapped(tgp_barrier_arr, 'tgp_barrier_arr', dirname)
 
     
     t_end = time.perf_counter()

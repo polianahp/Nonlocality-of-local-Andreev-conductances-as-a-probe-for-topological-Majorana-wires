@@ -146,7 +146,9 @@ class SimulationConfig(BaseModel):
     # Barrier Sweep Thermal Broadening
     barrier_conductance_mode: str = "zero_temperature"
     barrier_T_mK: float = Field(0.0, ge=0.0)
+    barrier_T_mK_list: Optional[List[float]] = None
     barrier_quadrature_nodes: PositiveInt = 8
+    barrier_sweep_only: bool = False
 
     class Config:
         arbitrary_types_allowed = True
@@ -273,7 +275,9 @@ class SimulationState:
         ]
         
         # Constant coordinate arrays
-        self.barrier_arr = np.linspace(0.0, 60 * config.barrier0, config.Upoints)
+        # Asymmetry ratios: 41 points from -20 to 20, plus high-asymmetry endpoints -60 and +60 (43 points total)
+        self.asym_ratios = np.concatenate([[-60.0], np.linspace(-20.0, 20.0, 41), [60.0]])
+        self.barrier_arr = self.asym_ratios * config.barrier0
         self.energies = np.linspace(-0.5, 0.5, config.num_engs)
         
         # Mapping acceleration type to Kwant solver type
@@ -299,6 +303,7 @@ class SimulationState:
             'barrier0': config.barrier0,
             'Vdisx': Vdisx,
             'energies': self.energies,
+            'asym_ratios': self.asym_ratios,
             'barrier_arr': self.barrier_arr,
             'mu_var': self.mu_var,
             'Vz_var': self.Vz_var,
@@ -314,5 +319,7 @@ class SimulationState:
             'pfaffian_delta_N': config.pfaffian_delta_N,
             'barrier_conductance_mode': config.barrier_conductance_mode,
             'barrier_T_mK': config.barrier_T_mK,
-            'barrier_quadrature_nodes': config.barrier_quadrature_nodes
+            'barrier_T_mK_list': config.barrier_T_mK_list,
+            'barrier_quadrature_nodes': config.barrier_quadrature_nodes,
+            'barrier_sweep_only': config.barrier_sweep_only
         }

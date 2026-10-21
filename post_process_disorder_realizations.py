@@ -217,11 +217,26 @@ def process_single_realization(args_tuple: Tuple) -> Dict[str, Any]:
         gt_2d = gt_flat.reshape(Nmu, Nvz)
 
         # 3. Vectorized reflection correlation (Step 1)
+        temp_suffix = ""
+        barrier_T = config_dict.get("barrier_T_mK")
+        if barrier_T is not None and float(barrier_T) > 0:
+            b_val = float(barrier_T)
+            t_str = f"{int(b_val)}mK" if b_val == int(b_val) else f"{b_val:.1f}mK"
+            temp_suffix = f"_{t_str}"
+
         b_arr = np.load(realization_dir / "barrier_arr.npy")
-        bl_l = np.load(realization_dir / "barrier_left_conductance_left_arr.npy")
-        bl_r = np.load(realization_dir / "barrier_left_conductance_right_arr.npy")
-        br_l = np.load(realization_dir / "barrier_right_conductance_left_arr.npy")
-        br_r = np.load(realization_dir / "barrier_right_conductance_right_arr.npy")
+
+        def _load_barrier_arr(base_name: str) -> np.ndarray:
+            if temp_suffix:
+                p_suffixed = realization_dir / f"{base_name}{temp_suffix}.npy"
+                if p_suffixed.exists():
+                    return np.load(p_suffixed)
+            return np.load(realization_dir / f"{base_name}.npy")
+
+        bl_l = _load_barrier_arr("barrier_left_conductance_left_arr")
+        bl_r = _load_barrier_arr("barrier_left_conductance_right_arr")
+        br_l = _load_barrier_arr("barrier_right_conductance_left_arr")
+        br_r = _load_barrier_arr("barrier_right_conductance_right_arr")
 
         cL = vectorized_reflection_correlation(bl_l, bl_r, b_arr).reshape(Nmu, Nvz)
         cR = vectorized_reflection_correlation(br_l, br_r, b_arr).reshape(Nmu, Nvz)
@@ -230,7 +245,8 @@ def process_single_realization(args_tuple: Tuple) -> Dict[str, Any]:
         # 4. TGP Stage 1 & 2 via TGPAdapter
         adapter = TGPAdapter(str(realization_dir))
         ds = adapter.to_xarray()
-        tprep = prepare_sim_cpu(ds, T_mK=30.0)
+        tgp_T = float(barrier_T) if (barrier_T is not None and float(barrier_T) > 0) else 30.0
+        tprep = prepare_sim_cpu(ds, T_mK=tgp_T)
 
         t_l = tprep.rename({"bias": "left_bias"})
         t_r = tprep.rename({"bias": "right_bias"})
@@ -659,6 +675,12 @@ def main():
         action="store_true",
         help="If set, copies the full data directory for best/worst realizations instead of creating symlinks."
     )
+    parser.add_argument(
+        "--barrier_T_mK",
+        type=float,
+        default=None,
+        help="Target temperature in mK for finite-T barrier sweep data (e.g. 30.0 or 40.0). If specified, loads barrier_*_<T>mK.npy and sets TGP broadening."
+    )
 
     args = parser.parse_args()
 
@@ -678,15 +700,23 @@ def main():
     figures_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Discover realization folders
-    required_files = [
+    temp_suffix = ""
+    if args.barrier_T_mK is not None and args.barrier_T_mK > 0:
+        b_val = args.barrier_T_mK
+        t_str = f"{int(b_val)}mK" if b_val == int(b_val) else f"{b_val:.1f}mK"
+        temp_suffix = f"_{t_str}"
+
+    base_required = [
         "all_params.npz",
         "pdi_data.npy",
         "tgp_stage1_dIdVl.npy",
         "barrier_arr.npy",
-        "barrier_left_conductance_left_arr.npy",
-        "barrier_left_conductance_right_arr.npy",
-        "barrier_right_conductance_left_arr.npy",
-        "barrier_right_conductance_right_arr.npy",
+    ]
+    barrier_names = [
+        "barrier_left_conductance_left_arr",
+        "barrier_left_conductance_right_arr",
+        "barrier_right_conductance_left_arr",
+        "barrier_right_conductance_right_arr",
     ]
 
     all_subs = sorted([p for p in target_dir.iterdir() if p.is_dir()])
@@ -694,7 +724,12 @@ def main():
     skipped_folders = []
 
     for sub in all_subs:
-        missing = [f for f in required_files if not (sub / f).exists()]
+        missing = [f for f in base_required if not (sub / f).exists()]
+        for b_name in barrier_names:
+            has_suffixed = (sub / f"{b_name}{temp_suffix}.npy").exists() if temp_suffix else False
+            has_base = (sub / f"{b_name}.npy").exists()
+            if not (has_suffixed or has_base):
+                missing.append(f"{b_name}{temp_suffix}.npy" if temp_suffix else f"{b_name}.npy")
         if not missing:
             valid_folders.append(sub)
         else:
@@ -719,6 +754,7 @@ def main():
     config_dict = {
         "gap_th_factor": args.gap_th_factor,
         "corr_threshold": args.corr_threshold,
+        "barrier_T_mK": args.barrier_T_mK,
     }
     work_items = [(str(p), config_dict) for p in valid_folders]
 
