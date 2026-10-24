@@ -1,0 +1,49 @@
+# S-ACD Precision-Optimized, Yield-Optimized, and Variations 1-6 (2026-10-22 Log)
+keep_data: true
+sweep_instances:
+  - instance_name: "sacd_precision_tau005_curv20_k3_area10"
+    parameters:
+      fpe_acd.tau: 0.05
+      fpe_curvature.curvature_threshold: 20.0
+      dpe_cutter_consensus.k_min: 3
+      combinator.mode: "acd_and_curv_only"
+      dpe_c4_post_processor.min_island_size: 10
+  - instance_name: "sacd_yield_tau001_curv0_k2_area10"
+    parameters:
+      fpe_acd.tau: 0.01
+      fpe_curvature.curvature_threshold: 0.0
+      dpe_cutter_consensus.k_min: 2
+      combinator.mode: "acd_and_curv_only"
+      dpe_c4_post_processor.min_island_size: 10
+  - instance_name: "var1_complementary_or_curv20_or_gap15"
+    parameters:
+      fpe_acd.tau: 0.05
+      fpe_curvature.curvature_threshold: 20.0
+      dpe_cutter_consensus.k_min: 2
+      fpe_gap.min_gap_mev: 0.015
+      combinator.mode: "complementary_or"
+      dpe_c4_post_processor.min_island_size: 10
+  - instance_name: "var2_strict_and_curv10_gap10"
+    parameters:
+      fpe_acd.tau: 0.05
+      fpe_curvature.curvature_threshold: 10.0
+      dpe_cutter_consensus.k_min: 2
+      fpe_gap.min_gap_mev: 0.010
+      combinator.mode: "strict_and"
+      dpe_c4_post_processor.min_island_size: 8
+  - instance_name: "var4_qd_gamma_sweetspot_proxy"
+    parameters:
+      fpe_acd.tau: 0.05
+      fpe_curvature.curvature_threshold: 10.0
+      dpe_cutter_consensus.k_min: 2
+      combinator.mode: "acd_and_curv_only"
+      fpe_qd_gamma.enabled: true
+      dpe_c4_post_processor.min_island_size: 8
+  - instance_name: "var5_max_pooling_or_ablation"
+    parameters:
+      fpe_acd.mode: "max_LR_or"
+      fpe_acd.tau: 0.05
+      fpe_curvature.curvature_threshold: 20.0
+      dpe_cutter_consensus.k_min: 2
+      combinator.mode: "acd_and_curv_only"
+      dpe_c4_post_processor.min_island_size: 10

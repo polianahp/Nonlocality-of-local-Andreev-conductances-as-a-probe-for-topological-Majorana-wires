@@ -1,0 +1,14 @@
+# Option 2 LQM-P Default & Coherence Threshold Sweep
+keep_data: false
+parameters:
+  fpe_pinch_off:
+    g_thresh: 0.05
+  fpe_power:
+    theta_P: 0.002
+    win_vz: 5
+  dpe_c4_post_processor:
+    enabled: true
+    min_island_size: 10
+sweep_grid:
+  fpe_coherence.theta_C: [0.20, 0.25, 0.35]
+  dpe_c4_post_processor.use_core_filter: [false, true]

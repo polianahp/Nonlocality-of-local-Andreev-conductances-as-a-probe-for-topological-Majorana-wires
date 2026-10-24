@@ -1,0 +1,14 @@
+# Microsoft TGP Stage 1 (ROI 1) and Stage 2 (ROI 2) Baseline Configurations
+keep_data: false
+sweep_instances:
+  - instance_name: "tgp_stage1_roi1_frac070_area7"
+    parameters:
+      stage.mode: "stage1_zbp"
+      dpe_cutter_consensus.min_fraction: 0.70
+      dpe_c4_post_processor.min_island_size: 7
+  - instance_name: "tgp_stage2_roi2_frac050_bnd060_area7"
+    parameters:
+      stage.mode: "stage2_gapped_boundary"
+      dpe_cutter_consensus.min_fraction: 0.50
+      dpe_boundary_scorer.boundary_pct_threshold: 0.60
+      dpe_c4_post_processor.min_island_size: 7

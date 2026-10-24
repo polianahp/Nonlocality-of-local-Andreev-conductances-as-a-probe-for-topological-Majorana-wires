@@ -1,0 +1,28 @@
+# Option 3 ZMC-2 and Dourado Appendix G Local Oscillation Correlation Presets
+keep_data: false
+sweep_instances:
+  - instance_name: "zmc2_default_tau008_smax020_area12"
+    parameters:
+      fpe_acd.tau: 0.08
+      fpe_symmetry_balance.enabled: true
+      fpe_symmetry_balance.s_max: 0.20
+      fpe_local_vz_corr.enabled: false
+      dpe_c4_post_processor.min_island_size: 12
+  - instance_name: "dourado_appG_vz_corr_w5_r050"
+    parameters:
+      fpe_acd.tau: 0.05
+      fpe_symmetry_balance.enabled: true
+      fpe_symmetry_balance.s_max: 0.25
+      fpe_local_vz_corr.enabled: true
+      fpe_local_vz_corr.window_pts: 5
+      fpe_local_vz_corr.r_threshold: 0.50
+      dpe_c4_post_processor.min_island_size: 10
+  - instance_name: "dourado_appG_vz_corr_w3_r050_core2x2"
+    parameters:
+      fpe_acd.tau: 0.05
+      fpe_symmetry_balance.enabled: false
+      fpe_local_vz_corr.enabled: true
+      fpe_local_vz_corr.window_pts: 3
+      fpe_local_vz_corr.r_threshold: 0.50
+      dpe_c4_post_processor.use_core_filter: true
+      dpe_c4_post_processor.min_island_size: 8

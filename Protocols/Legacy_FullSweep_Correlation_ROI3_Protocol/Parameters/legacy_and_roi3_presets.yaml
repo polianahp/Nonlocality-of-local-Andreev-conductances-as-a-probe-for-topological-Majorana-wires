@@ -1,0 +1,23 @@
+# Legacy Full-Sweep Correlation, Protocol v2.0 Peak Gates, and ROI 3 Presets
+keep_data: false
+sweep_instances:
+  - instance_name: "legacy_fullsweep_corr090_both_area5"
+    parameters:
+      fpe_full_sweep_corr.corr_threshold: 0.90
+      dpe_corr_lead.mode: "both"
+      fpe_legacy_peaks.enabled: false
+      roi3_tgp_intersection.enabled: false
+      dpe_c4_post_processor.min_island_size: 5
+  - instance_name: "legacy_v2_5gates_plus_corr085"
+    parameters:
+      fpe_full_sweep_corr.corr_threshold: 0.85
+      dpe_corr_lead.mode: "both"
+      fpe_legacy_peaks.enabled: true
+      dpe_c3_stability.enabled: true
+      dpe_c4_post_processor.min_island_size: 5
+  - instance_name: "roi3_tgp_stage2_intersect_corr085"
+    parameters:
+      fpe_full_sweep_corr.corr_threshold: 0.85
+      dpe_corr_lead.mode: "both"
+      roi3_tgp_intersection.enabled: true
+      dpe_c4_post_processor.min_island_size: 5

@@ -1,0 +1,127 @@
+# MSFT TGP Cross-Swept Conjugate Correlation: Corr(G_LL(U_R), G_RR(U_L))
+keep_data: false
+sweep_instances:
+  # 1. Low Asymmetry Window ([-5, +5]) with bnd = 0.60
+  - instance_name: "tgp_bnd060_cross_low070"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_cross_swept_corr.enabled: true
+      fpe_cross_swept_corr.corr_threshold: 0.70
+      fpe_cross_swept_corr.asym_min: -5.0
+      fpe_cross_swept_corr.asym_max: 5.0
+
+  - instance_name: "tgp_bnd060_cross_low080"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_cross_swept_corr.enabled: true
+      fpe_cross_swept_corr.corr_threshold: 0.80
+      fpe_cross_swept_corr.asym_min: -5.0
+      fpe_cross_swept_corr.asym_max: 5.0
+
+  - instance_name: "tgp_bnd060_cross_low085"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_cross_swept_corr.enabled: true
+      fpe_cross_swept_corr.corr_threshold: 0.85
+      fpe_cross_swept_corr.asym_min: -5.0
+      fpe_cross_swept_corr.asym_max: 5.0
+
+  # 2. Low Asymmetry Window ([-5, +5]) with bnd = 0.0 (gapless boundary removed)
+  - instance_name: "tgp_bnd000_cross_low070"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_cross_swept_corr.enabled: true
+      fpe_cross_swept_corr.corr_threshold: 0.70
+      fpe_cross_swept_corr.asym_min: -5.0
+      fpe_cross_swept_corr.asym_max: 5.0
+
+  - instance_name: "tgp_bnd000_cross_low080"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_cross_swept_corr.enabled: true
+      fpe_cross_swept_corr.corr_threshold: 0.80
+      fpe_cross_swept_corr.asym_min: -5.0
+      fpe_cross_swept_corr.asym_max: 5.0
+
+  - instance_name: "tgp_bnd000_cross_low085"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_cross_swept_corr.enabled: true
+      fpe_cross_swept_corr.corr_threshold: 0.85
+      fpe_cross_swept_corr.asym_min: -5.0
+      fpe_cross_swept_corr.asym_max: 5.0
+
+  # 3. Higher Asymmetry Full Sweep ([0, 60]) with bnd = 0.60
+  - instance_name: "tgp_bnd060_cross_high070"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_cross_swept_corr.enabled: true
+      fpe_cross_swept_corr.corr_threshold: 0.70
+      fpe_cross_swept_corr.asym_min: 0.0
+      fpe_cross_swept_corr.asym_max: 60.0
+
+  - instance_name: "tgp_bnd060_cross_high080"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_cross_swept_corr.enabled: true
+      fpe_cross_swept_corr.corr_threshold: 0.80
+      fpe_cross_swept_corr.asym_min: 0.0
+      fpe_cross_swept_corr.asym_max: 60.0
+
+  - instance_name: "tgp_bnd060_cross_high085"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_cross_swept_corr.enabled: true
+      fpe_cross_swept_corr.corr_threshold: 0.85
+      fpe_cross_swept_corr.asym_min: 0.0
+      fpe_cross_swept_corr.asym_max: 60.0
+
+  # 4. Higher Asymmetry Full Sweep ([0, 60]) with bnd = 0.0 (gapless boundary removed)
+  - instance_name: "tgp_bnd000_cross_high070"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_cross_swept_corr.enabled: true
+      fpe_cross_swept_corr.corr_threshold: 0.70
+      fpe_cross_swept_corr.asym_min: 0.0
+      fpe_cross_swept_corr.asym_max: 60.0
+
+  - instance_name: "tgp_bnd000_cross_high080"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_cross_swept_corr.enabled: true
+      fpe_cross_swept_corr.corr_threshold: 0.80
+      fpe_cross_swept_corr.asym_min: 0.0
+      fpe_cross_swept_corr.asym_max: 60.0
+
+  - instance_name: "tgp_bnd000_cross_high085"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_cross_swept_corr.enabled: true
+      fpe_cross_swept_corr.corr_threshold: 0.85
+      fpe_cross_swept_corr.asym_min: 0.0
+      fpe_cross_swept_corr.asym_max: 60.0
+
+  # 5. Combined Cross-Swept + Symmetry Balance + ACD
+  - instance_name: "tgp_bnd060_cross_low080_sym020_acd005"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_cross_swept_corr.enabled: true
+      fpe_cross_swept_corr.corr_threshold: 0.80
+      fpe_cross_swept_corr.asym_min: -5.0
+      fpe_cross_swept_corr.asym_max: 5.0
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.05
+
+  - instance_name: "tgp_bnd000_cross_low080_sym020_acd005"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_cross_swept_corr.enabled: true
+      fpe_cross_swept_corr.corr_threshold: 0.80
+      fpe_cross_swept_corr.asym_min: -5.0
+      fpe_cross_swept_corr.asym_max: 5.0
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.05

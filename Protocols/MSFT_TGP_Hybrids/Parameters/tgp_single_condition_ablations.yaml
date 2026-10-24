@@ -1,0 +1,98 @@
+# MSFT TGP Single-Condition Ablations (Gapless Boundary Standard 0.60 vs Removed 0.0)
+keep_data: false
+sweep_instances:
+  # 1. TGP Stage 2 Reference (Boundary 0.60 vs Removed 0.0)
+  - instance_name: "tgp_std_bnd060"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+  - instance_name: "tgp_nobnd_bnd000"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+
+  # 2. Just Low-Asymmetry Correlation (corr = 0.70, 0.80, 0.90) with bnd = 0.60
+  - instance_name: "tgp_bnd060_lowcorr070"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.70
+  - instance_name: "tgp_bnd060_lowcorr080"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.80
+  - instance_name: "tgp_bnd060_lowcorr090"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.90
+
+  # 3. Just Low-Asymmetry Correlation (corr = 0.70, 0.80, 0.90) with bnd = 0.0 (removed)
+  - instance_name: "tgp_bnd000_lowcorr070"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.70
+  - instance_name: "tgp_bnd000_lowcorr080"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.80
+  - instance_name: "tgp_bnd000_lowcorr090"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.90
+
+  # 4. Just Lead Conductance Symmetry Balance (s_max = 0.20, 0.30)
+  - instance_name: "tgp_bnd060_symbal_s020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+  - instance_name: "tgp_bnd060_symbal_s030"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.30
+  - instance_name: "tgp_bnd000_symbal_s020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+  - instance_name: "tgp_bnd000_symbal_s030"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.30
+
+  # 5. Just Normalized Asymmetric Conductance Deviation (tau = 0.01, 0.05, 0.08)
+  - instance_name: "tgp_bnd060_acd_tau001"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.01
+  - instance_name: "tgp_bnd060_acd_tau005"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.05
+  - instance_name: "tgp_bnd060_acd_tau008"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.08
+  - instance_name: "tgp_bnd000_acd_tau001"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.01
+  - instance_name: "tgp_bnd000_acd_tau005"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.05
+  - instance_name: "tgp_bnd000_acd_tau008"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.08

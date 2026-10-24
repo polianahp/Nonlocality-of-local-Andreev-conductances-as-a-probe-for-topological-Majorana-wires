@@ -1,0 +1,26 @@
+# Champion Low-Asymmetry Correlation + Lead-Avg 3w (No 2w) + 2x2 Core Filter (2026-10-23 Log)
+instance_name: "champion_corr075_both_3w0_no2w_core2x2"
+keep_data: true
+parameters:
+  fpe_corr:
+    corr_threshold: 0.75
+    asym_min: -5.0
+    asym_max: 5.0
+  dpe_corr_lead:
+    mode: "both"
+  fpe_3w:
+    curvature_threshold: 0.0
+    lead: "mean_LR"
+    curvature_source: "thermal_lockin_3w"
+  dpe_3w_lead:
+    mode: "continuous_pool"
+  gate_toggles:
+    use_3w_gate: true
+    use_2w_gate: false
+    use_gap_gate: false
+  dpe_c4_post_processor:
+    enabled: true
+    use_core_filter: true
+    core_shape: [2, 2]
+    core_mode: "component_has_core"
+    min_island_size: 1

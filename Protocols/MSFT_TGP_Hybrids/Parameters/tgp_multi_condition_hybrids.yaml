@@ -1,0 +1,114 @@
+# MSFT TGP Multi-Condition Hybrids (Symmetry Balance + ACD + Low-Asymmetry Correlation)
+keep_data: false
+sweep_instances:
+  # 1. TGP + ACD + Symmetry Balance (Standard bnd = 0.60)
+  - instance_name: "tgp_bnd060_acd005_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.05
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd060_acd001_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.01
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd060_acd005_sym030"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.05
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.30
+
+  # 2. TGP + ACD + Symmetry Balance (Gapless boundary removed bnd = 0.0)
+  - instance_name: "tgp_bnd000_acd005_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.05
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd000_acd001_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.01
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd000_acd005_sym030"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.05
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.30
+
+  # 3. Triad Hybrids: TGP + Low-Asym Corr + ACD + Symmetry Balance (bnd = 0.60)
+  - instance_name: "tgp_bnd060_lowcorr070_acd005_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.70
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.05
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd060_lowcorr080_acd005_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.80
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.05
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd060_lowcorr090_acd005_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.90
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.05
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  # 4. Triad Hybrids: TGP + Low-Asym Corr + ACD + Symmetry Balance (bnd = 0.0 removed)
+  - instance_name: "tgp_bnd000_lowcorr070_acd005_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.70
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.05
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd000_lowcorr080_acd005_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.80
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.05
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd000_lowcorr090_acd005_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.90
+      fpe_acd.enabled: true
+      fpe_acd.tau: 0.05
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20

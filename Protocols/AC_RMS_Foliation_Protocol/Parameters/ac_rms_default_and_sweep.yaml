@@ -1,0 +1,16 @@
+# Option 1 AC-RMS Default & Threshold Factor Sweep
+keep_data: false
+parameters:
+  fpe_ac_rms:
+    window_pts: 5
+    use_adaptive_percentile: true
+    percentile_rank: 95.0
+    high_plateau_multiplier: 1.30
+  dpe_1d_closing:
+    radius_vz: 1
+  dpe_c4_post_processor:
+    enabled: true
+    min_island_size: 10
+sweep_grid:
+  fpe_ac_rms.threshold_factor: [0.25, 0.35, 0.45]
+  dpe_c4_post_processor.use_core_filter: [false, true]

@@ -1,0 +1,167 @@
+# ==============================================================================
+# Nonlocal Asymmetric Conductance Deviation (S-ACD) & Cut Protocol Configuration
+# Fully reproducible, zero hardcoded parameters configuration file
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Target Data & Execution Directives
+# ------------------------------------------------------------------------------
+target:
+  # Path to target realization or dataset folder (relative to repo root or absolute path)
+  data_dir: "Outputs/Data/Disorder_Realizations/V0_0_872/disorder_realization_17"
+
+  # Electronic temperature in mK for thermal broadening and barrier conductance files (30.0 or 40.0)
+  temp_mK: 30.0
+
+  # Custom identifier for this realization/run (if null, auto-inferred from folder name)
+  disorder_name: "V0_0_872_realization_17"
+
+  # Directory where plots and summaries will be written (if null, auto-generated in Plots/)
+  plots_dir: null
+
+# ------------------------------------------------------------------------------
+# 2. User's Nonlocal S-ACD Protocol Parameters
+# ------------------------------------------------------------------------------
+sacd_protocol:
+  # --- Stage 1: Asymmetric Conductance Deviation & Lead Symmetry Gate ---
+  stage1:
+    # Asymmetric Conductance Deviation threshold: sqrt(a_L * a_R) >= tau
+    tau: 0.01
+
+    # Lead Asymmetry Gate threshold: |G_LL^sym - G_RR^sym| / max(G_LL^sym + G_RR^sym, 1e-4) <= s_max
+    s_max: 0.20
+
+    # Conductance floor below which asymmetry a_L, a_R is set to 0 to prevent noise division
+    floor_val: 0.001
+
+    # Barrier value (in barrier_arr units) defining symmetric reference point (e.g. 0.0 for U = 0)
+    sym_barrier_val: 0.0
+
+  # --- Stage 2: 3w Zero-Bias Negative Curvature Consensus ---
+  stage2_curvature:
+    # Negative curvature threshold: (d^2 G / dV^2)|_{V=0} <= -d2_threshold [(e^2/h)/meV^2]
+    d2_threshold: 100.0
+
+    # Minimum number of cutter gates (out of 5) requiring negative curvature on BOTH leads
+    min_cutters_consensus: 3
+
+    # Savitzky-Golay filter window length (must be odd integer >= 5)
+    savgol_window_length: 7
+
+    # Savitzky-Golay polynomial order
+    savgol_polyorder: 2
+
+    # Bias grid specification for numerical derivative
+    bias_window_min_mev: -0.134
+    bias_window_max_mev: 0.134
+    bias_num_points: 97
+    zero_bias_index: 48
+
+  # --- Stage 3: Non-Local Transport Gap & Subtractive Island Filtering ---
+  stage3_gap_and_filter:
+    # Non-local transport gap threshold (Delta_trans >= min_gap_uev in ueV)
+    min_gap_uev: 10.0
+
+    # Minimum contiguous island size (in pixels) for purely subtractive filtering (zero dilation)
+    min_island_size: 10
+
+    # Fallback cluster size if zero clusters meet strict min_island_size
+    fallback_min_island_size: 4
+
+    # Maximum number of fallback clusters to retain
+    fallback_top_n_clusters: 6
+
+# ------------------------------------------------------------------------------
+# 3. Microsoft Azure Quantum TGP Baseline Protocol Parameters
+# ------------------------------------------------------------------------------
+tgp_baseline:
+  # Chunk size for memory-efficient CPU thermal broadening (avoids RAM explosion)
+  broadening_chunk_size: 5000
+
+  # Transport gap extraction parameters (tgp.two.extract_gap)
+  gap_threshold_factor: 0.05       # Factor of bulk conductance determining gap boundary
+  noise_threshold: 0.0001          # Absolute noise floor (1e-4 e^2/h)
+
+  # Zero-bias peak probability derivative detection (tgp.two.zbp_dataset_derivative)
+  zbp_probability_threshold: 0.7   # Agreement threshold across cutter pairs
+  average_over_cutter: false       # Whether to average cutters before derivative
+
+  # Gap thresholding (tgp.two.set_gap_threshold)
+  threshold_low_mev: 0.010         # Minimum gap (0.010 meV = 10.0 ueV)
+  threshold_high_mev: 0.067        # Maximum gap (0.067 meV = 67.0 ueV)
+
+  # Clustering & scoring (tgp.two.cluster_and_score)
+  min_cluster_size: 7              # Minimum cluster size in pixels
+  cluster_gap_threshold_mev: 0.010 # Cluster median gap filter (0.010 meV = 10.0 ueV)
+  cluster_percentage_boundary_threshold: 0.6  # Boundary contact fraction with 3w closing
+  cluster_ncutter_threshold: 0.5   # Cutter agreement fraction
+
+# ------------------------------------------------------------------------------
+# 4. Hamiltonian Simulation & Microscopic Cut Diagnostics Parameters
+# ------------------------------------------------------------------------------
+diagnostics:
+  # Reference barrier height U_0 (in meV) for normalizing U_R/U_0 and U_L/U_0 sweep axes
+  reference_barrier_u0: 2.0
+
+  # Number of BdG eigenvalues to compute along each horizontal mu cut
+  num_eigenvalues_cut: 14
+
+  # Number of low-energy BdG eigenvalues to compute at the Medoid for Majorana density
+  num_eigenvalues_medoid: 2
+
+  # Majorana boundary confinement percentage threshold (calc_mzm_boundary_confinement)
+  mzm_boundary_confinement_pct: 80.0
+
+  # Majorana separability calculation options (calc_mzm_separability)
+  mzm_separability_continuous: true
+  mzm_separability_auto_orient: true
+
+  # Maximum number of top clusters to generate individual 8-panel diagnostic slides for
+  max_clusters_to_plot: 6
+
+  # Maximum number of top clusters to annotate on the 2D phase map
+  max_clusters_annotated_on_map: 10
+
+# ------------------------------------------------------------------------------
+# 5. Plotting, Figure Styling & Visual Palette
+# ------------------------------------------------------------------------------
+visualization:
+  # Output figure resolution (DPI)
+  dpi: 200
+
+  # BdG spectrum energy limits [min, max] in meV
+  spec_ylim_mev: [-0.16, 0.16]
+
+  # Nonlocal conductance colorbar limits [vmin, vmax] in e^2/h
+  nonlocal_conductance_range: [-0.10, 0.10]
+
+  # Background themes
+  figure_bg_color: "#0b132b"
+  axes_bg_color: "#0b1120"
+  legend_bg_color: "#0f172a"
+  grid_color: "white"
+  grid_alpha: 0.25
+  pfaffian_boundary_color: "#38bdf8"
+  pfaffian_bulk_color: "#1e293b"
+
+  # Cluster medoid color palette (distinct, high-contrast hex codes)
+  cluster_palette:
+    - "#00f5d4"  # Cyan / Teal
+    - "#ff006e"  # Magenta / Rose
+    - "#3a86ff"  # Royal Blue
+    - "#ffbe0b"  # Amber Yellow
+    - "#06d6a0"  # Emerald Green
+    - "#fb5607"  # Deep Orange
+    - "#8338ec"  # Violet / Purple
+    - "#00b4d8"  # Sky Blue
+    - "#90be6d"  # Light Olive
+    - "#f72585"  # Neon Pink
+    - "#4cc9f0"  # Aqua
+    - "#e63946"  # Crimson Red
+    - "#a855f7"  # Purple
+    - "#ec4899"  # Pink
+    - "#14b8a6"  # Teal
+    - "#f97316"  # Orange
+    - "#6366f1"  # Indigo
+    - "#84cc16"  # Lime Green
+    - "#06b6d4"  # Light Cyan

@@ -1,0 +1,59 @@
+# Reproduces the 2026-10-22 & 2026-10-23 ablation across lead consensus modes,
+# 2w gate inclusion/exclusion, correlation thresholds, and core filter modes.
+keep_data: false
+sweep_instances:
+  - instance_name: "strict_both_leads_with_2w_core2x2"
+    parameters:
+      fpe_corr.corr_threshold: 0.75
+      dpe_corr_lead.mode: "both"
+      fpe_3w.curvature_threshold: 0.0
+      dpe_3w_lead.mode: "both"
+      gate_toggles.use_2w_gate: true
+      dpe_2w_lead.mode: "both"
+      dpe_c4_post_processor.use_core_filter: true
+      dpe_c4_post_processor.core_mode: "component_has_core"
+  - instance_name: "lead_average_with_2w_core2x2"
+    parameters:
+      fpe_corr.corr_threshold: 0.75
+      dpe_corr_lead.mode: "both"
+      fpe_3w.curvature_threshold: 0.0
+      fpe_3w.lead: "mean_LR"
+      dpe_3w_lead.mode: "continuous_pool"
+      gate_toggles.use_2w_gate: true
+      fpe_2w.lead: "signed_mean"
+      dpe_2w_lead.mode: "continuous_pool"
+      dpe_c4_post_processor.use_core_filter: true
+      dpe_c4_post_processor.core_mode: "component_has_core"
+  - instance_name: "relaxed_either_lead_with_2w_core2x2"
+    parameters:
+      fpe_corr.corr_threshold: 0.75
+      dpe_corr_lead.mode: "both"
+      fpe_3w.curvature_threshold: 0.0
+      dpe_3w_lead.mode: "either"
+      gate_toggles.use_2w_gate: true
+      dpe_2w_lead.mode: "either"
+      dpe_c4_post_processor.use_core_filter: true
+      dpe_c4_post_processor.core_mode: "component_has_core"
+  - instance_name: "lead_average_3w20_no2w_core_opening"
+    parameters:
+      fpe_corr.corr_threshold: 0.85
+      dpe_corr_lead.mode: "both"
+      fpe_3w.curvature_threshold: 20.0
+      fpe_3w.lead: "mean_LR"
+      dpe_3w_lead.mode: "continuous_pool"
+      gate_toggles.use_2w_gate: false
+      dpe_c4_post_processor.use_core_filter: true
+      dpe_c4_post_processor.core_mode: "morphological_opening"
+      dpe_c4_post_processor.min_island_size: 8
+  - instance_name: "corr085_R_lead_3w20_gap15_area10"
+    parameters:
+      fpe_corr.corr_threshold: 0.85
+      dpe_corr_lead.mode: "R_only"
+      fpe_3w.curvature_threshold: 20.0
+      dpe_3w_lead.mode: "R_only"
+      gate_toggles.use_2w_gate: false
+      gate_toggles.use_gap_gate: true
+      fpe_gap.gap_type: "spectral_excitation"
+      fpe_gap.min_gap_mev: 0.015
+      dpe_c4_post_processor.use_core_filter: true
+      dpe_c4_post_processor.min_island_size: 10
