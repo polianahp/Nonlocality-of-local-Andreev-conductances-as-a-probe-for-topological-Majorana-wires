@@ -67,7 +67,7 @@ V0_NAME="V0_1_2"
 echo "=================================================================="
 echo " Submitting 3 μm Unified Jobs: $V0_NAME"
 echo " Realization Range: $START_INDEX to $END_INDEX ($NUM_JOBS jobs requested)"
-echo " Temperatures: 30 mK & 40 mK | Walltime: 01:15:00 | Cores: 256"
+echo " Temperatures: 30 mK & 40 mK | Walltime: 03:00:00 | Cores: 256"
 if [ "$DRY_RUN" -eq 1 ]; then
     echo " MODE: DRY RUN (no jobs will be submitted)"
 fi

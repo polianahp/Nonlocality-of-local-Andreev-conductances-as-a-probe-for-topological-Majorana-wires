@@ -74,7 +74,7 @@ cd "$SCRIPT_DIR" || exit 1
 
 echo "=================================================================="
 echo " Submitting 3 μm Unified Jobs: {v0_tag} (Target: $MAX_JOBS jobs)"
-echo " Temperatures: 30 mK & 40 mK | Walltime: 01:15:00 | Cores: 256"
+echo " Temperatures: 30 mK & 40 mK | Walltime: 03:00:00 | Cores: 256"
 echo "=================================================================="
 
 for i in $(seq 0 $((MAX_JOBS - 1))); do
@@ -159,7 +159,7 @@ def generate_slurm_script(
 #SBATCH -N 1                            # Number of nodes (single node parallel pool)
 #SBATCH -n 1                            # Number of tasks
 #SBATCH -c 256                          # Cores per task (256 cores on Harpers Ferry AMD EPYC node)
-#SBATCH -t 01:15:00                     # Time limit (1 hour 15 minutes)
+#SBATCH -t 03:00:00                     # Time limit (3 hours)
 #SBATCH -p day_3gb                      # Partition (day_3gb: 1 day limit, 3GB RAM/core)
 #SBATCH --mail-type=END,FAIL            # Notifications
 #SBATCH --mail-user=nos00002@mix.wvu.edu
