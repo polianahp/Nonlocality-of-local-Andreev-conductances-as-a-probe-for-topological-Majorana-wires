@@ -163,20 +163,86 @@ class RealizationFeatureCache:
         return self._memo[key]
 
     @property
+    def has_pfaffian_data(self) -> bool:
+        """Return True if ground-truth pdi_data.npy exists on disk."""
+        return (self.realization_dir / "pdi_data.npy").exists()
+
+    @property
+    def has_stage1_data(self) -> bool:
+        """Return True if stage-1 cutter bias sweep arrays exist on disk."""
+        return (self.realization_dir / "tgp_stage1_dIdVl.npy").exists()
+
+    def _compute_pfaffian_mask_from_params(self, save_to_disk: bool = True) -> np.ndarray:
+        """Compute the ground-truth Pfaffian mask from all_params.npz on the fly and optionally save to disk."""
+        params_path = self.realization_dir / "all_params.npz"
+        if not params_path.exists():
+            raise FileNotFoundError(
+                f"Cannot compute pfaffian mask: missing both pdi_data.npy and all_params.npz in {self.realization_dir}"
+            )
+        p = np.load(params_path, allow_pickle=True)
+        ts = float(p["t"])
+        alphas = float(p["alpha"])
+        gamma = float(p["gamma"])
+        delta0 = float(p["Delta0"])
+        Nx = int(p["Ls"])
+        Vdisx = p["Vdisx"] if "Vdisx" in p else None
+        V0 = float(p["V0"]) if "V0" in p else 0.0
+        delta_N = int(p.get("pfaffian_delta_N", 0))
+
+        from src.helpers import PfaffianSimulator
+        from src.pfaffian_invariant import eta_m
+
+        ax = 200.0 / alphas
+        ms = 1000.0 * eta_m / (2.0 * ax**2 * ts)
+        sim = PfaffianSimulator(
+            Nx=Nx,
+            Ny=1,
+            delta_N=delta_N,
+            ax=ax,
+            ay=ax,
+            ms=ms,
+            gamma0=gamma,
+            delta0=delta0,
+            method="h",
+        )
+        if Vdisx is not None and np.any(Vdisx != 0):
+            sim.load_disorder(Vdisx)
+
+        mask = np.zeros((self.n_mu, self.n_vz), dtype=bool)
+        pdi_rows = []
+        for i, mu in enumerate(self.mu_vals):
+            for j, vz in enumerate(self.vz_vals):
+                val = float(np.mean(sim.vPf2Dx(vz, mu, V0, gamma, 0.0)))
+                is_topo = (val == 1.0)
+                mask[i, j] = is_topo
+                if save_to_disk:
+                    pdi_rows.append([mu, vz, 0.0, 1.0 if is_topo else 0.0])
+
+        if save_to_disk:
+            try:
+                pdi_arr = np.array(pdi_rows, dtype=np.float64)
+                np.save(self.realization_dir / "pdi_data.npy", pdi_arr)
+            except Exception as e:
+                print(f"Warning: Failed to save pdi_data.npy to {self.realization_dir}: {e}")
+
+        return mask
+
+    @property
     def pfaffian_mask(self) -> np.ndarray:
         r"""Ground-truth topological Pfaffian mask ($\mathcal{Q} = -1$, stored as `1.0` in `pdi_data.npy`)."""
         if self._pfaffian_mask is None:
             pdi_path = self.realization_dir / "pdi_data.npy"
-            if not pdi_path.exists():
-                raise FileNotFoundError(f"Missing pdi_data.npy in {self.realization_dir}")
-            pdi = np.load(pdi_path)
-            if pdi.ndim == 2 and pdi.shape[1] >= 4:
-                gt_flat = pdi[:, 3] == 1.0
-            elif pdi.ndim == 2 and pdi.shape[1] >= 3:
-                gt_flat = pdi[:, 2] == 1.0
+            if pdi_path.exists():
+                pdi = np.load(pdi_path)
+                if pdi.ndim == 2 and pdi.shape[1] >= 4:
+                    gt_flat = pdi[:, 3] == 1.0
+                elif pdi.ndim == 2 and pdi.shape[1] >= 3:
+                    gt_flat = pdi[:, 2] == 1.0
+                else:
+                    gt_flat = pdi.ravel() == 1.0
+                self._pfaffian_mask = gt_flat.reshape(self.n_mu, self.n_vz)
             else:
-                gt_flat = pdi.ravel() == 1.0
-            self._pfaffian_mask = gt_flat.reshape(self.n_mu, self.n_vz)
+                self._pfaffian_mask = self._compute_pfaffian_mask_from_params(save_to_disk=True)
         return self._pfaffian_mask
 
     @property

@@ -59,7 +59,8 @@ def extract_island_medoids_and_areas(
         }
 
     areas: List[int] = []
-    medoids: List[Dict[str, float]] = []
+    clusters: List[Dict[str, Any]] = []
+    centers_of_mass: List[Dict[str, Any]] = []
     for lbl in range(1, num_islands + 1):
         pts = np.argwhere(labeled == lbl)
         area = int(pts.shape[0])
@@ -68,22 +69,45 @@ def extract_island_medoids_and_areas(
         areas.append(area)
         phys_pts = np.column_stack([mu_vals[pts[:, 0]], vz_vals[pts[:, 1]]])
         centroid = np.mean(phys_pts, axis=0)
+        com_idx = np.mean(pts, axis=0)
         dist_sq = np.sum((phys_pts - centroid) ** 2, axis=1)
         med_idx = int(np.argmin(dist_sq))
-        medoids.append({
+        cluster_entry = {
             "island_id": int(lbl),
             "area_px": area,
+            # Exact continuous center of mass (centroid)
+            "center_of_mass_mu_meV": round(float(centroid[0]), 5),
+            "center_of_mass_Vz_meV": round(float(centroid[1]), 5),
+            "center_of_mass_mu_idx": round(float(com_idx[0]), 2),
+            "center_of_mass_Vz_idx": round(float(com_idx[1]), 2),
+            # In-cluster medoid point (guaranteed to lie within cluster C_k)
+            "medoid_mu_meV": round(float(phys_pts[med_idx, 0]), 5),
+            "medoid_Vz_meV": round(float(phys_pts[med_idx, 1]), 5),
+            "medoid_mu_idx": int(pts[med_idx, 0]),
+            "medoid_Vz_idx": int(pts[med_idx, 1]),
+            # Backward-compatible aliases
             "mu_meV": round(float(phys_pts[med_idx, 0]), 5),
             "Vz_meV": round(float(phys_pts[med_idx, 1]), 5),
             "mu_idx": int(pts[med_idx, 0]),
             "Vz_idx": int(pts[med_idx, 1]),
+        }
+        clusters.append(cluster_entry)
+        centers_of_mass.append({
+            "island_id": int(lbl),
+            "area_px": area,
+            "mu_meV": round(float(centroid[0]), 5),
+            "Vz_meV": round(float(centroid[1]), 5),
+            "mu_idx": round(float(com_idx[0]), 2),
+            "Vz_idx": round(float(com_idx[1]), 2),
         })
 
     return {
         "island_count": int(len(areas)),
         "mean_island_area_px": float(np.mean(areas)) if areas else 0.0,
         "max_island_area_px": int(np.max(areas)) if areas else 0,
-        "medoids_mu_vz": medoids,
+        "medoids_mu_vz": clusters,
+        "centers_of_mass_mu_vz": centers_of_mass,
+        "clusters": clusters,
     }
 
 
@@ -198,6 +222,8 @@ def evaluate_realization_metrics(
         "mean_island_area_px": round(float(island_info["mean_island_area_px"]), 2),
         "max_island_area_px": int(island_info["max_island_area_px"]),
         "medoids_mu_vz": island_info["medoids_mu_vz"],
+        "centers_of_mass_mu_vz": island_info["centers_of_mass_mu_vz"],
+        "clusters": island_info["clusters"],
         "step_diagnostics": step_diag,
     }
 

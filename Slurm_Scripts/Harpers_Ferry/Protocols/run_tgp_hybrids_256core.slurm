@@ -12,8 +12,8 @@
 
 # ==============================================================================
 # Harpers Ferry Production Slurm Runner: MSFT_TGP_Hybrids Protocol Family
-# Evaluates all 44 TGP Hybrid instances across all disorder strengths (V0 = 0.378,
-# 0.645, 0.872, 1.2 meV) and temperatures (30 mK, 40 mK) using the modern
+# Evaluates all 44 TGP Hybrid instances across all disorder strengths (V0 = 0.1,
+# 0.378, 0.645, 0.872, 1.2 meV) and temperatures (30 mK, 40 mK) using the modern
 # FPE/DPE Realization-Major Engine with shared Continuous Feature Caching.
 # ==============================================================================
 
@@ -50,9 +50,20 @@ export NUMEXPR_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
 
 NUM_WORKERS="${SLURM_CPUS_PER_TASK:-256}"
-DATA_ROOT="${1:-${REPO_DIR}/Outputs/Data/Disorder_Realizations}"
-OUTPUT_NAME="Microsoft_Hybrids_Post_Processing"
-OUTPUTS_ROOT="${2:-${REPO_DIR}/Outputs/${OUTPUT_NAME}}"
+
+# Auto-detect data root: check Data/Disorder_Realizations first, then Outputs/Data/Disorder_Realizations
+if [ -d "${REPO_DIR}/Data/Disorder_Realizations" ]; then
+    DETECTED_DATA="${REPO_DIR}/Data/Disorder_Realizations"
+elif [ -d "${REPO_DIR}/Outputs/Data/Disorder_Realizations" ]; then
+    DETECTED_DATA="${REPO_DIR}/Outputs/Data/Disorder_Realizations"
+elif [ -d "${SCRATCH_ROOT}/Data/Disorder_Realizations" ]; then
+    DETECTED_DATA="${SCRATCH_ROOT}/Data/Disorder_Realizations"
+else
+    DETECTED_DATA="${REPO_DIR}/Data/Disorder_Realizations"
+fi
+
+DATA_ROOT="${1:-$DETECTED_DATA}"
+OUTPUTS_ROOT="${2:-${REPO_DIR}/Outputs/Protocols}"
 
 echo "=================================================================="
 echo "Harpers Ferry TGP Hybrids Production Suite: $(date)"
@@ -60,10 +71,16 @@ echo "Host Node:           $(hostname)"
 echo "Slurm Job ID:        ${SLURM_JOB_ID:-local}"
 echo "Repository:          $REPO_DIR"
 echo "Data Root:           $DATA_ROOT"
-echo "Common Output Dir:   $OUTPUTS_ROOT"
+echo "Output Directory:    $OUTPUTS_ROOT"
 echo "Allocated Cores:     $NUM_WORKERS"
 echo "Temperatures:        30.0 mK, 40.0 mK"
 echo "=================================================================="
+
+# 3.5 Precompute any missing Pfaffian ground-truth masks across the 256 cores
+echo "[$(date)] Checking / precomputing ground-truth Pfaffian masks across ${NUM_WORKERS} cores..."
+python3 Scripts-Notebooks/precompute_pfaffian_masks.py \
+    --data-root "$DATA_ROOT" \
+    --workers "$NUM_WORKERS"
 
 # 4. Execute Realization-Major FPE/DPE Runner
 python3 run_protocol_suite.py \
@@ -95,9 +112,8 @@ echo "Common Output Directory: $OUTPUTS_ROOT"
 echo "Master Leaderboard:      ${OUTPUTS_ROOT}/master_protocols_leaderboard.md"
 echo "Leaderboard CSV:         ${OUTPUTS_ROOT}/master_protocols_leaderboard.csv"
 echo "Summary Report:          ${OUTPUTS_ROOT}/MSFT_TGP_Hybrids/leaderboard_summary.md"
-echo ""
 echo "To download all post-processing results to your local machine, run:"
-echo "rsync -avz nos00002@harpersferry.hpc.wvu.edu:${OUTPUTS_ROOT}/ ./Microsoft_Hybrids_Post_Processing/"
+echo "rsync -avz nos00002@harpersferry.hpc.wvu.edu:${OUTPUTS_ROOT}/MSFT_TGP_Hybrids/ /home/pseudonym/Documents/Code/NonlocalProtocol/Outputs/Protocols/MSFT_TGP_Hybrids/"
 echo "=================================================================="
 
 conda deactivate

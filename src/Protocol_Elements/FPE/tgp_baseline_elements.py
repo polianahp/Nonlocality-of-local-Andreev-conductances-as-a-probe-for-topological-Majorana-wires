@@ -62,6 +62,22 @@ def compute_tgp_canonical_dataset(
     )
 
     def _compute() -> Dict[str, Any]:
+        if not cache.has_stage1_data:
+            # Graceful fallback for barrier-sweep-only simulations (e.g. Harpers Ferry runs)
+            # where stage-1 cutter bias sweeps were bypassed. Sets candidate roi2_2d to all True
+            # so downstream non-local barrier correlators and C4 post-processing can run.
+            dummy_3d = np.ones((5, cache.n_mu, cache.n_vz), dtype=bool)
+            dummy_gap = np.full((5, cache.n_mu, cache.n_vz), 0.05, dtype=np.float64)
+            return {
+                "zbp_3d": dummy_3d,
+                "gapped_zbp_3d": dummy_3d,
+                "gap_arr_3d": dummy_gap,
+                "gapless_2d": np.zeros((cache.n_mu, cache.n_vz), dtype=bool),
+                "roi2_2d": np.ones((cache.n_mu, cache.n_vz), dtype=bool),
+                "z_ds": None,
+                "s2": None,
+            }
+
         import xarray as xr
         import tgp.two
 

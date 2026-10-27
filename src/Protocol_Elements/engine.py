@@ -39,8 +39,37 @@ from .cache import RealizationFeatureCache
 from .leaderboard import rebuild_leaderboards
 from .metrics import aggregate_ensemble_metrics, evaluate_realization_metrics
 
+import os
+import re
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_DATA_ROOT = REPO_ROOT / "Outputs" / "Data" / "Disorder_Realizations"
+
+
+def _resolve_default_data_root() -> Path:
+    """Dynamically resolve default Disorder_Realizations path across local and cluster environments."""
+    candidates = [
+        REPO_ROOT / "Data" / "Disorder_Realizations",
+        REPO_ROOT / "Outputs" / "Data" / "Disorder_Realizations",
+    ]
+    scratch_env = os.environ.get("SCRATCH", "/scratch/nos00002")
+    if scratch_env:
+        scratch = Path(scratch_env)
+        candidates.extend([
+            scratch / "nonlocalcond" / "Data" / "Disorder_Realizations",
+            scratch / "nonlocalcond" / "Outputs" / "Data" / "Disorder_Realizations",
+            scratch / "Data" / "Disorder_Realizations",
+        ])
+    for c in candidates:
+        if c.exists() and any(c.glob("V0_*")):
+            return c
+    return (
+        REPO_ROOT / "Data" / "Disorder_Realizations"
+        if (REPO_ROOT / "Data" / "Disorder_Realizations").exists()
+        else REPO_ROOT / "Outputs" / "Data" / "Disorder_Realizations"
+    )
+
+
+DEFAULT_DATA_ROOT = _resolve_default_data_root()
 DEFAULT_OUTPUTS_ROOT = REPO_ROOT / "Outputs" / "Protocols"
 
 
@@ -339,6 +368,11 @@ def expand_yaml_to_instance_specs(
     return specs
 
 
+def _realization_sort_key(p: Path) -> int:
+    m = re.search(r"(\d+)", p.name)
+    return int(m.group(1)) if m else 0
+
+
 def discover_realization_tasks(
     data_root: Union[str, Path] = DEFAULT_DATA_ROOT,
     v0_filter: Optional[Sequence[str]] = None,
@@ -348,7 +382,11 @@ def discover_realization_tasks(
     """Discover `(realization_dir, v0_label, temperature_mK)` tasks under `data_root`."""
     root = Path(data_root)
     if not root.exists():
-        raise FileNotFoundError(f"Data root not found: {root}")
+        fallback = _resolve_default_data_root()
+        if fallback.exists():
+            root = fallback
+        else:
+            raise FileNotFoundError(f"Data root not found: {root} (fallback checked: {fallback})")
 
     tasks: List[Tuple[str, str, float]] = []
     if root.is_dir() and root.name.startswith("V0_"):
@@ -363,7 +401,8 @@ def discover_realization_tasks(
                 d
                 for d in v0_dir.iterdir()
                 if d.is_dir() and "realization" in d.name and (d / "all_params.npz").exists()
-            ]
+            ],
+            key=_realization_sort_key,
         )
         if max_realizations_per_v0 is not None:
             r_dirs = r_dirs[: int(max_realizations_per_v0)]
@@ -464,11 +503,34 @@ def run_protocol_specs(
 
     for spec in specs_list:
         key = (spec.protocol_name, spec.instance_name)
-        r_metrics = [ro["results"][key]["metrics"] for ro in raw_outputs]
-        ensemble_summary = aggregate_ensemble_metrics(r_metrics)
+        new_metrics = [ro["results"][key]["metrics"] for ro in raw_outputs]
 
         inst_dir = out_root / spec.protocol_name / spec.instance_name
         inst_dir.mkdir(parents=True, exist_ok=True)
+        metrics_json_path = inst_dir / "realization_metrics.json"
+
+        # Merge with existing metrics on disk so multi-V0 or sequential runs accumulate rather than overwrite
+        merged_records: Dict[Tuple[float, str, str], Dict[str, Any]] = OrderedDict()
+        if metrics_json_path.exists():
+            try:
+                with open(metrics_json_path, "r", encoding="utf-8") as f:
+                    old_recs = json.load(f)
+                for rec in old_recs:
+                    t_k = round(float(rec.get("temperature_mK", 30.0)), 4)
+                    v_k = str(rec.get("v0_label", ""))
+                    r_k = str(rec.get("realization_name", ""))
+                    merged_records[(t_k, v_k, r_k)] = rec
+            except Exception:
+                pass
+
+        for rec in new_metrics:
+            t_k = round(float(rec.get("temperature_mK", 30.0)), 4)
+            v_k = str(rec.get("v0_label", ""))
+            r_k = str(rec.get("realization_name", ""))
+            merged_records[(t_k, v_k, r_k)] = rec
+
+        r_metrics = list(merged_records.values())
+        ensemble_summary = aggregate_ensemble_metrics(r_metrics)
 
         step_names = list(r_metrics[0]["step_diagnostics"].keys()) if r_metrics else []
 

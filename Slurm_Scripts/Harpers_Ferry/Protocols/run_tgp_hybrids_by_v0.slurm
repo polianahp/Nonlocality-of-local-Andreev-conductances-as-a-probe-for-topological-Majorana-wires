@@ -51,9 +51,20 @@ export NUMEXPR_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
 
 NUM_WORKERS="${SLURM_CPUS_PER_TASK:-64}"
-DATA_ROOT="${2:-${REPO_DIR}/Outputs/Data/Disorder_Realizations}"
-OUTPUT_NAME="Microsoft_Hybrids_Post_Processing"
-OUTPUTS_ROOT="${3:-${REPO_DIR}/Outputs/${OUTPUT_NAME}}"
+
+# Auto-detect data root: check Data/Disorder_Realizations first, then Outputs/Data/Disorder_Realizations
+if [ -d "${REPO_DIR}/Data/Disorder_Realizations" ]; then
+    DETECTED_DATA="${REPO_DIR}/Data/Disorder_Realizations"
+elif [ -d "${REPO_DIR}/Outputs/Data/Disorder_Realizations" ]; then
+    DETECTED_DATA="${REPO_DIR}/Outputs/Data/Disorder_Realizations"
+elif [ -d "${SCRATCH_ROOT}/Data/Disorder_Realizations" ]; then
+    DETECTED_DATA="${SCRATCH_ROOT}/Data/Disorder_Realizations"
+else
+    DETECTED_DATA="${REPO_DIR}/Data/Disorder_Realizations"
+fi
+
+DATA_ROOT="${2:-$DETECTED_DATA}"
+OUTPUTS_ROOT="${3:-${REPO_DIR}/Outputs/Protocols}"
 
 echo "=================================================================="
 echo "Harpers Ferry TGP Hybrids V0 Run: $(date)"
@@ -61,10 +72,18 @@ echo "Target V0:           $V0_TARGET"
 echo "Host Node:           $(hostname)"
 echo "Job ID:              ${SLURM_JOB_ID:-local}"
 echo "Repository:          $REPO_DIR"
-echo "Common Output Dir:   $OUTPUTS_ROOT"
+echo "Data Root:           $DATA_ROOT"
+echo "Output Directory:    $OUTPUTS_ROOT"
 echo "Allocated Cores:     $NUM_WORKERS"
 echo "Temperatures:        30.0 mK, 40.0 mK"
 echo "=================================================================="
+
+# Precompute any missing Pfaffian ground-truth masks for this V0 target
+echo "[$(date)] Checking / precomputing ground-truth Pfaffian masks for $V0_TARGET across ${NUM_WORKERS} cores..."
+python3 Scripts-Notebooks/precompute_pfaffian_masks.py \
+    --data-root "$DATA_ROOT" \
+    --v0 "$V0_TARGET" \
+    --workers "$NUM_WORKERS"
 
 python3 run_protocol_suite.py \
     --protocols MSFT_TGP_Hybrids \
