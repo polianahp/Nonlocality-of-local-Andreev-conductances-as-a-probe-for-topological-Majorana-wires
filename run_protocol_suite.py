@@ -131,6 +131,12 @@ def main() -> None:
         default=str(DEFAULT_OUTPUTS_ROOT),
         help="Path to Outputs directory (default: Outputs/Protocols).",
     )
+    parser.add_argument(
+        "--force-recalculate",
+        action="store_true",
+        default=False,
+        help="Force re-evaluation of all realization metrics and replace on-disk realization_metrics.json files.",
+    )
     args = parser.parse_args()
 
     outputs_root_path = (
@@ -182,6 +188,7 @@ def main() -> None:
         temperatures_mK=args.temperatures,
         max_realizations_per_v0=args.max_realizations_per_v0,
         max_workers=args.workers,
+        force_recalculate=args.force_recalculate,
     )
     elapsed = time.perf_counter() - t0
 

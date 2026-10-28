@@ -214,6 +214,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Step-by-step passing-area figures for the top-N protocols.")
     ap.add_argument("--top-n", type=int, default=10)
     ap.add_argument("--temperature", type=float, default=30.0)
+    ap.add_argument("--realization-index", type=int, default=10, help="Realization index to plot (default: 10).")
     ap.add_argument(
         "--output-name",
         type=str,

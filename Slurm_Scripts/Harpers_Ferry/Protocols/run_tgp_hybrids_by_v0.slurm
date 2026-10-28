@@ -3,7 +3,7 @@
 #SBATCH -N 1                         # 1 Node
 #SBATCH -n 1                         # 1 Master task
 #SBATCH -c 64                        # 64 Cores
-#SBATCH -t 01:00:00                  # 1 Hour limit
+#SBATCH -t 00:30:00                  # Walltime limit (30 minutes)
 #SBATCH -p day_3gb                   # Partition (day_3gb)
 #SBATCH --mail-type=END,FAIL         # Email notifications
 #SBATCH --mail-user=nos00002@mix.wvu.edu
@@ -42,8 +42,9 @@ if [ ! -d "$REPO_DIR" ]; then
 fi
 
 cd "$REPO_DIR" || exit 1
-mkdir -p Logs/Slurm Outputs/Protocols
+mkdir -p Logs/Slurm Outputs/Microsoft_Hybrids_Post_Processing
 
+export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
@@ -64,7 +65,7 @@ else
 fi
 
 DATA_ROOT="${2:-$DETECTED_DATA}"
-OUTPUTS_ROOT="${3:-${REPO_DIR}/Outputs/Protocols}"
+OUTPUTS_ROOT="${3:-${REPO_DIR}/Outputs/Microsoft_Hybrids_Post_Processing}"
 
 echo "=================================================================="
 echo "Harpers Ferry TGP Hybrids V0 Run: $(date)"
@@ -76,22 +77,24 @@ echo "Data Root:           $DATA_ROOT"
 echo "Output Directory:    $OUTPUTS_ROOT"
 echo "Allocated Cores:     $NUM_WORKERS"
 echo "Temperatures:        30.0 mK, 40.0 mK"
+echo "Force Recalculate:   True"
 echo "=================================================================="
 
 # Precompute any missing Pfaffian ground-truth masks for this V0 target
 echo "[$(date)] Checking / precomputing ground-truth Pfaffian masks for $V0_TARGET across ${NUM_WORKERS} cores..."
-python3 Scripts-Notebooks/precompute_pfaffian_masks.py \
+python3 -u Scripts-Notebooks/precompute_pfaffian_masks.py \
     --data-root "$DATA_ROOT" \
     --v0 "$V0_TARGET" \
     --workers "$NUM_WORKERS"
 
-python3 run_protocol_suite.py \
+python3 -u run_protocol_suite.py \
     --protocols MSFT_TGP_Hybrids \
     --v0 "$V0_TARGET" \
     --data-root "$DATA_ROOT" \
     --outputs-root "$OUTPUTS_ROOT" \
     --temperatures 30.0 40.0 \
     --workers "$NUM_WORKERS" \
+    --force-recalculate \
     --keep-instances-file "${REPO_DIR}/Protocols/MSFT_TGP_Hybrids/top20_union_instances.txt"
 
 EXIT_CODE=$?

@@ -25,6 +25,7 @@ import importlib.util
 import itertools
 import json
 import subprocess
+import time
 from collections import OrderedDict
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
@@ -466,6 +467,7 @@ def run_protocol_specs(
     temperatures_mK: Sequence[float] = (30.0,),
     max_realizations_per_v0: Optional[int] = None,
     max_workers: int = 1,
+    force_recalculate: bool = False,
 ) -> Dict[str, Dict[str, Any]]:
     """Execute a collection of `ProtocolInstanceSpec`s and write outputs to `Outputs/Protocols/`."""
     if not specs:
@@ -485,12 +487,41 @@ def run_protocol_specs(
     specs_list = list(specs)
     worker_inputs = [(r_dir, v0_lbl, t_mK, specs_list) for (r_dir, v0_lbl, t_mK) in tasks]
 
-    eff_workers = max(1, min(int(max_workers), len(worker_inputs)))
+    n_tasks = len(worker_inputs)
+    eff_workers = max(1, min(int(max_workers), n_tasks))
+    t_engine_start = time.perf_counter()
+    print(
+        f"[Engine] Starting evaluation of {n_tasks} realization states across {eff_workers} workers...",
+        flush=True,
+    )
+
     if eff_workers == 1:
-        raw_outputs = [_evaluate_single_realization_worker(inp) for inp in worker_inputs]
+        raw_outputs = []
+        for i, inp in enumerate(worker_inputs, 1):
+            ro = _evaluate_single_realization_worker(inp)
+            raw_outputs.append(ro)
+            if i % 20 == 0 or i == n_tasks:
+                el = time.perf_counter() - t_engine_start
+                print(
+                    f"[Engine] Evaluated {i}/{n_tasks} states ({100.0*i/n_tasks:.1f}%) in {el:.1f}s...",
+                    flush=True,
+                )
     else:
+        import concurrent.futures
+        raw_outputs = []
         with ProcessPoolExecutor(max_workers=eff_workers) as pool:
-            raw_outputs = list(pool.map(_evaluate_single_realization_worker, worker_inputs))
+            futures = [pool.submit(_evaluate_single_realization_worker, inp) for inp in worker_inputs]
+            for i, fut in enumerate(concurrent.futures.as_completed(futures), 1):
+                raw_outputs.append(fut.result())
+                if i % 25 == 0 or i == n_tasks:
+                    el = time.perf_counter() - t_engine_start
+                    rate = i / max(el, 1e-6)
+                    eta = (n_tasks - i) / max(rate, 1e-6)
+                    print(
+                        f"[Engine] Evaluated {i}/{n_tasks} states ({100.0*i/n_tasks:.1f}%) in {el:.1f}s "
+                        f"({rate:.1f} states/s, ETA: {eta:.1f}s)...",
+                        flush=True,
+                    )
 
     git_hash = _get_git_commit_hash()
     timestamp_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -510,8 +541,9 @@ def run_protocol_specs(
         metrics_json_path = inst_dir / "realization_metrics.json"
 
         # Merge with existing metrics on disk so multi-V0 or sequential runs accumulate rather than overwrite
+        # (unless force_recalculate is True, in which case existing files are cleanly replaced)
         merged_records: Dict[Tuple[float, str, str], Dict[str, Any]] = OrderedDict()
-        if metrics_json_path.exists():
+        if not force_recalculate and metrics_json_path.exists():
             try:
                 with open(metrics_json_path, "r", encoding="utf-8") as f:
                     old_recs = json.load(f)

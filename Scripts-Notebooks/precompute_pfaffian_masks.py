@@ -146,12 +146,13 @@ def main() -> None:
     else:
         v0_dirs = sorted([d for d in root.iterdir() if d.is_dir() and d.name.startswith("V0_")])
 
+    if args.v0:
+        v0_dirs = [d for d in v0_dirs if d.name in args.v0]
+
     to_process: List[Path] = []
     already_computed = 0
 
     for v0_dir in v0_dirs:
-        if args.v0 and v0_dir.name not in args.v0:
-            continue
         r_dirs = sorted(
             [
                 d
@@ -167,17 +168,17 @@ def main() -> None:
             else:
                 to_process.append(r_dir)
 
-    print("==================================================================")
-    print("Pfaffian Ground-Truth Mask Precomputor")
-    print(f"Data Root:         {root}")
-    print(f"Disorder Folders:  {[d.name for d in v0_dirs]}")
-    print(f"Already Completed: {already_computed} realizations")
-    print(f"Needs Computation: {len(to_process)} realizations")
-    print(f"Allocated Workers: {args.workers}")
-    print("==================================================================")
+    print("==================================================================", flush=True)
+    print("Pfaffian Ground-Truth Mask Precomputor", flush=True)
+    print(f"Data Root:         {root}", flush=True)
+    print(f"Disorder Folders:  {[d.name for d in v0_dirs]}", flush=True)
+    print(f"Already Completed: {already_computed} realizations", flush=True)
+    print(f"Needs Computation: {len(to_process)} realizations", flush=True)
+    print(f"Allocated Workers: {args.workers}", flush=True)
+    print("==================================================================", flush=True)
 
     if not to_process:
-        print("[Done] All realizations already contain pdi_data.npy!")
+        print("[Done] All realizations already contain pdi_data.npy!", flush=True)
         return
 
     t_start = time.perf_counter()
@@ -191,7 +192,8 @@ def main() -> None:
             results.append(res)
             print(
                 f"[{i}/{len(inputs)}] {res['v0']}/{res['realization']}: "
-                f"{res.get('n_topo', 0)} topo points in {res['elapsed_s']:.2f}s"
+                f"{res.get('n_topo', 0)} topo points in {res['elapsed_s']:.2f}s",
+                flush=True,
             )
     else:
         with mp.Pool(processes=num_workers) as pool:
@@ -203,14 +205,15 @@ def main() -> None:
                 if i % 10 == 0 or i == len(inputs):
                     print(
                         f"[{i}/{len(inputs)}] Completed {res['v0']}/{res['realization']} "
-                        f"({res.get('n_topo', 0)} topo pts, {res['elapsed_s']:.1f}s)"
+                        f"({res.get('n_topo', 0)} topo pts, {res['elapsed_s']:.1f}s)",
+                        flush=True,
                     )
 
     total_time = time.perf_counter() - t_start
-    print("==================================================================")
+    print("==================================================================", flush=True)
     print(f"[Complete] Finished {len(to_process)} realizations in {total_time:.2f}s "
-          f"({total_time/60.0:.2f} min).")
-    print("==================================================================")
+          f"({total_time/60.0:.2f} min).", flush=True)
+    print("==================================================================", flush=True)
 
 
 if __name__ == "__main__":
