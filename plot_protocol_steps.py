@@ -232,17 +232,17 @@ def main() -> None:
     )
     data_root = Path(args.data_root)
     instances = load_instance_records(outputs_root)
-    ranked = build_ranked_rows(instances)[: args.top_n]
+    ranked = build_ranked_rows(instances, temperature_mK=args.temperature)[: args.top_n]
     v0_labels = sorted(
         {r.get("v0_label") for i in instances for r in i["records"] if r.get("v0_label")},
         key=lambda s: float(v0_label_to_mev(s)),
     )
 
     index_lines = [
-        f"# Step-by-step figures: top {args.top_n} protocols",
+        f"# Step-by-step figures: top {args.top_n} protocols ({int(round(args.temperature))} mK)",
         "",
         f"Ranking: {RANK_RULE}. "
-        f"Maps at {int(args.temperature)} mK, realization index {args.realization_index} of each $V_0$ folder.",
+        f"Maps at {int(round(args.temperature))} mK, realization index {args.realization_index} of each $V_0$ folder.",
         "",
         "| Rank | Protocol | Instance | Mean FDR (%) | Mean TPR (%) | Pass (%) | Figure |",
         "| :---: | :--- | :--- | :---: | :---: | :---: | :--- |",
@@ -258,6 +258,8 @@ def main() -> None:
             f"{row['mean_FDR_pct']:.2f} | {row['mean_TPR_pct']:.2f} | {row['pass_rate_pct']:.1f} | [{rel.name}]({rel.as_posix()}) |"
         )
         print(f"[#{row['rank']}] wrote {path}")
+    t_tag = f"{int(round(args.temperature))}mK"
+    (outputs_root / f"top_protocols_step_by_step_{t_tag}.md").write_text("\n".join(index_lines) + "\n", encoding="utf-8")
     (outputs_root / "top_protocols_step_by_step.md").write_text("\n".join(index_lines) + "\n", encoding="utf-8")
 
 

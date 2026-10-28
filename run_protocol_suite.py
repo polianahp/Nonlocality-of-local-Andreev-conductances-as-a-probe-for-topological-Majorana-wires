@@ -195,10 +195,17 @@ def main() -> None:
     # The master + per-protocol leaderboards are rebuilt from all on-disk results inside
     # run_protocol_specs (src/Protocol_Elements/leaderboard.py) after every run.
     out_root = outputs_root_path
+    t_lines = []
+    for t_mK in args.temperatures:
+        t_tag = f"{int(round(t_mK))}mK"
+        t_path = out_root / f"master_protocols_leaderboard_{t_tag}.md"
+        t_lines.append(f"  - {t_tag} Leaderboard:   {t_path}")
+    t_str = ("\n" + "\n".join(t_lines)) if t_lines else ""
 
     print(
-        f"[Protocol Suite] Completed {len(specs)} instances in {elapsed:.2f}s. "
-        f"Master leaderboard written to {out_root / 'master_protocols_leaderboard.md'}."
+        f"[Protocol Suite] Completed {len(specs)} instances in {elapsed:.2f}s.\n"
+        f"  - Master (Pooled):    {out_root / 'master_protocols_leaderboard.md'}"
+        f"{t_str}"
     )
 
 

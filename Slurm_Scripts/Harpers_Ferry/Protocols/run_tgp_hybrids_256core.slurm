@@ -106,19 +106,33 @@ if [ $EXIT_CODE -ne 0 ]; then
     exit $EXIT_CODE
 fi
 
-# 5. Generate Top-10 Diagnostic Step-by-Step Passing Area Figures
-echo "[$(date)] Generating diagnostic passing-area figures for Top 10 protocols..."
+# 5. Generate Top-10 Diagnostic Step-by-Step Passing Area Figures for 30 mK and 40 mK
+echo "[$(date)] Generating diagnostic passing-area figures for Top 10 protocols at 30 mK..."
 python3 -u plot_protocol_steps.py \
     --top-n 10 \
+    --temperature 30.0 \
+    --data-root "$DATA_ROOT" \
+    --outputs-root "$OUTPUTS_ROOT" || true
+
+echo "[$(date)] Generating diagnostic passing-area figures for Top 10 protocols at 40 mK..."
+python3 -u plot_protocol_steps.py \
+    --top-n 10 \
+    --temperature 40.0 \
     --data-root "$DATA_ROOT" \
     --outputs-root "$OUTPUTS_ROOT" || true
 
 echo "=================================================================="
 echo "TGP Hybrids Suite Completed Successfully: $(date)"
-echo "Common Output Directory: $OUTPUTS_ROOT"
-echo "Master Leaderboard:      ${OUTPUTS_ROOT}/master_protocols_leaderboard.md"
-echo "Leaderboard CSV:         ${OUTPUTS_ROOT}/master_protocols_leaderboard.csv"
-echo "Summary Report:          ${OUTPUTS_ROOT}/MSFT_TGP_Hybrids/leaderboard_summary.md"
+echo "Common Output Directory:  $OUTPUTS_ROOT"
+echo "Master Leaderboard (All): ${OUTPUTS_ROOT}/master_protocols_leaderboard.md"
+echo "30 mK Leaderboard:        ${OUTPUTS_ROOT}/master_protocols_leaderboard_30mK.md"
+echo "40 mK Leaderboard:        ${OUTPUTS_ROOT}/master_protocols_leaderboard_40mK.md"
+echo "Leaderboard CSV (All):    ${OUTPUTS_ROOT}/master_protocols_leaderboard.csv"
+echo "30 mK CSV:                ${OUTPUTS_ROOT}/master_protocols_leaderboard_30mK.csv"
+echo "40 mK CSV:                ${OUTPUTS_ROOT}/master_protocols_leaderboard_40mK.csv"
+echo "Summary Report (All):     ${OUTPUTS_ROOT}/MSFT_TGP_Hybrids/leaderboard_summary.md"
+echo "Summary 30 mK Report:     ${OUTPUTS_ROOT}/MSFT_TGP_Hybrids/leaderboard_summary_30mK.md"
+echo "Summary 40 mK Report:     ${OUTPUTS_ROOT}/MSFT_TGP_Hybrids/leaderboard_summary_40mK.md"
 echo "To download all post-processing results to your local machine, run:"
 echo "rsync -avz nos00002@harpersferry.hpc.wvu.edu:${OUTPUTS_ROOT}/ /home/pseudonym/Documents/Code/NonlocalProtocol/Outputs/Microsoft_Hybrids_Post_Processing/"
 echo "=================================================================="

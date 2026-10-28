@@ -217,10 +217,10 @@ def test_end_to_end_keep_data_true_and_false(tmp_path: Path):
     assert not (inst_dir_false / "step_data").exists()
 
 
-def _fake_record(v0_label, fdr, tpr, has_pred=True):
+def _fake_record(v0_label, fdr, tpr, has_pred=True, temperature_mK=30.0):
     return {
         "realization_name": "disorder_realization_10", "v0_label": v0_label, "v0_mev": 0.0,
-        "temperature_mK": 30.0, "has_prediction": has_pred, "n_predicted_px": 10,
+        "temperature_mK": temperature_mK, "has_prediction": has_pred, "n_predicted_px": 10,
         "n_true_positive_px": 5, "n_false_positive_px": 5, "n_ground_truth_topo_px": 100,
         "survival_pct": 1.0, "FDR_pct": fdr, "FDR_active_only_pct": fdr if has_pred else None,
         "TPR_pct": tpr, "MZM_confinement_C": 0.9, "MZM_separability_S": 0.5,
@@ -245,7 +245,12 @@ def test_leaderboard_rank_fdr_then_tpr_and_v0_split(tmp_path: Path):
         d.mkdir(parents=True)
         (d / "config.yaml").write_text(yaml.safe_dump({"keep_data": False}))
         (d / "realization_metrics.json").write_text(
-            json.dumps([_fake_record("V0_0_378", fa, ta), _fake_record("V0_1_2", fb, tb)])
+            json.dumps([
+                _fake_record("V0_0_378", fa, ta, temperature_mK=30.0),
+                _fake_record("V0_1_2", fb, tb, temperature_mK=30.0),
+                _fake_record("V0_0_378", fa * 1.1, ta * 0.9, temperature_mK=40.0),
+                _fake_record("V0_1_2", fb * 1.1, tb * 0.9, temperature_mK=40.0),
+            ])
         )
     md = rebuild_leaderboards(tmp_path)
     text = md.read_text()
@@ -256,6 +261,27 @@ def test_leaderboard_rank_fdr_then_tpr_and_v0_split(tmp_path: Path):
     # In the V0 = 1.2 section P_B (20%) still ranks below the 10% protocols; per-V0 split exists
     sec_12 = text.split("$V_0 = 1.2$ meV")[1]
     assert sec_12.index("low_fdr_high_tpr") < sec_12.index("high_fdr")
+
+    # Verify per-temperature leaderboards exist and are correctly structured
+    master_30 = tmp_path / "master_protocols_leaderboard_30mK.md"
+    master_40 = tmp_path / "master_protocols_leaderboard_40mK.md"
+    assert master_30.exists()
+    assert master_40.exists()
+    assert (tmp_path / "master_protocols_leaderboard_30mk.md").exists()
+    assert (tmp_path / "master_protocols_leaderboard_40mk.md").exists()
+
+    text_30 = master_30.read_text()
+    assert "Master Cross-Protocol Leaderboard — 30mK" in text_30
+    assert "$V_0 = 0.378$ meV (30mK)" in text_30
+    text_40 = master_40.read_text()
+    assert "Master Cross-Protocol Leaderboard — 40mK" in text_40
+    assert "$V_0 = 0.378$ meV (40mK)" in text_40
+
+    # Verify per-protocol temperature summaries exist
+    assert (tmp_path / "P_A" / "leaderboard_summary_30mK.md").exists()
+    assert (tmp_path / "P_A" / "leaderboard_summary_40mK.md").exists()
+    assert (tmp_path / "P_B" / "leaderboard_summary_30mK.md").exists()
+    assert (tmp_path / "P_B" / "leaderboard_summary_40mK.md").exists()
 
 
 def test_run_protocol_specs_rebuilds_master_leaderboard(tmp_path: Path):

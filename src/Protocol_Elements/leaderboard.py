@@ -33,6 +33,7 @@ RANK_RULE = "Area >= 10 px, ranked by Mean FDR (ascending) then Mean TPR (descen
 
 CSV_FIELDS = [
     "scope",
+    "temperature_mK",
     "rank",
     "protocol_name",
     "instance_name",
@@ -102,9 +103,15 @@ def load_instance_records(outputs_root: Union[str, Path]) -> List[Dict[str, Any]
     return instances
 
 
-def _row_from_summary(inst: Dict[str, Any], scope: str, sm: Dict[str, Any]) -> Dict[str, Any]:
+def _row_from_summary(
+    inst: Dict[str, Any],
+    scope: str,
+    sm: Dict[str, Any],
+    temperature_mK: Optional[float] = None,
+) -> Dict[str, Any]:
     return {
         "scope": scope,
+        "temperature_mK": f"{temperature_mK:.1f}" if temperature_mK is not None else "pooled",
         "protocol_name": inst["protocol_name"],
         "instance_name": inst["instance_name"],
         "keep_data": inst["keep_data"],
@@ -125,19 +132,26 @@ def _row_from_summary(inst: Dict[str, Any], scope: str, sm: Dict[str, Any]) -> D
 def build_ranked_rows(
     instances: Sequence[Dict[str, Any]],
     v0_label: Optional[str] = None,
+    temperature_mK: Optional[float] = None,
 ) -> List[Dict[str, Any]]:
-    """Aggregate and rank all instances (optionally restricted to one disorder strength)."""
-    scope = "overall" if v0_label is None else v0_label
+    """Aggregate and rank all instances (optionally restricted to one disorder strength and/or temperature)."""
+    scope_parts = []
+    if v0_label is not None:
+        scope_parts.append(v0_label)
+    if temperature_mK is not None:
+        scope_parts.append(f"{int(round(temperature_mK))}mK")
+    scope = "_".join(scope_parts) if scope_parts else "overall"
+
     rows: List[Dict[str, Any]] = []
     for inst in instances:
-        recs = (
-            inst["records"]
-            if v0_label is None
-            else [r for r in inst["records"] if r.get("v0_label") == v0_label]
-        )
+        recs = inst["records"]
+        if v0_label is not None:
+            recs = [r for r in recs if r.get("v0_label") == v0_label]
+        if temperature_mK is not None:
+            recs = [r for r in recs if abs(float(r.get("temperature_mK", 30.0)) - temperature_mK) < 1e-3]
         if not recs:
             continue
-        rows.append(_row_from_summary(inst, scope, aggregate_ensemble_metrics(recs)))
+        rows.append(_row_from_summary(inst, scope, aggregate_ensemble_metrics(recs), temperature_mK=temperature_mK))
     rows.sort(key=_rank_key)
     for i, r in enumerate(rows, start=1):
         r["rank"] = i
@@ -183,7 +197,13 @@ def _write_csv(path: Path, rows: Sequence[Dict[str, Any]]) -> None:
 
 
 def rebuild_leaderboards(outputs_root: Union[str, Path]) -> Optional[Path]:
-    """Rebuild the master leaderboard (overall + per-V0) and every per-protocol leaderboard.
+    """Rebuild the master leaderboard (overall + per-V0 + per-temperature) and every per-protocol leaderboard.
+
+    Generates:
+    - master_protocols_leaderboard.md & master_protocols_leaderboard.csv (all temperatures pooled)
+    - master_protocols_leaderboard_30mK.md & master_protocols_leaderboard_30mK.csv
+    - master_protocols_leaderboard_40mK.md & master_protocols_leaderboard_40mK.csv
+    - Per-protocol summary files for pooled, 30 mK, and 40 mK inside each protocol folder.
 
     Returns the path of `master_protocols_leaderboard.md`, or `None` if there is nothing to rank.
     """
@@ -197,9 +217,23 @@ def rebuild_leaderboards(outputs_root: Union[str, Path]) -> Optional[Path]:
         {r.get("v0_label") for inst in instances for r in inst["records"] if r.get("v0_label")},
         key=_v0_sort_value,
     )
+    temperatures = sorted(
+        {round(float(r.get("temperature_mK", 30.0)), 1) for inst in instances for r in inst["records"]},
+    )
 
     overall = build_ranked_rows(instances)
     per_v0 = {lbl: build_ranked_rows(instances, v0_label=lbl) for lbl in v0_labels}
+
+    # Navigation links for temperature splits
+    temp_links = [
+        f"[{int(round(t))} mK Leaderboard](master_protocols_leaderboard_{int(round(t))}mK.md)"
+        for t in temperatures
+    ]
+    temp_nav_banner = (
+        "> **Temperature Leaderboards**: " + " | ".join(temp_links)
+        if len(temperatures) > 1 or (len(temperatures) == 1 and temperatures[0] in (30.0, 40.0))
+        else ""
+    )
 
     md: List[str] = [
         "# Master Cross-Protocol Leaderboard (`Outputs/Protocols/`)",
@@ -207,14 +241,19 @@ def rebuild_leaderboards(outputs_root: Union[str, Path]) -> Optional[Path]:
         f"_Rebuilt {stamp} from {len(instances)} evaluated protocol instances. "
         f"Ranking: {RANK_RULE}._",
         "",
+    ]
+    if temp_nav_banner:
+        md.extend([temp_nav_banner, ""])
+
+    md.extend([
         "`N` = number of realization-temperature states aggregated (temperatures pooled). "
         "`Mean FDR` is the per-realization mean with empty predictions counted as FDR = 0; "
         "`Active FDR` averages only realizations with at least one passing pixel; read both "
         "alongside `Pass (%)` and `Mean TPR`.",
         "",
-        "## Overall (all disorder strengths pooled)",
+        "## Overall (all disorder strengths and temperatures pooled)",
         "",
-    ] + _md_table(overall, include_protocol=True) + [""]
+    ] + _md_table(overall, include_protocol=True) + [""])
 
     for lbl in v0_labels:
         rows = per_v0[lbl]
@@ -233,7 +272,66 @@ def rebuild_leaderboards(outputs_root: Union[str, Path]) -> Optional[Path]:
         csv_rows.extend(per_v0[lbl])
     _write_csv(root / "master_protocols_leaderboard.csv", csv_rows)
 
-    # Per-protocol leaderboards (same ranking, overall + per-V0 in one file)
+    # Dedicated Per-Temperature Master Leaderboards (e.g. 30 mK and 40 mK)
+    for t_mK in temperatures:
+        t_tag = f"{int(round(t_mK))}mK"
+        t_overall = build_ranked_rows(instances, temperature_mK=t_mK)
+        t_per_v0 = {lbl: build_ranked_rows(instances, v0_label=lbl, temperature_mK=t_mK) for lbl in v0_labels}
+
+        other_links = [
+            f"[{int(round(ot))} mK Leaderboard](master_protocols_leaderboard_{int(round(ot))}mK.md)"
+            for ot in temperatures if ot != t_mK
+        ] + ["[Pooled Master Leaderboard](master_protocols_leaderboard.md)"]
+        t_nav_banner = "> **Related Leaderboards**: " + " | ".join(other_links)
+
+        t_md: List[str] = [
+            f"# Master Cross-Protocol Leaderboard — {t_tag} (`Outputs/Protocols/`)",
+            "",
+            f"_Rebuilt {stamp} from {len(instances)} evaluated protocol instances at $T = {int(round(t_mK))}$ mK. "
+            f"Ranking: {RANK_RULE}._",
+            "",
+            t_nav_banner,
+            "",
+            f"`N` = number of realization states aggregated at {t_tag}. "
+            "`Mean FDR` is the per-realization mean with empty predictions counted as FDR = 0; "
+            "`Active FDR` averages only realizations with at least one passing pixel; read both "
+            "alongside `Pass (%)` and `Mean TPR`.",
+            "",
+            f"## Overall (all disorder strengths pooled at {t_tag})",
+            "",
+        ] + _md_table(t_overall, include_protocol=True) + [""]
+
+        for lbl in v0_labels:
+            rows = t_per_v0[lbl]
+            if not rows:
+                continue
+            t_md += [
+                f"## Disorder strength $V_0 = {v0_label_to_mev(lbl)}$ meV ({t_tag})",
+                "",
+            ] + _md_table(rows, include_protocol=True) + [""]
+
+        t_master_md = root / f"master_protocols_leaderboard_{t_tag}.md"
+        t_master_md.write_text("\n".join(t_md) + "\n", encoding="utf-8")
+
+        # Also write lowercase (e.g. 30mk) for robust link/CLI resolution
+        t_lower_tag = f"{int(round(t_mK))}mk"
+        if t_lower_tag != t_tag:
+            try:
+                (root / f"master_protocols_leaderboard_{t_lower_tag}.md").write_text("\n".join(t_md) + "\n", encoding="utf-8")
+            except Exception:
+                pass
+
+        t_csv_rows: List[Dict[str, Any]] = list(t_overall)
+        for lbl in v0_labels:
+            t_csv_rows.extend(t_per_v0[lbl])
+        _write_csv(root / f"master_protocols_leaderboard_{t_tag}.csv", t_csv_rows)
+        if t_lower_tag != t_tag:
+            try:
+                _write_csv(root / f"master_protocols_leaderboard_{t_lower_tag}.csv", t_csv_rows)
+            except Exception:
+                pass
+
+    # Per-protocol leaderboards (pooled + per-temperature)
     for proto in sorted({i["protocol_name"] for i in instances}):
         p_inst = [i for i in instances if i["protocol_name"] == proto]
         p_overall = build_ranked_rows(p_inst)
@@ -242,9 +340,18 @@ def rebuild_leaderboards(outputs_root: Union[str, Path]) -> Optional[Path]:
             "",
             f"_Rebuilt {stamp}. Ranking: {RANK_RULE}._",
             "",
+        ]
+        if temp_nav_banner:
+            p_temp_links = [
+                f"[{int(round(t))} mK Summary](leaderboard_summary_{int(round(t))}mK.md)"
+                for t in temperatures
+            ]
+            p_md.extend(["> **Temperature Summaries**: " + " | ".join(p_temp_links), ""])
+
+        p_md.extend([
             "## Overall (all disorder strengths pooled)",
             "",
-        ] + _md_table(p_overall, include_protocol=False) + [""]
+        ] + _md_table(p_overall, include_protocol=False) + [""])
         p_csv = list(p_overall)
         for lbl in v0_labels:
             rows = build_ranked_rows(p_inst, v0_label=lbl)
@@ -255,5 +362,35 @@ def rebuild_leaderboards(outputs_root: Union[str, Path]) -> Optional[Path]:
             p_csv.extend(rows)
         (root / proto / "leaderboard_summary.md").write_text("\n".join(p_md) + "\n", encoding="utf-8")
         _write_csv(root / proto / "leaderboard_summary.csv", p_csv)
+
+        # Per-temperature summary files inside each protocol directory
+        for t_mK in temperatures:
+            t_tag = f"{int(round(t_mK))}mK"
+            p_t_overall = build_ranked_rows(p_inst, temperature_mK=t_mK)
+            p_t_md = [
+                f"# Leaderboard Summary: `{proto}` — {t_tag}",
+                "",
+                f"_Rebuilt {stamp} at $T = {int(round(t_mK))}$ mK. Ranking: {RANK_RULE}._",
+                "",
+                f"## Overall (all disorder strengths pooled at {t_tag})",
+                "",
+            ] + _md_table(p_t_overall, include_protocol=False) + [""]
+            p_t_csv = list(p_t_overall)
+            for lbl in v0_labels:
+                rows = build_ranked_rows(p_inst, v0_label=lbl, temperature_mK=t_mK)
+                if not rows:
+                    continue
+                p_t_md += [f"## Disorder strength $V_0 = {v0_label_to_mev(lbl)}$ meV ({t_tag})", ""]
+                p_t_md += _md_table(rows, include_protocol=False) + [""]
+                p_t_csv.extend(rows)
+            (root / proto / f"leaderboard_summary_{t_tag}.md").write_text("\n".join(p_t_md) + "\n", encoding="utf-8")
+            _write_csv(root / proto / f"leaderboard_summary_{t_tag}.csv", p_t_csv)
+            t_lower_tag = f"{int(round(t_mK))}mk"
+            if t_lower_tag != t_tag:
+                try:
+                    (root / proto / f"leaderboard_summary_{t_lower_tag}.md").write_text("\n".join(p_t_md) + "\n", encoding="utf-8")
+                    _write_csv(root / proto / f"leaderboard_summary_{t_lower_tag}.csv", p_t_csv)
+                except Exception:
+                    pass
 
     return master_md
