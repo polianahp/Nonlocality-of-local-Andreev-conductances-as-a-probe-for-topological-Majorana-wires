@@ -42,6 +42,8 @@ def extract_island_medoids_and_areas(
             "mean_island_area_px": 0.0,
             "max_island_area_px": 0,
             "medoids_mu_vz": [],
+            "centers_of_mass_mu_vz": [],
+            "clusters": [],
         }
 
     struct = (
@@ -56,6 +58,8 @@ def extract_island_medoids_and_areas(
             "mean_island_area_px": 0.0,
             "max_island_area_px": 0,
             "medoids_mu_vz": [],
+            "centers_of_mass_mu_vz": [],
+            "clusters": [],
         }
 
     areas: List[int] = []
@@ -218,12 +222,12 @@ def evaluate_realization_metrics(
         "TPR_pct": round(float(tpr_pct), 4),
         "MZM_confinement_C": round(float(mean_conf), 4),
         "MZM_separability_S": round(float(mean_sep), 4),
-        "island_count": int(island_info["island_count"]),
-        "mean_island_area_px": round(float(island_info["mean_island_area_px"]), 2),
-        "max_island_area_px": int(island_info["max_island_area_px"]),
-        "medoids_mu_vz": island_info["medoids_mu_vz"],
-        "centers_of_mass_mu_vz": island_info["centers_of_mass_mu_vz"],
-        "clusters": island_info["clusters"],
+        "island_count": int(island_info.get("island_count", 0)),
+        "mean_island_area_px": round(float(island_info.get("mean_island_area_px", 0.0)), 2),
+        "max_island_area_px": int(island_info.get("max_island_area_px", 0)),
+        "medoids_mu_vz": island_info.get("medoids_mu_vz", []),
+        "centers_of_mass_mu_vz": island_info.get("centers_of_mass_mu_vz", []),
+        "clusters": island_info.get("clusters", []),
         "step_diagnostics": step_diag,
     }
 
