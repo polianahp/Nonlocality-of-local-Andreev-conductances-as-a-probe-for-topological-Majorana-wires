@@ -1,6 +1,6 @@
-# Mathematical Union of Top 20 Protocols Across All 4 Disorder Strengths
+# Mathematical Union of Top Protocols Across All 4 Disorder Strengths
 # (V0 = 0.378, 0.645, 0.872, 1.2 meV), ranked by Area >= 10 px, Mean FDR asc, Mean TPR desc
-# Total instances: 30 (out of 44 evaluated in MSFT_TGP_Hybrids family)
+# Includes original union instances + new lowcorr+sym dyad candidates
 
 tgp_bnd000_acd001_sym020
 tgp_bnd000_acd005_sym020
@@ -32,3 +32,21 @@ tgp_bnd060_lowcorr090_acd005_sym020
 tgp_bnd060_symbal_s020
 tgp_bnd060_symbal_s030
 tgp_std_bnd060
+
+# New LowCorr + Sym Dyad candidates without ACD
+tgp_bnd000_lowcorr070_sym020
+tgp_bnd000_lowcorr075_sym020
+tgp_bnd000_lowcorr080_sym015
+tgp_bnd000_lowcorr080_sym020
+tgp_bnd000_lowcorr080_sym025
+tgp_bnd000_lowcorr080_sym030
+tgp_bnd000_lowcorr085_sym020
+tgp_bnd000_lowcorr090_sym020
+tgp_bnd060_lowcorr070_sym020
+tgp_bnd060_lowcorr075_sym020
+tgp_bnd060_lowcorr080_sym015
+tgp_bnd060_lowcorr080_sym020
+tgp_bnd060_lowcorr080_sym025
+tgp_bnd060_lowcorr080_sym030
+tgp_bnd060_lowcorr085_sym020
+tgp_bnd060_lowcorr090_sym020

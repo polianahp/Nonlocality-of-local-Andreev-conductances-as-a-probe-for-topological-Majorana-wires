@@ -41,6 +41,8 @@ from scipy.signal import savgol_filter
 REPO_ROOT = Path(__file__).resolve().parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+if str(REPO_ROOT / "Archive") not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT / "Archive"))
 
 import src.helpers as hp
 from src.tgp_adapter import TGPAdapter
@@ -305,6 +307,22 @@ def main():
         g_LL_sym, g_LL_pinch, g_RR_sym, g_RR_pinch,
         tau=tau, s_max=s_max, floor_val=floor_val
     )
+    corr_cfg = sacd_cfg.get("stage_corr", {})
+    if corr_cfg.get("enabled", False):
+        from src.Protocol_Elements import FPE, RealizationFeatureCache
+        v0_lbl = data_dir.parent.name if data_dir.parent.name.startswith("V0_") else "V0_0_378"
+        cache = RealizationFeatureCache(data_dir, temperature_mK=temp_mK, v0_label=v0_lbl)
+        m_corr = FPE.fpe_barrier_reflection_correlation(
+            cache,
+            corr_threshold=float(corr_cfg.get("corr_threshold", 0.80)),
+            asym_min=float(corr_cfg.get("asym_min", -5.0)),
+            asym_max=float(corr_cfg.get("asym_max", 5.0)),
+            lead=str(corr_cfg.get("lead", "R")),
+        )
+        m_stage1 = m_stage1 & m_corr
+        logger.info("Applied Low-Asymmetry Correlation gate (thresh=%.2f, passed=%d px)",
+                    float(corr_cfg.get("corr_threshold", 0.80)), int(np.sum(m_corr)))
+
     m_stage2 = m_stage1 & compute_sacd_stage2_curvature(
         dIdVl, dIdVr, Nmu, Nvz,
         d2_thresh=d2_threshold,

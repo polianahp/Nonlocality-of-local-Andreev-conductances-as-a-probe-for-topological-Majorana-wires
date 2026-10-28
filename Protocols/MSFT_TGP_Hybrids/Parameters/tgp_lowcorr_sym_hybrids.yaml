@@ -1,0 +1,379 @@
+# MSFT TGP Dyad Hybrids: Low-Asymmetry Correlation + Lead Symmetry Balance (No ACD)
+keep_data: false
+sweep_instances:
+  # ==============================================================================
+  # 1. Dyad Hybrids: Gapless Boundary Removed (bnd = 0.0)
+  # ==============================================================================
+  - instance_name: "tgp_bnd000_lowcorr070_sym015"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.70
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.15
+
+  - instance_name: "tgp_bnd000_lowcorr070_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.70
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd000_lowcorr070_sym025"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.70
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.25
+
+  - instance_name: "tgp_bnd000_lowcorr070_sym030"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.70
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.30
+
+  - instance_name: "tgp_bnd000_lowcorr075_sym015"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.75
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.15
+
+  - instance_name: "tgp_bnd000_lowcorr075_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.75
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd000_lowcorr075_sym025"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.75
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.25
+
+  - instance_name: "tgp_bnd000_lowcorr075_sym030"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.75
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.30
+
+  - instance_name: "tgp_bnd000_lowcorr080_sym015"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.80
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.15
+
+  - instance_name: "tgp_bnd000_lowcorr080_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.80
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd000_lowcorr080_sym025"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.80
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.25
+
+  - instance_name: "tgp_bnd000_lowcorr080_sym030"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.80
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.30
+
+  - instance_name: "tgp_bnd000_lowcorr085_sym015"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.85
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.15
+
+  - instance_name: "tgp_bnd000_lowcorr085_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.85
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd000_lowcorr085_sym025"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.85
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.25
+
+  - instance_name: "tgp_bnd000_lowcorr085_sym030"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.85
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.30
+
+  - instance_name: "tgp_bnd000_lowcorr090_sym015"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.90
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.15
+
+  - instance_name: "tgp_bnd000_lowcorr090_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.90
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd000_lowcorr090_sym025"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.90
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.25
+
+  - instance_name: "tgp_bnd000_lowcorr090_sym030"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.90
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.30
+
+  # ==============================================================================
+  # 2. Dyad Hybrids: Standard Gapless Boundary (bnd = 0.60)
+  # ==============================================================================
+  - instance_name: "tgp_bnd060_lowcorr070_sym015"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.70
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.15
+
+  - instance_name: "tgp_bnd060_lowcorr070_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.70
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd060_lowcorr070_sym025"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.70
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.25
+
+  - instance_name: "tgp_bnd060_lowcorr070_sym030"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.70
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.30
+
+  - instance_name: "tgp_bnd060_lowcorr075_sym015"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.75
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.15
+
+  - instance_name: "tgp_bnd060_lowcorr075_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.75
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd060_lowcorr075_sym025"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.75
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.25
+
+  - instance_name: "tgp_bnd060_lowcorr075_sym030"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.75
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.30
+
+  - instance_name: "tgp_bnd060_lowcorr080_sym015"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.80
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.15
+
+  - instance_name: "tgp_bnd060_lowcorr080_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.80
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd060_lowcorr080_sym025"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.80
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.25
+
+  - instance_name: "tgp_bnd060_lowcorr080_sym030"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.80
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.30
+
+  - instance_name: "tgp_bnd060_lowcorr085_sym015"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.85
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.15
+
+  - instance_name: "tgp_bnd060_lowcorr085_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.85
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd060_lowcorr085_sym025"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.85
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.25
+
+  - instance_name: "tgp_bnd060_lowcorr085_sym030"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.85
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.30
+
+  - instance_name: "tgp_bnd060_lowcorr090_sym015"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.90
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.15
+
+  - instance_name: "tgp_bnd060_lowcorr090_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.90
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd060_lowcorr090_sym025"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.90
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.25
+
+  - instance_name: "tgp_bnd060_lowcorr090_sym030"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.90
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.30
+
+  # ==============================================================================
+  # 3. Intermediate Single-Condition Baselines (Ablations)
+  # ==============================================================================
+  - instance_name: "tgp_bnd000_lowcorr075"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.75
+
+  - instance_name: "tgp_bnd000_lowcorr085"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.85
+
+  - instance_name: "tgp_bnd060_lowcorr075"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.75
+
+  - instance_name: "tgp_bnd060_lowcorr085"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_low_asym_corr.enabled: true
+      fpe_low_asym_corr.corr_threshold: 0.85
+
+  - instance_name: "tgp_bnd000_symbal_s015"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.15
+
+  - instance_name: "tgp_bnd000_symbal_s025"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.25
+
+  - instance_name: "tgp_bnd060_symbal_s015"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.15
+
+  - instance_name: "tgp_bnd060_symbal_s025"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.25
