@@ -31,6 +31,10 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import helpers as hp
+try:
+    from src.config import PathConfigs
+except ImportError:
+    from config import PathConfigs
 
 
 def _eval_single_point(task_args: Tuple[int, float, float, Dict[str, Any]]):
@@ -77,20 +81,14 @@ def _eval_single_point(task_args: Tuple[int, float, float, Dict[str, Any]]):
 
 def resolve_data_root(custom_root: str | None = None) -> Path:
     if custom_root:
-        p = Path(custom_root)
-        if p.exists():
-            return p
+        data_root = Path(custom_root)
+    else:
+        data_root = PathConfigs.DATA / "Disorder_Realizations"
 
-    candidates = [
-        Path(os.environ.get("SCRATCH", "/scratch/nos00002")) / "nonlocalcond" / "Data" / "Disorder_Realizations",
-        Path(os.environ.get("SCRATCH", "/scratch/nos00002")) / "Data" / "Disorder_Realizations",
-        REPO_ROOT / "Outputs" / "Data" / "Disorder_Realizations",
-        REPO_ROOT / "Data" / "Disorder_Realizations",
-    ]
-    for c in candidates:
-        if c.exists():
-            return c
-    return REPO_ROOT / "Outputs" / "Data" / "Disorder_Realizations"
+    if not data_root.exists():
+        raise FileNotFoundError(f"Data root directory does not exist: {data_root}")
+
+    return data_root
 
 
 def main() -> None:

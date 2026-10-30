@@ -52,18 +52,12 @@ export VECLIB_MAXIMUM_THREADS=1
 
 NUM_WORKERS="${SLURM_CPUS_PER_TASK:-256}"
 
-# Auto-detect data root
-if [ -d "${REPO_DIR}/Data/Disorder_Realizations" ]; then
-    DETECTED_DATA="${REPO_DIR}/Data/Disorder_Realizations"
-elif [ -d "${REPO_DIR}/Outputs/Data/Disorder_Realizations" ]; then
-    DETECTED_DATA="${REPO_DIR}/Outputs/Data/Disorder_Realizations"
-elif [ -d "${SCRATCH_ROOT}/Data/Disorder_Realizations" ]; then
-    DETECTED_DATA="${SCRATCH_ROOT}/Data/Disorder_Realizations"
-else
-    DETECTED_DATA="${REPO_DIR}/Outputs/Data/Disorder_Realizations"
+# Canonical data root via PathConfigs (Outputs/Data/Disorder_Realizations)
+DATA_ROOT="${1:-${REPO_DIR}/Outputs/Data/Disorder_Realizations}"
+if [ ! -d "$DATA_ROOT" ]; then
+    echo "ERROR: DATA_ROOT does not exist: $DATA_ROOT" >&2
+    exit 1
 fi
-
-DATA_ROOT="${1:-$DETECTED_DATA}"
 OUTPUTS_ROOT="${2:-${REPO_DIR}/Outputs/Protocols}"
 POSTPROCESSING_ROOT="${REPO_DIR}/Outputs/Postprocessing/N100_Leaderboards"
 

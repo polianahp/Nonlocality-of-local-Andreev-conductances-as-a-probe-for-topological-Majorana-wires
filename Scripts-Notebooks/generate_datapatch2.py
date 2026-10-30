@@ -194,14 +194,15 @@ if [ ! -d "$REPO_DIR" ]; then
     REPO_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 fi
 
-if [ -d "${{REPO_DIR}}/Data/Disorder_Realizations/${{V0_NAME}}" ]; then
-    DATA_DIR="${{REPO_DIR}}/Data/Disorder_Realizations/${{V0_NAME}}"
-elif [ -d "${{REPO_DIR}}/Outputs/Data/Disorder_Realizations/${{V0_NAME}}" ]; then
-    DATA_DIR="${{REPO_DIR}}/Outputs/Data/Disorder_Realizations/${{V0_NAME}}"
-elif [ -d "${{SCRATCH_ROOT}}/Data/Disorder_Realizations/${{V0_NAME}}" ]; then
-    DATA_DIR="${{SCRATCH_ROOT}}/Data/Disorder_Realizations/${{V0_NAME}}"
-else
-    DATA_DIR="${{REPO_DIR}}/Outputs/Data/Disorder_Realizations/${{V0_NAME}}"
+if [ ! -d "$REPO_DIR" ]; then
+    echo "ERROR: Repository directory does not exist: $REPO_DIR" >&2
+    exit 1
+fi
+
+DATA_DIR="${{REPO_DIR}}/Outputs/Data/Disorder_Realizations/${{V0_NAME}}"
+if [ ! -d "$DATA_DIR" ]; then
+    echo "ERROR: Data directory does not exist: $DATA_DIR" >&2
+    exit 1
 fi
 
 ACTIVE_JOBS=""

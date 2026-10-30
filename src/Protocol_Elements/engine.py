@@ -43,31 +43,17 @@ from .metrics import aggregate_ensemble_metrics, evaluate_realization_metrics
 import os
 import re
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+try:
+    from src.config import PathConfigs
+except ImportError:
+    from config import PathConfigs
+
+REPO_ROOT = PathConfigs.ROOT
 
 
 def _resolve_default_data_root() -> Path:
-    """Dynamically resolve default Disorder_Realizations path across local and cluster environments."""
-    candidates = [
-        REPO_ROOT / "Data" / "Disorder_Realizations",
-        REPO_ROOT / "Outputs" / "Data" / "Disorder_Realizations",
-    ]
-    scratch_env = os.environ.get("SCRATCH", "/scratch/nos00002")
-    if scratch_env:
-        scratch = Path(scratch_env)
-        candidates.extend([
-            scratch / "nonlocalcond" / "Data" / "Disorder_Realizations",
-            scratch / "nonlocalcond" / "Outputs" / "Data" / "Disorder_Realizations",
-            scratch / "Data" / "Disorder_Realizations",
-        ])
-    for c in candidates:
-        if c.exists() and any(c.glob("V0_*")):
-            return c
-    return (
-        REPO_ROOT / "Data" / "Disorder_Realizations"
-        if (REPO_ROOT / "Data" / "Disorder_Realizations").exists()
-        else REPO_ROOT / "Outputs" / "Data" / "Disorder_Realizations"
-    )
+    """Resolve canonical Disorder_Realizations path via PathConfigs."""
+    return PathConfigs.DATA / "Disorder_Realizations"
 
 
 DEFAULT_DATA_ROOT = _resolve_default_data_root()
@@ -383,11 +369,7 @@ def discover_realization_tasks(
     """Discover `(realization_dir, v0_label, temperature_mK)` tasks under `data_root`."""
     root = Path(data_root)
     if not root.exists():
-        fallback = _resolve_default_data_root()
-        if fallback.exists():
-            root = fallback
-        else:
-            raise FileNotFoundError(f"Data root not found: {root} (fallback checked: {fallback})")
+        raise FileNotFoundError(f"Data root directory not found: {root}")
 
     tasks: List[Tuple[str, str, float]] = []
     if root.is_dir() and root.name.startswith("V0_"):
