@@ -261,6 +261,7 @@ def aggregate_ensemble_metrics(
         islands = np.array([r["island_count"] for r in records], dtype=np.float64)
         mean_areas = np.array([r["mean_island_area_px"] for r in records], dtype=np.float64)
         max_areas = np.array([r["max_island_area_px"] for r in records], dtype=np.float64)
+        preds = np.array([r.get("n_predicted_px", 0) for r in records], dtype=np.float64)
         pass_rate = 100.0 * sum(1 for r in records if r["has_prediction"]) / float(n_r)
 
         # Aggregate per-step waterfall metrics
@@ -303,6 +304,7 @@ def aggregate_ensemble_metrics(
             "mean_island_count": round(float(np.mean(islands)), 3),
             "mean_island_area_px": round(float(np.mean(mean_areas)), 2),
             "max_island_area_px": int(np.max(max_areas)),
+            "mean_predicted_px": round(float(np.mean(preds)), 2),
             "step_waterfall_metrics": waterfall,
         }
 

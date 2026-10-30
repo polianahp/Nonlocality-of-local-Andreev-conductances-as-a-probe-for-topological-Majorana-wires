@@ -1,0 +1,28 @@
+# Protocol Instance: Pure 3-Condition TGP-Killer for V0 <= 0.872 meV (No Symmetry Balance)
+instance_name: "lowcorr085_curv500_5of5_gap10_pure3"
+description: "Pure 3-Condition TGP-Killer for V0 <= 0.872 meV (No Symmetry Filter): Beats TGP at V0=0.378 (1.70%), V0=0.645 (13.17%), and V0=0.872 (22.94% vs 25.34%)"
+keep_data: true
+parameters:
+  fpe_corr:
+    corr_threshold: 0.85
+    asym_min: -5.0
+    asym_max: 5.0
+    mean_subtract: false
+    normalize_by_first_point: false
+    norm_floor: 1.0e-12
+  dpe_corr_lead:
+    mode: "both"
+  fpe_3w:
+    curvature_threshold: 500.0  # evaluates I_3w <= -500.0 (e^2/h)/meV^2
+  dpe_cutter_consensus:
+    k_min: 5  # passes 5 of 5 cutters
+  fpe_gap:
+    min_gap_mev: 0.010  # 10 ueV (0.010 meV)
+  fpe_lead_symmetry:
+    enabled: false
+  dpe_c4_post_processor:
+    enabled: true
+    min_island_size: 10
+    use_core_filter: true
+    core_shape: [2, 2]
+    core_mode: "component_has_core"

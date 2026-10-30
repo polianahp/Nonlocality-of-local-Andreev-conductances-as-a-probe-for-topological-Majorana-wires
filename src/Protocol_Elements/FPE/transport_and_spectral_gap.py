@@ -43,23 +43,35 @@ def extract_nonlocal_transport_gap_maps(
     *,
     gap_threshold_factor: float = 0.05,
     noise_threshold: float = 1e-4,
-    use_thermal_broadened: bool = False,
+    median_size: int = 2,
+    use_thermal_broadened: bool = True,
+    global_field_threshold: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     r"""Compute memoized open-system nonlocal conductance transport gap maps `(gap_l_3d, gap_r_3d, gap_min_2d)`.
 
-    Uses antisymmetrized nonlocal conductances $A(G_{RL}(V))$ and $A(G_{LR}(V))$ across the
-    positive bias grid to determine the minimum bias $V > 0$ where $|A(G_{\alpha\beta}(V))|$
-    exceeds `max(gap_threshold_factor * max_V |A(G)|, noise_threshold)`.
+    Matches Microsoft `tgp.two.determine_gap` (`Aghaee 2023`, App. D.2, Eq. D2) and
+    `helpers.extract_nonlocal_gap(..., global_threshold=True)`:
+    1. Evaluates thermally broadened nonlocal conductances $G_{RL}(V, T), G_{LR}(V, T)$ by default
+       (`use_thermal_broadened=True`, reducing to $T=0$ when `cache.temperature_mK == 0`).
+    2. Applies optional 2D `(Vz, bias)` median filter (`median_size=2`) prior to antisymmetrization.
+    3. Normalizes dynamic threshold over each `(Vz, bias)` field-bias slice (`global_field_threshold=True`,
+       `axis=(-2, -1)`) rather than a single pixel so deeply gapped topological pixels do not
+       collapse their reference amplitude.
+    4. Applies the TGP half-bin midpoint correction `pos_bias[i] + 0.5 * (pos_bias[i+1] - pos_bias[i])`.
     """
     key = (
         "nonlocal_transport_gap_maps",
         round(float(gap_threshold_factor), 6),
         round(float(noise_threshold), 8),
+        int(median_size),
         bool(use_thermal_broadened),
+        bool(global_field_threshold),
         round(cache.temperature_mK, 4) if use_thermal_broadened else 0.0,
     )
 
     def _compute() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        import scipy.ndimage
+
         if use_thermal_broadened:
             src = cache.get_stage1_broadened_and_lockin()
             g_rl, g_lr = src["g_rl"], src["g_lr"]
@@ -69,20 +81,31 @@ def extract_nonlocal_transport_gap_maps(
             g_lr = np.nan_to_num(src["g_lr"], nan=0.0)
 
         bias = cache.bias_grid
-        mid = len(bias) // 2
+        mid = int(np.argmin(np.abs(bias)))
         pos_bias = bias[mid:]  # shape (N_pos=49,), starting at 0.0 meV
+        # Midpoint lookup matching tgp.two.extract_gap_from_trace & helpers.extract_nonlocal_gap
+        pos_midpoints = pos_bias.copy()
+        pos_midpoints[:-1] = pos_bias[:-1] + 0.5 * np.diff(pos_bias)
 
         def _extract_3d(g_4d: np.ndarray) -> np.ndarray:
-            # Antisymmetric component A(G(V)) = 0.5 * (G(V) - G(-V))
-            anti = 0.5 * np.abs(g_4d[:, :, :, mid:] - g_4d[:, :, :, mid::-1])
-            peak_anti = np.max(anti, axis=-1, keepdims=True)
+            if int(median_size) > 1:
+                # Filter along (B=Vz, bias) per (cutter, mu) slice matching tgp.two.determine_gap
+                g_work = scipy.ndimage.median_filter(
+                    g_4d, size=(1, 1, int(median_size), int(median_size))
+                )
+            else:
+                g_work = g_4d
+
+            # Antisymmetric component |A(G(V))| = 0.5 * |G(V) - G(-V)|
+            anti = 0.5 * np.abs(g_work[:, :, :, mid:] - g_work[:, :, :, mid::-1])
+            norm_axis = (-2, -1) if global_field_threshold else -1
+            peak_anti = np.max(anti, axis=norm_axis, keepdims=True)
             thresh = np.maximum(float(gap_threshold_factor) * peak_anti, float(noise_threshold))
-            above = anti >= thresh
-            # Ignore index 0 (V=0 where anti == 0)
+            above = anti > thresh
             above[:, :, :, 0] = False
             has_crossing = np.any(above, axis=-1)
             first_idx = np.argmax(above, axis=-1)
-            gap_3d = np.where(has_crossing, pos_bias[first_idx], pos_bias[-1])
+            gap_3d = np.where(has_crossing, pos_midpoints[first_idx], pos_bias[-1])
             return gap_3d
 
         gap_l_3d = _extract_3d(g_rl)
@@ -101,8 +124,11 @@ def fpe_nonlocal_conductance_transport_gap(
     max_gap_mev: Optional[float] = 0.067,
     gap_threshold_factor: float = 0.05,
     noise_threshold: float = 1e-4,
-    use_thermal_broadened: bool = False,
-    pooling: Literal["cutter_mean_min_LR", "per_cutter_min_LR", "L_mean", "R_mean"] = "cutter_mean_min_LR",
+    median_size: int = 2,
+    use_thermal_broadened: bool = True,
+    global_field_threshold: bool = True,
+    pooling: Literal["cutter_mean_min_LR", "per_cutter_min_LR", "k_of_n_min_LR", "L_mean", "R_mean"] = "cutter_mean_min_LR",
+    k_min_cutters: int = 3,
 ) -> np.ndarray:
     r"""Open-system nonlocal conductance transport gap FPE $\Delta_{\text{trans}}^{\text{NL}} \in [\Delta_{\min}, \Delta_{\max}]$.
 
@@ -113,8 +139,17 @@ def fpe_nonlocal_conductance_transport_gap(
         cache,
         gap_threshold_factor=gap_threshold_factor,
         noise_threshold=noise_threshold,
+        median_size=median_size,
         use_thermal_broadened=use_thermal_broadened,
+        global_field_threshold=global_field_threshold,
     )
+    if pooling == "k_of_n_min_LR":
+        per_c = np.minimum(gap_l_3d, gap_r_3d)
+        c_mask = per_c >= float(min_gap_mev)
+        if max_gap_mev is not None:
+            c_mask = c_mask & (per_c <= float(max_gap_mev))
+        return np.sum(c_mask, axis=0) >= int(k_min_cutters)
+
     if pooling == "cutter_mean_min_LR":
         obs = gap_min_2d
     elif pooling == "per_cutter_min_LR":

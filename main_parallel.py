@@ -123,6 +123,7 @@ def worker_simulation_step(iter_data, static_params):
             syst_tgp = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz, 
                                        alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
                                        barrier_l=b_val, barrier_r=b_val, Vdisx=Vdisx)
+            
             dL, dR, dLR, dRL, _ = hp.calc_dIdV(syst_tgp, tgp_energies, solver_type=solver_type)
             tgp_stage1_dIdVl[idx, :] = dL
             tgp_stage1_dIdVr[idx, :] = dR

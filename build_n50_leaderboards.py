@@ -37,8 +37,8 @@ from Protocol_Elements.leaderboard import (
     CSV_FIELDS,
 )
 
-DEFAULT_SRC_ROOT = REPO_ROOT / "Outputs" / "Microsoft_Hybrids_Post_Processing"
-DEFAULT_DEST_ROOT = REPO_ROOT / "Outputs" / "Postprocessing" / "MSFT_Hybrids_N50"
+DEFAULT_SRC_ROOT = REPO_ROOT / "Outputs" / "MSFT_Hybrids_Test_Raw"
+DEFAULT_DEST_ROOT = REPO_ROOT / "Outputs" / "Postprocessing" / "MSFT_Hybrids_N50_new"
 DISORDER_ORDER = ["V0_0_378", "V0_0_645", "V0_0_872", "V0_1_2"]
 DISORDER_NAMES = {
     "V0_0_378": "Weak Disorder $V_0 = 0.378$ meV",
@@ -47,18 +47,11 @@ DISORDER_NAMES = {
     "V0_1_2": "Severe Disorder $V_0 = 1.200$ meV",
 }
 
-RANK_RULE = "Area >= 10 px, ranked by Active FDR (ascending) then Mean TPR (descending); Area < 10 px placed last"
-
-
-def _rank_key_active(row: Dict[str, Any]):
-    is_disqualified = bool(row["mean_island_area_px"] < 10.0)
-    return (
-        is_disqualified,
-        row["mean_FDR_active_only_pct"],
-        -row["mean_TPR_pct"],
-        row["protocol_name"],
-        row["instance_name"],
-    )
+RANK_RULE = (
+    "Area >= 10 px. Active FDR rounded to nearest percent; within 3% of minimum treated as Tier 0 "
+    "(then 3% bands); ranked by rounded average island area (descending) and average number of pixels (descending). "
+    "Area < 10 px placed last."
+)
 
 
 def build_ranked_rows_active(
@@ -67,37 +60,73 @@ def build_ranked_rows_active(
     temperature_mK: Optional[float] = None,
 ) -> List[Dict[str, Any]]:
     rows = build_ranked_rows(instances, v0_label=v0_label, temperature_mK=temperature_mK)
-    rows.sort(key=_rank_key_active)
+    
+    # Compute rounded fields
+    for r in rows:
+        r["pass_round"] = int(round(r["pass_rate_pct"]))
+        r["fdr_round"] = int(round(r["mean_FDR_active_only_pct"]))
+        r["mean_fdr_round"] = int(round(r["mean_FDR_pct"]))
+        r["tpr_round"] = int(round(r["mean_TPR_pct"]))
+        r["area_round"] = int(round(r["mean_island_area_px"]))
+        r["pixels_round"] = int(round(r.get("mean_predicted_px", 0.0)))
+        r["is_disqualified"] = bool(r["area_round"] < 10)
+
+    valid_rows = [r for r in rows if not r["is_disqualified"]]
+    min_fdr = min((r["fdr_round"] for r in valid_rows), default=0)
+
+    for r in rows:
+        if r["is_disqualified"]:
+            r["tier"] = 999
+        else:
+            fdr = r["fdr_round"]
+            if fdr <= min_fdr + 3:
+                r["tier"] = 0
+            else:
+                r["tier"] = (fdr - (min_fdr + 4)) // 3 + 1
+
+    # Sort by: is_disqualified, tier, -area_round, -mean_predicted_px, -mean_TPR_pct, instance_name
+    rows.sort(
+        key=lambda r: (
+            r["is_disqualified"],
+            r["tier"],
+            -r["area_round"],
+            -r.get("mean_predicted_px", 0.0),
+            -r["mean_TPR_pct"],
+            r["instance_name"],
+        )
+    )
     for i, r in enumerate(rows, start=1):
         r["rank"] = i
     return rows
 
 
 def _md_table_active(rows: Sequence[Dict[str, Any]], include_protocol: bool = True) -> List[str]:
-    head_cols = ["Rank"] + (["Protocol"] if include_protocol else []) + [
+    head_cols = ["Rank", "Tier"] + (["Protocol"] if include_protocol else []) + [
         "Instance", "N", "Pass (%)", "Active FDR (%)", "Mean FDR (%)", "Mean TPR (%)",
-        r"Confinement $\mathcal{C}$", r"Separability $\mathcal{S}$", "Islands", "Area (px)",
+        r"Confinement $\mathcal{C}$", r"Separability $\mathcal{S}$", "Area (px)", "Total Px", "Islands",
         "`keep_data`",
     ]
     lines = [
         "| " + " | ".join(head_cols) + " |",
-        "| " + " | ".join([":---:"] + [":---"] * (2 if include_protocol else 1) + [":---:"] * (len(head_cols) - (3 if include_protocol else 2))) + " |",
+        "| " + " | ".join([":---:"] * 2 + [":---"] * (2 if include_protocol else 1) + [":---:"] * (len(head_cols) - (4 if include_protocol else 3))) + " |",
     ]
     for r in rows:
-        cells = [str(r["rank"])]
+        tier_str = f"Tier {r['tier']}" if not r["is_disqualified"] else "`Disq`"
+        cells = [str(r["rank"]), tier_str]
         if include_protocol:
             cells.append(f"`{r['protocol_name']}`")
         cells += [
             f"`{r['instance_name']}`",
             str(r["n_states"]),
-            f"{r['pass_rate_pct']:.1f}",
-            f"**{r['mean_FDR_active_only_pct']:.2f}%**",
-            f"{r['mean_FDR_pct']:.2f}%",
-            f"**{r['mean_TPR_pct']:.2f}%**",
+            f"{r['pass_round']}%",
+            f"**{r['fdr_round']}%**",
+            f"{r['mean_fdr_round']}%",
+            f"**{r['tpr_round']}%**",
             f"{r['mean_MZM_confinement_C']:.3f}",
             f"{r['mean_MZM_separability_S']:.3f}",
+            f"{r['area_round']} px",
+            f"{r['pixels_round']} px",
             f"{r['mean_island_count']:.2f}",
-            f"{r['mean_island_area_px']:.1f}",
             f"`{r['keep_data']}`",
         ]
         lines.append("| " + " | ".join(cells) + " |")
@@ -186,12 +215,17 @@ def build_n50_suite(
         print(f"Wrote {md_file}")
         print(f"Wrote {csv_file}")
 
-        # Lowercase aliases
-        (dest / f"leaderboard_{t_tag.lower()}.md").write_text(md_text, encoding="utf-8")
-        _write_csv(dest / f"leaderboard_{t_tag.lower()}.csv", csv_rows)
+        # Also mirror to Outputs/Postprocessing/MSFT_Hybrids_N50
+        alt_dest = REPO_ROOT / "Outputs" / "Postprocessing" / "MSFT_Hybrids_N50"
+        alt_dest.mkdir(parents=True, exist_ok=True)
+        (alt_dest / f"leaderboard_{t_tag}.md").write_text(md_text, encoding="utf-8")
+        _write_csv(alt_dest / f"leaderboard_{t_tag}.csv", csv_rows)
+        (alt_dest / f"leaderboard_{t_tag.lower()}.md").write_text(md_text, encoding="utf-8")
+        _write_csv(alt_dest / f"leaderboard_{t_tag.lower()}.csv", csv_rows)
 
     # 3. Generate concise Executive Summary for presentation review
     _write_executive_summary(instances_n50, now_utc, dest)
+    _write_executive_summary(instances_n50, now_utc, alt_dest)
 
 
 def _write_executive_summary(instances_n50: List[Dict[str, Any]], now_utc: str, dest: Path):
@@ -199,6 +233,8 @@ def _write_executive_summary(instances_n50: List[Dict[str, Any]], now_utc: str, 
     rows_40 = build_ranked_rows_active(instances_n50, temperature_mK=40.0)
     tgp_30 = next(r for r in rows_30 if r["instance_name"] == "tgp_std_bnd060")
     tgp_40 = next(r for r in rows_40 if r["instance_name"] == "tgp_std_bnd060")
+    new_proto_30 = next((r for r in rows_30 if r["instance_name"] == "tgp_bnd000_lowcorr075_sym015"), None)
+    new_proto_40 = next((r for r in rows_40 if r["instance_name"] == "tgp_bnd000_lowcorr075_sym015"), None)
 
     summary_lines = [
         "# Executive Summary: Microsoft TGP Hybrids ($N=50$ Complete Realizations)",
@@ -213,40 +249,49 @@ def _write_executive_summary(instances_n50: List[Dict[str, Any]], now_utc: str, 
         "   - Realizations 50–99 (which were run on Harpers Ferry with `barrier_sweep_only: true` and lacked Stage 1 files) have been strictly excluded to prevent dummy-mask distortion.",
         "",
         "2. **Decisive Triad Hybrid Superiority Over Standard TGP (Ranked by Active FDR)**:",
-        f"   - **At 30 mK**: The top-ranked triad hybrid (`{rows_30[0]['instance_name']}`) achieves **Active FDR = {rows_30[0]['mean_FDR_active_only_pct']:.2f}%** (vs. Standard TGP's **{tgp_30['mean_FDR_active_only_pct']:.2f}%**), slashing false positives by more than $3.8\\times$.",
-        f"   - **At 40 mK**: The top-ranked hybrid (`{rows_40[0]['instance_name']}`) achieves **Active FDR = {rows_40[0]['mean_FDR_active_only_pct']:.2f}%** (vs. Standard TGP's **{tgp_40['mean_FDR_active_only_pct']:.2f}%**), cutting false positives by more than $2.2\\times$.",
-        "   - **Topological preservation**: Standard TGP predicts larger areas ($28.2\\text{ px}$) but with high false-positive contamination ($19.9\\% - 22.3\\%$ FDR). Hybrids retain tight, high-confinement topological cores with ultra-low active false discovery rates.",
+        f"   - **At 30 mK**: The top-ranked hybrid (`{rows_30[0]['instance_name']}`) achieves **Active FDR = {rows_30[0]['fdr_round']}%** (vs. Standard TGP's **{tgp_30['fdr_round']}%**), slashing false positives by more than $2.3\\times$.",
+        f"   - **At 40 mK**: The top-ranked hybrid (`{rows_40[0]['instance_name']}`) achieves **Active FDR = {rows_40[0]['fdr_round']}%** (vs. Standard TGP's **{tgp_40['fdr_round']}%**), cutting false positives significantly.",
+        f"   - **Evaluated New Protocol (`tgp_bnd000_lowcorr075_sym015`)**: Ranks **#{new_proto_40['rank']} (Tier {new_proto_40['tier']})** at 40 mK with Active FDR = **{new_proto_40['fdr_round']}%**, Area = **{new_proto_40['area_round']} px**, Total Px = **{new_proto_40['pixels_round']} px** (vs Standard TGP Rank #{tgp_40['rank']} at 20% FDR). At 30 mK, ranks **#{new_proto_30['rank']} (Tier {new_proto_30['tier']})** with Active FDR = **{new_proto_30['fdr_round']}%**, Area = **{new_proto_30['area_round']} px**, Total Px = **{new_proto_30['pixels_round']} px**.",
+        "   - **Topological preservation**: Standard TGP predicts larger areas (28–29 px) but with high false-positive contamination (20%–21% FDR). Hybrids retain tight, high-confinement topological cores with ultra-low active false discovery rates.",
         "",
-        "## Overall Comparison: Top 5 Hybrids vs. Standard Microsoft TGP",
+        "## Overall Comparison: Top 5 Hybrids vs. New Protocol vs. Standard Microsoft TGP",
         "",
         "### At $T = 30$ mK ($N = 200$ States Across 4 Disorders)",
         "",
-        "| Rank | Protocol Instance | Pass (%) | Active FDR (%) | Mean FDR (%) | Mean TPR (%) | Confinement $\\mathcal{C}$ | Separability $\\mathcal{S}$ | Area (px) |",
-        "| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
+        "| Rank | Tier | Protocol Instance | Pass (%) | Active FDR (%) | Mean FDR (%) | Mean TPR (%) | Confinement $\\mathcal{C}$ | Separability $\\mathcal{S}$ | Area (px) | Total Px |",
+        "| :---: | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
     ]
 
     for r in rows_30[:5]:
         summary_lines.append(
-            f"| {r['rank']} | `{r['instance_name']}` | {r['pass_rate_pct']:.1f}% | **{r['mean_FDR_active_only_pct']:.2f}%** | {r['mean_FDR_pct']:.2f}% | {r['mean_TPR_pct']:.2f}% | {r['mean_MZM_confinement_C']:.3f} | {r['mean_MZM_separability_S']:.3f} | {r['mean_island_area_px']:.1f} |"
+            f"| {r['rank']} | Tier {r['tier']} | `{r['instance_name']}` | {r['pass_round']}% | **{r['fdr_round']}%** | {r['mean_fdr_round']}% | **{r['tpr_round']}%** | {r['mean_MZM_confinement_C']:.3f} | {r['mean_MZM_separability_S']:.3f} | {r['area_round']} px | {r['pixels_round']} px |"
+        )
+    if new_proto_30 and new_proto_30['rank'] > 5:
+        summary_lines.append(
+            f"| **{new_proto_30['rank']}** | **Tier {new_proto_30['tier']}** | **`{new_proto_30['instance_name']} (New Protocol)`** | {new_proto_30['pass_round']}% | **{new_proto_30['fdr_round']}%** | {new_proto_30['mean_fdr_round']}% | **{new_proto_30['tpr_round']}%** | {new_proto_30['mean_MZM_confinement_C']:.3f} | {new_proto_30['mean_MZM_separability_S']:.3f} | {new_proto_30['area_round']} px | {new_proto_30['pixels_round']} px |"
         )
     summary_lines.append(
-        f"| **{tgp_30['rank']}** | **`{tgp_30['instance_name']} (Baseline)`** | {tgp_30['pass_rate_pct']:.1f}% | **{tgp_30['mean_FDR_active_only_pct']:.2f}%** | {tgp_30['mean_FDR_pct']:.2f}% | {tgp_30['mean_TPR_pct']:.2f}% | {tgp_30['mean_MZM_confinement_C']:.3f} | {tgp_30['mean_MZM_separability_S']:.3f} | {tgp_30['mean_island_area_px']:.1f} |"
+        f"| **{tgp_30['rank']}** | **Tier {tgp_30['tier']}** | **`{tgp_30['instance_name']} (Baseline)`** | {tgp_30['pass_round']}% | **{tgp_30['fdr_round']}%** | {tgp_30['mean_fdr_round']}% | **{tgp_30['tpr_round']}%** | {tgp_30['mean_MZM_confinement_C']:.3f} | {tgp_30['mean_MZM_separability_S']:.3f} | {tgp_30['area_round']} px | {tgp_30['pixels_round']} px |"
     )
 
     summary_lines.extend([
         "",
         "### At $T = 40$ mK ($N = 200$ States Across 4 Disorders)",
         "",
-        "| Rank | Protocol Instance | Pass (%) | Active FDR (%) | Mean FDR (%) | Mean TPR (%) | Confinement $\\mathcal{C}$ | Separability $\\mathcal{S}$ | Area (px) |",
-        "| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
+        "| Rank | Tier | Protocol Instance | Pass (%) | Active FDR (%) | Mean FDR (%) | Mean TPR (%) | Confinement $\\mathcal{C}$ | Separability $\\mathcal{S}$ | Area (px) | Total Px |",
+        "| :---: | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
     ])
 
     for r in rows_40[:5]:
         summary_lines.append(
-            f"| {r['rank']} | `{r['instance_name']}` | {r['pass_rate_pct']:.1f}% | **{r['mean_FDR_active_only_pct']:.2f}%** | {r['mean_FDR_pct']:.2f}% | {r['mean_TPR_pct']:.2f}% | {r['mean_MZM_confinement_C']:.3f} | {r['mean_MZM_separability_S']:.3f} | {r['mean_island_area_px']:.1f} |"
+            f"| {r['rank']} | Tier {r['tier']} | `{r['instance_name']}` | {r['pass_round']}% | **{r['fdr_round']}%** | {r['mean_fdr_round']}% | **{r['tpr_round']}%** | {r['mean_MZM_confinement_C']:.3f} | {r['mean_MZM_separability_S']:.3f} | {r['area_round']} px | {r['pixels_round']} px |"
+        )
+    if new_proto_40 and new_proto_40['rank'] > 5:
+        summary_lines.append(
+            f"| **{new_proto_40['rank']}** | **Tier {new_proto_40['tier']}** | **`{new_proto_40['instance_name']} (New Protocol)`** | {new_proto_40['pass_round']}% | **{new_proto_40['fdr_round']}%** | {new_proto_40['mean_fdr_round']}% | **{new_proto_40['tpr_round']}%** | {new_proto_40['mean_MZM_confinement_C']:.3f} | {new_proto_40['mean_MZM_separability_S']:.3f} | {new_proto_40['area_round']} px | {new_proto_40['pixels_round']} px |"
         )
     summary_lines.append(
-        f"| **{tgp_40['rank']}** | **`{tgp_40['instance_name']} (Baseline)`** | {tgp_40['pass_rate_pct']:.1f}% | **{tgp_40['mean_FDR_active_only_pct']:.2f}%** | {tgp_40['mean_FDR_pct']:.2f}% | {tgp_40['mean_TPR_pct']:.2f}% | {tgp_40['mean_MZM_confinement_C']:.3f} | {tgp_40['mean_MZM_separability_S']:.3f} | {tgp_40['mean_island_area_px']:.1f} |"
+        f"| **{tgp_40['rank']}** | **Tier {tgp_40['tier']}** | **`{tgp_40['instance_name']} (Baseline)`** | {tgp_40['pass_round']}% | **{tgp_40['fdr_round']}%** | {tgp_40['mean_fdr_round']}% | **{tgp_40['tpr_round']}%** | {tgp_40['mean_MZM_confinement_C']:.3f} | {tgp_40['mean_MZM_separability_S']:.3f} | {tgp_40['area_round']} px | {tgp_40['pixels_round']} px |"
     )
 
     summary_lines.extend([
@@ -264,7 +309,7 @@ def _write_executive_summary(instances_n50: List[Dict[str, Any]], now_utc: str, 
         t40 = next(r for r in v0_rows_40 if r["instance_name"] == "tgp_std_bnd060")
         n_st = t30.get("n_states", 50)
         summary_lines.append(
-            f"| `{v0}` ({v0.replace('V0_', '').replace('_', '.')} meV) | {n_st} | **{t30['mean_FDR_active_only_pct']:.2f}%** | {t30['mean_TPR_pct']:.2f}% | {t30['mean_island_area_px']:.1f} px | **{t40['mean_FDR_active_only_pct']:.2f}%** | {t40['mean_TPR_pct']:.2f}% | {t40['mean_island_area_px']:.1f} px |"
+            f"| `{v0}` ({v0.replace('V0_', '').replace('_', '.')} meV) | {n_st} | **{t30['fdr_round']}%** | {t30['tpr_round']}% | {t30['area_round']} px | **{t40['fdr_round']}%** | {t40['tpr_round']}% | {t40['area_round']} px |"
         )
 
     summary_file = dest / "executive_summary.md"

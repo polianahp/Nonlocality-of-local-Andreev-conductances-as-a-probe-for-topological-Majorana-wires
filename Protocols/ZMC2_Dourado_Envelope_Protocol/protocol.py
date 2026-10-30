@@ -49,6 +49,7 @@ class Protocol(BaseProtocol):
             "sym_asym_ratio": 0.0,
             "pinch_asym_ratio": 60.0,
             "variance_floor": 1.0e-10,
+            "use_cosine": False,
         },
         "dpe_1d_closing": {
             "radius_vz": 1,

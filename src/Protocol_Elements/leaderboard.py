@@ -35,20 +35,28 @@ CSV_FIELDS = [
     "scope",
     "temperature_mK",
     "rank",
+    "tier",
     "protocol_name",
     "instance_name",
     "keep_data",
     "n_states",
     "pass_rate_pct",
+    "pass_round",
     "mean_FDR_pct",
+    "mean_fdr_round",
     "median_FDR_pct",
     "mean_FDR_active_only_pct",
+    "fdr_round",
     "mean_TPR_pct",
+    "tpr_round",
     "median_TPR_pct",
     "mean_MZM_confinement_C",
     "mean_MZM_separability_S",
     "mean_island_count",
     "mean_island_area_px",
+    "area_round",
+    "mean_predicted_px",
+    "pixels_round",
 ]
 
 
@@ -126,6 +134,7 @@ def _row_from_summary(
         "mean_MZM_separability_S": sm.get("mean_MZM_separability_S_active", 0.0),
         "mean_island_count": sm.get("mean_island_count", 0.0),
         "mean_island_area_px": sm.get("mean_island_area_px", 0.0),
+        "mean_predicted_px": sm.get("mean_predicted_px", 0.0),
     }
 
 

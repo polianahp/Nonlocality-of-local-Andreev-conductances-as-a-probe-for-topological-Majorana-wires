@@ -55,11 +55,12 @@ class Protocol(BaseProtocol):
             "min_fraction": None,
         },
         "fpe_gap": {
-            "gap_type": "spectral_excitation",
+            "gap_type": "nonlocal_transport",
             "min_gap_mev": 0.015,
             "max_gap_mev": None,
             "gap_threshold_factor": 0.05,
             "noise_threshold": 1.0e-4,
+            "use_thermal_broadened": True,
         },
         "fpe_qd_gamma": {
             "enabled": False,
@@ -119,22 +120,21 @@ class Protocol(BaseProtocol):
         )
         steps["step_3_dpe_curvature_k_of_n"] = m_curv
 
-        # Step 3: Gap FPE
+        # Step 3: Open-system Nonlocal Transport Gap FPE
         g_cfg = params["fpe_gap"]
-        if g_cfg["gap_type"] == "spectral_excitation":
-            m_gap = FPE.fpe_spectral_excitation_gap(
-                cache,
-                min_gap_mev=g_cfg["min_gap_mev"],
-                max_gap_mev=g_cfg["max_gap_mev"],
+        if g_cfg["gap_type"] != "nonlocal_transport":
+            raise ValueError(
+                f"Closed-system gap_type='{g_cfg['gap_type']}' (E1) is theoretically unobservable and "
+                "forbidden in experimental protocols; use gap_type='nonlocal_transport'."
             )
-        else:
-            m_gap = FPE.fpe_nonlocal_conductance_transport_gap(
-                cache,
-                min_gap_mev=g_cfg["min_gap_mev"],
-                max_gap_mev=g_cfg["max_gap_mev"],
-                gap_threshold_factor=g_cfg["gap_threshold_factor"],
-                noise_threshold=g_cfg["noise_threshold"],
-            )
+        m_gap = FPE.fpe_nonlocal_conductance_transport_gap(
+            cache,
+            min_gap_mev=g_cfg["min_gap_mev"],
+            max_gap_mev=g_cfg["max_gap_mev"],
+            gap_threshold_factor=g_cfg["gap_threshold_factor"],
+            noise_threshold=g_cfg["noise_threshold"],
+            use_thermal_broadened=bool(g_cfg.get("use_thermal_broadened", True)),
+        )
         steps["step_4_fpe_gap"] = m_gap
 
         # Step 4: Logical combination

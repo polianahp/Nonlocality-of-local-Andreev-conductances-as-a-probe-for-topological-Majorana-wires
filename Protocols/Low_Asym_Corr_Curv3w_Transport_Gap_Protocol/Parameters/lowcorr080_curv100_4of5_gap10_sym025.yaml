@@ -1,0 +1,30 @@
+# Protocol Instance: High-Yield TGP-Killer (4 of 5 Cutters + Symmetry Balance)
+instance_name: "lowcorr080_curv100_4of5_gap10_sym025"
+description: "High-Yield TGP-Killer: Beats Microsoft TGP across all 4 disorder strengths (V0=0.378: 3.46%; V0=0.645: 15.78%; V0=0.872: 22.90%; V0=1.2: 20.00%) with higher topological yield (125.5 px at V0=1.2)"
+keep_data: true
+parameters:
+  fpe_corr:
+    corr_threshold: 0.80
+    asym_min: -5.0
+    asym_max: 5.0
+    mean_subtract: false
+    normalize_by_first_point: false
+    norm_floor: 1.0e-12
+  dpe_corr_lead:
+    mode: "both"
+  fpe_3w:
+    curvature_threshold: 100.0  # evaluates I_3w <= -100.0 (e^2/h)/meV^2
+  dpe_cutter_consensus:
+    k_min: 4  # passes 4 of 5 cutters
+  fpe_gap:
+    min_gap_mev: 0.010  # 10 ueV (0.010 meV)
+  fpe_lead_symmetry:
+    enabled: true
+    s_max: 0.25
+    eps_sym: 1.0e-4
+  dpe_c4_post_processor:
+    enabled: true
+    min_island_size: 10
+    use_core_filter: true
+    core_shape: [2, 2]
+    core_mode: "component_has_core"

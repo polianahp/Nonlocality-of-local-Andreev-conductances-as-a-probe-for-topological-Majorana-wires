@@ -1,0 +1,26 @@
+# Protocol Instance: Low-Asymmetry Correlation (0.75) + 3w Curvature <= -100 + Transport Gap >= 20 ueV
+instance_name: "lowcorr075_curv100_gap20uev"
+description: "C_low >= 0.75 in [-5, 5], 3w <= -100 on both sides for >= 3 of 5 cutters, Delta_transport >= 20 ueV, Area >= 10 px with 2x2 core"
+keep_data: true
+parameters:
+  fpe_corr:
+    corr_threshold: 0.75
+    asym_min: -5.0
+    asym_max: 5.0
+    mean_subtract: false
+    normalize_by_first_point: false
+    norm_floor: 1.0e-12
+  dpe_corr_lead:
+    mode: "both"
+  fpe_3w:
+    curvature_threshold: 100.0  # evaluates I_3w <= -100.0 (e^2/h)/meV^2
+  dpe_cutter_consensus:
+    k_min: 3  # passes >= 3 of 5 cutters
+  fpe_gap:
+    min_gap_mev: 0.020  # 20 ueV (0.020 meV)
+  dpe_c4_post_processor:
+    enabled: true
+    min_island_size: 10
+    use_core_filter: true
+    core_shape: [2, 2]
+    core_mode: "component_has_core"

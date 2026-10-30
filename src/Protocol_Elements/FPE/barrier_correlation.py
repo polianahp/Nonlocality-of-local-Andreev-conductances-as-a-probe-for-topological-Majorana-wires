@@ -131,13 +131,14 @@ def fpe_local_vz_oscillation_correlation(
     sym_asym_ratio: float = 0.0,
     pinch_asym_ratio: float = 60.0,
     variance_floor: float = 1e-10,
+    use_cosine: bool = False,
 ) -> np.ndarray:
-    r"""Dourado et al. PRB 110, 014504 (2024) Appendix G 1D sliding-window Pearson correlation along $V_z$.
+    r"""Dourado et al. PRB 110, 014504 (2024) Appendix G 1D sliding-window Pearson/Cosine correlation along $V_z$.
 
-    Computes local sliding-window Pearson correlation $r_{\text{local}}(\mu, V_z)$ along the Zeeman
-    axis (`axis=1`) over a window of `window_pts` points ($3\,\text{pts} \approx 0.06\,\text{meV}$ or
-    $5\,\text{pts} \approx 0.10\,\text{meV}$) between Left and Right observables, returning
-    `r_local >= r_threshold`.
+    Computes local sliding-window Pearson correlation (or uncentered cosine similarity if `use_cosine=True`)
+    $r_{\text{local}}(\mu, V_z)$ along the Zeeman axis (`axis=1`) over a window of `window_pts` points
+    ($3\,\text{pts} \approx 0.06\,\text{meV}$ or $5\,\text{pts} \approx 0.10\,\text{meV}$) between Left and Right
+    observables, returning `r_local >= r_threshold`.
     """
     w = max(int(window_pts), 3)
     if w % 2 == 0:
@@ -149,6 +150,7 @@ def fpe_local_vz_oscillation_correlation(
         round(float(sym_asym_ratio), 4),
         round(float(pinch_asym_ratio), 4),
         float(variance_floor),
+        bool(use_cosine),
     )
 
     def _compute() -> np.ndarray:
@@ -183,12 +185,18 @@ def fpe_local_vz_oscillation_correlation(
         x_win = np.stack([x_pad[:, k : k + n_vz] for k in range(w)], axis=-1)
         y_win = np.stack([y_pad[:, k : k + n_vz] for k in range(w)], axis=-1)
 
-        dx = x_win - np.mean(x_win, axis=-1, keepdims=True)
-        dy = y_win - np.mean(y_win, axis=-1, keepdims=True)
-        cov = np.sum(dx * dy, axis=-1)
-        vx = np.sum(dx * dx, axis=-1)
-        vy = np.sum(dy * dy, axis=-1)
-        denom = np.sqrt(vx * vy)
+        if use_cosine:
+            cov = np.sum(x_win * y_win, axis=-1)
+            vx = np.sum(x_win * x_win, axis=-1)
+            vy = np.sum(y_win * y_win, axis=-1)
+            denom = np.sqrt(vx * vy)
+        else:
+            dx = x_win - np.mean(x_win, axis=-1, keepdims=True)
+            dy = y_win - np.mean(y_win, axis=-1, keepdims=True)
+            cov = np.sum(dx * dy, axis=-1)
+            vx = np.sum(dx * dx, axis=-1)
+            vy = np.sum(dy * dy, axis=-1)
+            denom = np.sqrt(vx * vy)
         valid = denom > float(variance_floor)
         r_map = np.full(x.shape, -1.0, dtype=np.float64)
         r_map[valid] = np.clip(cov[valid] / denom[valid], -1.0, 1.0)

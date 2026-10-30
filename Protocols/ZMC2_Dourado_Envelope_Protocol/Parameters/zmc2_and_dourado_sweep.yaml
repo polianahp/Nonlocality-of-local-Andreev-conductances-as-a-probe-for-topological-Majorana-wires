@@ -26,3 +26,23 @@ sweep_instances:
       fpe_local_vz_corr.r_threshold: 0.50
       dpe_c4_post_processor.use_core_filter: true
       dpe_c4_post_processor.min_island_size: 8
+  - instance_name: "dourado_appG_vz_cosine_w5_c050"
+    parameters:
+      fpe_acd.tau: 0.05
+      fpe_symmetry_balance.enabled: true
+      fpe_symmetry_balance.s_max: 0.25
+      fpe_local_vz_corr.enabled: true
+      fpe_local_vz_corr.window_pts: 5
+      fpe_local_vz_corr.r_threshold: 0.50
+      fpe_local_vz_corr.use_cosine: true
+      dpe_c4_post_processor.min_island_size: 10
+  - instance_name: "dourado_appG_vz_cosine_w3_c050_core2x2"
+    parameters:
+      fpe_acd.tau: 0.05
+      fpe_symmetry_balance.enabled: false
+      fpe_local_vz_corr.enabled: true
+      fpe_local_vz_corr.window_pts: 3
+      fpe_local_vz_corr.r_threshold: 0.50
+      fpe_local_vz_corr.use_cosine: true
+      dpe_c4_post_processor.use_core_filter: true
+      dpe_c4_post_processor.min_island_size: 8

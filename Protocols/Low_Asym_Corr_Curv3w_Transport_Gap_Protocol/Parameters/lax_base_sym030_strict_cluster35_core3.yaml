@@ -1,0 +1,32 @@
+# Protocol Instance: Lax Base (k=3) + Mild Symmetry (0.30) + Strict Cluster 35 px (Core 3x3)
+instance_name: "lax_base_sym030_strict_cluster35_core3"
+description: "Lax physical protocol with 3-of-5 cutter consensus and mild symmetry (C >= 0.75, 3w <= -100 for >= 3 of 5 cutters, Delta >= 10 ueV, S_sym <= 0.30) paired with strict cluster pruning: Area >= 35 px with 3x3 core. Outperforms TGP across all disorder strengths."
+keep_data: true
+parameters:
+  fpe_corr:
+    corr_threshold: 0.75
+    asym_min: -5.0
+    asym_max: 5.0
+    mean_subtract: false
+    normalize_by_first_point: false
+    norm_floor: 1.0e-12
+  dpe_corr_lead:
+    mode: "both"
+  fpe_3w:
+    curvature_threshold: 100.0
+  dpe_cutter_consensus:
+    k_min: 3
+  fpe_gap:
+    min_gap_mev: 0.010
+  fpe_lead_symmetry:
+    enabled: true
+    s_max: 0.30
+    eps_sym: 1.0e-4
+  dpe_c4_post_processor:
+    enabled: true
+    min_island_size: 35
+    use_core_filter: true
+    core_shape: [3, 3]
+    core_mode: "component_has_core"
+    area_connectivity: 8
+    core_connectivity: 8

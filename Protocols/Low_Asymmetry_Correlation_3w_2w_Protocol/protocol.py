@@ -168,23 +168,22 @@ class Protocol(BaseProtocol):
             candidate = DPE.dpe_and(candidate, m_2w)
             steps["step_6_after_2w"] = candidate
 
-        # 5. Optional transport or spectral gap gate
+        # 5. Optional open-system nonlocal transport gap gate
         if toggles.get("use_gap_gate", False):
             g_cfg = params["fpe_gap"]
-            if g_cfg["gap_type"] == "spectral_excitation":
-                m_gap = FPE.fpe_spectral_excitation_gap(
-                    cache,
-                    min_gap_mev=g_cfg["min_gap_mev"],
-                    max_gap_mev=g_cfg["max_gap_mev"],
+            if g_cfg["gap_type"] != "nonlocal_transport":
+                raise ValueError(
+                    f"Closed-system gap_type='{g_cfg['gap_type']}' (E1) is theoretically unobservable and "
+                    "forbidden in experimental protocols; use gap_type='nonlocal_transport'."
                 )
-            else:
-                m_gap = FPE.fpe_nonlocal_conductance_transport_gap(
-                    cache,
-                    min_gap_mev=g_cfg["min_gap_mev"],
-                    max_gap_mev=g_cfg["max_gap_mev"],
-                    gap_threshold_factor=g_cfg["gap_threshold_factor"],
-                    noise_threshold=g_cfg["noise_threshold"],
-                )
+            m_gap = FPE.fpe_nonlocal_conductance_transport_gap(
+                cache,
+                min_gap_mev=g_cfg["min_gap_mev"],
+                max_gap_mev=g_cfg["max_gap_mev"],
+                gap_threshold_factor=g_cfg["gap_threshold_factor"],
+                noise_threshold=g_cfg["noise_threshold"],
+                use_thermal_broadened=True,
+            )
             steps["step_7_fpe_gap"] = m_gap
             candidate = DPE.dpe_and(candidate, m_gap)
 

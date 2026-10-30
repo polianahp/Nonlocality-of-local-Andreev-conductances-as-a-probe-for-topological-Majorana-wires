@@ -89,7 +89,11 @@ def test_all_fpes_shapes_and_types(sample_cache: RealizationFeatureCache):
     m_vz_corr = FPE.fpe_local_vz_oscillation_correlation(
         sample_cache, r_threshold=0.50, window_pts=5
     )
+    m_vz_cos = FPE.fpe_local_vz_oscillation_correlation(
+        sample_cache, r_threshold=0.50, window_pts=5, use_cosine=True
+    )
     assert m_vz_corr.dtype == bool and m_vz_corr.shape == shape_2d
+    assert m_vz_cos.dtype == bool and m_vz_cos.shape == shape_2d
 
     m_rms = FPE.fpe_ac_rms_energy(sample_cache, multiplier=1.0)
     m_rms_hi = FPE.fpe_ac_rms_energy(sample_cache, multiplier=1.30)

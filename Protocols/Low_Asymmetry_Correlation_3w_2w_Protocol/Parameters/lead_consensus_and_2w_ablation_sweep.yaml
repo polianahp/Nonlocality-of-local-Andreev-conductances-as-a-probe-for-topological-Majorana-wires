@@ -53,7 +53,7 @@ sweep_instances:
       dpe_3w_lead.mode: "R_only"
       gate_toggles.use_2w_gate: false
       gate_toggles.use_gap_gate: true
-      fpe_gap.gap_type: "spectral_excitation"
+      fpe_gap.gap_type: "nonlocal_transport"
       fpe_gap.min_gap_mev: 0.015
       dpe_c4_post_processor.use_core_filter: true
       dpe_c4_post_processor.min_island_size: 10
