@@ -1,0 +1,22 @@
+# Single-point diagnostic test for exact Hamiltonian mode
+dirname: "test_exact_1point"
+fname: "Tdis.npz"
+V0: 0.872
+
+hamiltonian_mode: "exact"
+
+# Sweep Ranges: 1 point at mu ~ 1.0, Vz ~ 0.6
+mu_min: 1.0
+mu_max: 1.01
+mu_dist: 0.02
+
+Vz_min: 0.6
+Vz_max: 0.61
+Vz_dist: 0.02
+
+# Simulation Resolution
+Upoints: 5
+num_engs: 51
+num_eigenvalues: 4
+acceleration_type: "parallel"
+calc_pfaffian: True

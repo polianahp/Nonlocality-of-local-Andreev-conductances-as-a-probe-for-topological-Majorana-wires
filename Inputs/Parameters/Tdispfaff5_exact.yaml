@@ -1,0 +1,55 @@
+# ==============================================================================
+# Tdispfaff5_exact.yaml
+# Production Configuration for Exact Energy-Dependent Self-Energy Hamiltonian
+# Replicating original Tdis_pfaff5 parameters with exact Kwant solver
+# ==============================================================================
+
+# Disorder Management
+dirname: "Tdispfaff5_exact"
+fname: "Tdis.npz"
+V0: 1.2
+
+# Geometry and Physics
+Ls: 300
+Ln: 0
+Lb: 3
+Lb_pdi: 3
+a0: 100.0
+ms: 0.023
+Delta_0: 0.3
+gamma: 0.2
+barrier0: 2.0
+mu_n: 0.0
+qn: 20
+
+# Exact Energy-Dependent Self-Energy Solver Mode
+hamiltonian_mode: "exact"
+
+# Sweep Ranges (Full Production Grid: 225 x 70 = 15,750 points)
+mu_max: 4.5
+mu_min: 0.0
+mu_dist: 0.02
+
+Vz_max: 1.4
+Vz_min: 0.0
+Vz_dist: 0.02
+
+# Simulation Resolution
+Upoints: 101
+num_engs: 51
+num_eigenvalues: 12
+eng_window_range: 51
+weight_threshold: 0.8
+separation_threshold: 0.65
+
+# Execution and Observables
+acceleration_type: "parallel"
+conductance_flag: True
+spectra_flag: True
+localization_flag: True
+pdi_flag: True
+calc_pfaffian: True
+pfaffian_delta_N: 0
+
+# Barrier Sweep Mode (Zero-temperature conductance at E = 0.0)
+barrier_conductance_mode: "zero_temperature"

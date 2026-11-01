@@ -136,6 +136,7 @@ class SimulationConfig(BaseModel):
     
     # Execution Settings
     acceleration_type: str = "parallel" # parallel, gpu, None
+    hamiltonian_mode: str = "legacy" # "legacy" or "exact"
     conductance_flag: bool = True
     spectra_flag: bool = True
     localization_flag: bool = True
@@ -321,5 +322,6 @@ class SimulationState:
             'barrier_T_mK': config.barrier_T_mK,
             'barrier_T_mK_list': config.barrier_T_mK_list,
             'barrier_quadrature_nodes': config.barrier_quadrature_nodes,
-            'barrier_sweep_only': config.barrier_sweep_only
+            'barrier_sweep_only': config.barrier_sweep_only,
+            'hamiltonian_mode': getattr(config, 'hamiltonian_mode', 'legacy')
         }

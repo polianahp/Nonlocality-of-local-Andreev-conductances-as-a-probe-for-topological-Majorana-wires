@@ -962,6 +962,467 @@ def build_system_closed(t, mu, gamma, Delta0, V_z, alpha, Ls, Vdisx, a=1):
     return syst.finalized()
 
 
+
+def sigma_al_bcs(omega: float, gamma: float, Delta0: float, eta: float = 0.0) -> np.ndarray:
+    """
+    Computes the parent-Al BCS self-energy Sigma_Al(omega) in the Nambu-spin basis
+    Psi = (c_up, c_dn, c_dn^dag, -c_up^dag)^T:
+
+        Sigma_Al(omega) = -gamma / s(omega) * (omega * tau_0 - Delta0 * tau_x) (x) sigma_0
+        Sigma_Al(0) = +gamma * tau_x (x) sigma_0
+
+    Parameters
+    ----------
+    omega : float
+        Evaluation frequency / bias energy.
+    gamma : float
+        Nanowire-superconductor coupling (gamma >= 0).
+    Delta0 : float
+        Bulk superconducting gap (Delta0 > 0).
+    eta : float, optional
+        Dynes broadening parameter (eta >= 0, default 0.0).
+
+    Returns
+    -------
+    np.ndarray
+        4x4 complex self-energy matrix.
+    """
+    if gamma < 0.0:
+        raise ValueError(f"gamma must be non-negative, got {gamma}")
+    if Delta0 <= 0.0:
+        raise ValueError(f"Delta0 must be strictly positive, got {Delta0}")
+    if eta < 0.0:
+        raise ValueError(f"eta must be non-negative, got {eta}")
+
+    if eta == 0.0:
+        if abs(omega) == Delta0:
+            raise ValueError(f"Divergence in Sigma_Al: |omega| == Delta0 ({Delta0}) with eta=0.")
+        elif abs(omega) < Delta0:
+            s = np.sqrt(Delta0**2 - omega**2)
+        else:
+            s = -1j * np.sign(omega) * np.sqrt(omega**2 - Delta0**2)
+    else:
+        s = np.sqrt(Delta0**2 - (omega + 1j * eta)**2)
+
+    I4 = np.eye(4, dtype=complex)
+    tx = np.kron(sigma_x, sigma_0)
+    return (-gamma / s) * (omega * I4 - Delta0 * tx)
+
+
+def build_system_exact(
+    t: float,
+    mu: float,
+    gamma: float,
+    Delta0: float,
+    V_z: float,
+    alpha: float,
+    Ls: int,
+    Vdisx: Optional[np.ndarray] = None,
+    a: float = 1,
+    closed: bool = False,
+    mu_n: float = 0.0,
+    Ln: int = 0,
+    Lb: int = 3,
+    mu_leads: Optional[float] = None,
+    barrier_l: float = 0.0,
+    barrier_r: float = 0.0,
+    eta: float = 0.0
+):
+    """
+    Constructs an exact Kwant system with energy-dependent parent-Al self-energy.
+
+    Physics specification:
+    Bare semiconductor (Z = 1, bare hopping everywhere):
+        h_j = (eps_ref - mu_j) * tau_z (x) sigma_0 + V_z * tau_0 (x) sigma_x + Sigma_Al(omega)
+        T = -t * tau_z (x) sigma_0 + 0.5j * alpha * tau_z (x) sigma_y
+    with eps_ref = 2t for both open and closed systems.
+
+    Onsite superconductor terms are Kwant value functions accepting parameter 'omega'.
+    """
+    if Ln != 0:
+        raise NotImplementedError("Ln != 0 is not currently supported in build_system_exact.")
+
+    syst = kwant.Builder()
+    lat = kwant.lattice.square(a, norbs=4)
+
+    tzs0 = np.kron(sigma_z, sigma_0)
+    t0sx = np.kron(sigma_0, sigma_x)
+    tzsy = np.kron(sigma_z, sigma_y)
+    hop = -t * tzs0 + 0.5j * alpha * tzsy
+
+    mu_s = np.zeros(Ls)
+    if Vdisx is None:
+        Vdisx = np.zeros(Ls)
+    for i in range(Ls):
+        mu_s[i] = mu - Vdisx[i]
+
+    eps_ref = 2.0 * t
+
+    if closed:
+        offset = 0
+        def onsite_sc_closed(site, omega):
+            i = site.tag[0] - offset
+            return (eps_ref - mu_s[i]) * tzs0 + V_z * t0sx + sigma_al_bcs(omega, gamma, Delta0, eta)
+
+        for i in range(Ls):
+            syst[lat(i, 0)] = onsite_sc_closed
+            if i > 0:
+                syst[lat(i, 0), lat(i - 1, 0)] = hop
+        return syst.finalized()
+
+    # Open system
+    if mu_leads is None:
+        mu_leads = t
+
+    offset = Lb
+    def onsite_sc_open(site, omega):
+        i = site.tag[0] - offset
+        return (eps_ref - mu_s[i]) * tzs0 + V_z * t0sx + sigma_al_bcs(omega, gamma, Delta0, eta)
+
+    # 1. Left Barrier
+    for i in range(Lb):
+        syst[lat(i, 0)] = (2.0 * t + barrier_l) * tzs0
+        if i > 0:
+            syst[lat(i, 0), lat(i - 1, 0)] = hop
+
+    # 2. Superconductor
+    for i in range(Lb, Lb + Ls):
+        syst[lat(i, 0)] = onsite_sc_open
+        if i > 0:
+            syst[lat(i, 0), lat(i - 1, 0)] = hop
+
+    # 3. Right Barrier
+    for i in range(Lb + Ls, Lb + Ls + Lb):
+        syst[lat(i, 0)] = (2.0 * t + barrier_r) * tzs0
+        if i > 0:
+            syst[lat(i, 0), lat(i - 1, 0)] = hop
+
+    # 4. Leads
+    sym_left_lead = kwant.TranslationalSymmetry((-a, 0))
+    sym_right_lead = kwant.TranslationalSymmetry((a, 0))
+    left_lead = kwant.Builder(sym_left_lead, conservation_law=np.diag([-2, -1, 1, 2]))
+    right_lead = kwant.Builder(sym_right_lead, conservation_law=np.diag([-2, -1, 1, 2]))
+
+    left_lead[lat(0, 0)] = (2.0 * t - mu_leads) * tzs0
+    left_lead[lat(1, 0), lat(0, 0)] = -t * tzs0
+
+    right_lead[lat(0, 0)] = (2.0 * t - mu_leads) * tzs0
+    right_lead[lat(1, 0), lat(0, 0)] = -t * tzs0
+
+    syst.attach_lead(left_lead)
+    syst.attach_lead(right_lead)
+    return syst.finalized()
+
+
+def smatrix_exact(fsyst, E: float):
+    """
+    Computes scattering matrix for an exact Kwant system at bias energy E,
+    ensuring that energy E and self-energy evaluation frequency omega are strictly identical.
+    """
+    return kwant.smatrix(fsyst, energy=E, params=dict(omega=E), check_hermiticity=False)
+
+
+def calc_conductance_matrix_exact(fsyst, E: float, solver_type: str = 'cpu') -> np.ndarray:
+    """
+    Computes 2x2 differential conductance matrix [G_LL, G_LR; G_RL, G_RR] in units of e^2/h
+    for an exact energy-dependent Kwant system at bias E.
+    """
+    if solver_type == 'gpu':
+        raise NotImplementedError("solver_type='gpu' is not supported for exact systems with energy-dependent params.")
+    elif solver_type != 'cpu':
+        raise ValueError(f"Unknown solver_type '{solver_type}'. Must be 'cpu'.")
+
+    smatrix = smatrix_exact(fsyst, E)
+    Rl = 0.0
+    Al = 0.0
+    Rr = 0.0
+    Ar = 0.0
+
+    # Non-Local Transmissions
+    T_RL = 0.0; TA_RL = 0.0  # Left -> Right
+    T_LR = 0.0; TA_LR = 0.0  # Right -> Left
+
+    for i in range(2):
+        for j in range(2):
+            Rl += smatrix.transmission((0, j), (0, i))
+            Al += smatrix.transmission((0, j + 2), (0, i))
+
+            Rr += smatrix.transmission((1, j), (1, i))
+            Ar += smatrix.transmission((1, j + 2), (1, i))
+
+            T_RL += smatrix.transmission((1, j), (0, i))        # Normal
+            TA_RL += smatrix.transmission((1, j + 2), (0, i))    # Crossed Andreev
+            T_LR += smatrix.transmission((0, j), (1, i))        # Normal
+            TA_LR += smatrix.transmission((0, j + 2), (1, i))    # Crossed Andreev
+
+    G_LL = 2.0 - Rl + Al
+    G_LR = -(T_LR - TA_LR)
+    G_RL = -(T_RL - TA_RL)
+    G_RR = 2.0 - Rr + Ar
+
+    return np.array([[G_LL, G_LR], [G_RL, G_RR]], dtype=float)
+
+
+def sturm_count_exact(fsyst, E: float, Delta0: Optional[float] = None, _allow_retry: bool = True) -> int:
+    """
+    Computes the number of negative eigenvalues of H(E) - E * I via block LDL^dagger
+    (Haynsworth inertia count) for closed nanowires.
+
+    Parameters
+    ----------
+    fsyst : kwant.system.FiniteSystem
+        Finalized closed system (must have no leads).
+    E : float
+        Evaluation energy.
+    Delta0 : float, optional
+        Superconducting gap for validation (|E| < Delta0).
+    """
+    if len(fsyst.lead_interfaces) > 0:
+        raise ValueError("sturm_count_exact only operates on closed systems without leads.")
+
+    if Delta0 is not None and abs(E) >= Delta0:
+        raise ValueError(f"|E| >= Delta0: |{E}| >= {Delta0}. Sturm count requires |E| < Delta0.")
+
+    H = fsyst.hamiltonian_submatrix(params=dict(omega=E), sparse=True).tocsr()
+
+    # Hermiticity check
+    H_diff = H - H.conj().T
+    max_diff = np.max(np.abs(H_diff.data)) if len(H_diff.data) > 0 else 0.0
+    max_h = np.max(np.abs(H.data)) if len(H.data) > 0 else 1.0
+    if max_diff > 1e-12 * max_h:
+        raise ValueError(f"Hamiltonian is non-Hermitian at E={E}: max |H - H^dagger| = {max_diff}")
+
+    # Spatial reordering
+    order = np.argsort([s.tag[0] for s in fsyst.sites])
+    perm = np.concatenate([np.arange(4 * i, 4 * i + 4) for i in order])
+    H_ordered = H[perm][:, perm]
+
+    Ls = len(fsyst.sites)
+    neg_count = 0
+    Sprev = None
+    I4 = np.eye(4, dtype=complex)
+
+    for i in range(Ls):
+        A = H_ordered[4 * i : 4 * i + 4, 4 * i : 4 * i + 4].toarray() - E * I4
+        if i > 0:
+            B = H_ordered[4 * (i - 1) : 4 * i, 4 * i : 4 * i + 4].toarray()
+            A = A - B.conj().T @ np.linalg.solve(Sprev, B)
+        A = 0.5 * (A + A.conj().T)
+        eigs = np.linalg.eigvalsh(A)
+
+        # Check for near-singularity
+        if np.any(np.abs(eigs) < 1e-13 * max_h):
+            if _allow_retry:
+                c_plus = sturm_count_exact(fsyst, E + 1e-12, Delta0=Delta0, _allow_retry=False)
+                c_minus = sturm_count_exact(fsyst, E - 1e-12, Delta0=Delta0, _allow_retry=False)
+                if c_plus == c_minus:
+                    return c_plus
+                else:
+                    raise RuntimeError(
+                        f"Sturm count near singularity at E={E} did not agree: c+={c_plus}, c-={c_minus}"
+                    )
+            else:
+                raise RuntimeError(f"Singular pivot in block Sturm count at site {i}, E={E}.")
+
+        neg_count += int(np.sum(eigs < 0.0))
+        Sprev = A
+
+    return neg_count
+
+
+def solve_exact_spectrum(
+    fsyst,
+    n_states: int,
+    gamma: float,
+    Delta0: float,
+    tol: float = 1e-11,
+    edge_margin: float = 1e-9
+) -> dict:
+    """
+    Finds the lowest n_states non-negative fixed points of det[E * I - H_bare - Sigma(E)] = 0
+    via Weyl-monotone block-Sturm bisection and certification.
+    """
+    import scipy.linalg
+
+    if len(fsyst.lead_interfaces) > 0:
+        raise ValueError("solve_exact_spectrum only operates on closed systems without leads.")
+
+    order = np.argsort([s.tag[0] for s in fsyst.sites])
+    perm = np.concatenate([np.arange(4 * i, 4 * i + 4) for i in order])
+    Ls = len(fsyst.sites)
+
+    # 1. Extract bare block-tridiagonal arrays once
+    H0 = fsyst.hamiltonian_submatrix(params=dict(omega=0.0), sparse=True).tocsr()
+    H0_diff = H0 - H0.conj().T
+    if len(H0_diff.data) > 0 and np.max(np.abs(H0_diff.data)) > 1e-12 * np.max(np.abs(H0.data)):
+        raise ValueError("Hamiltonian at omega=0 is non-Hermitian.")
+    H0_ordered = H0[perm][:, perm]
+
+    sig0 = sigma_al_bcs(0.0, gamma, Delta0, eta=0.0)
+    A_bare = np.zeros((Ls, 4, 4), dtype=complex)
+    B = np.zeros((Ls - 1, 4, 4), dtype=complex)
+    for i in range(Ls):
+        A_bare[i] = H0_ordered[4 * i : 4 * i + 4, 4 * i : 4 * i + 4].toarray() - sig0
+        if i < Ls - 1:
+            B[i] = H0_ordered[4 * i : 4 * i + 4, 4 * (i + 1) : 4 * (i + 1) + 4].toarray()
+
+    # Verify at interior test energy E_chk = 0.37 * Delta0
+    E_chk = 0.37 * Delta0
+    H_chk = fsyst.hamiltonian_submatrix(params=dict(omega=E_chk), sparse=True).tocsr()[perm][:, perm]
+    sig_chk = sigma_al_bcs(E_chk, gamma, Delta0, eta=0.0)
+    for i in range(Ls):
+        A_expected = A_bare[i] + sig_chk
+        A_actual = H_chk[4 * i : 4 * i + 4, 4 * i : 4 * i + 4].toarray()
+        if np.max(np.abs(A_expected - A_actual)) > 1e-13:
+            raise ValueError("Cached Hamiltonian mismatch on diagonal at E_chk.")
+        if i < Ls - 1:
+            B_actual = H_chk[4 * i : 4 * i + 4, 4 * (i + 1) : 4 * (i + 1) + 4].toarray()
+            if np.max(np.abs(B[i] - B_actual)) > 1e-13:
+                raise ValueError("Cached Hamiltonian mismatch on off-diagonal at E_chk.")
+
+    max_h = max(np.max(np.abs(A_bare)), np.max(np.abs(B))) if Ls > 1 else np.max(np.abs(A_bare))
+
+    # Fast cached Sturm count evaluator
+    I4 = np.eye(4, dtype=complex)
+    tx = np.kron(sigma_x, sigma_0)
+
+    def fast_count(E_eval, allow_retry=True):
+        if abs(E_eval) >= Delta0:
+            raise ValueError(f"|E| >= Delta0: {E_eval}")
+        sig_E = sigma_al_bcs(E_eval, gamma, Delta0, eta=0.0)
+        neg = 0
+        Sprev = None
+        for i in range(Ls):
+            A = A_bare[i] + sig_E - E_eval * I4
+            if i > 0:
+                b = B[i - 1]
+                A = A - b.conj().T @ np.linalg.solve(Sprev, b)
+            A = 0.5 * (A + A.conj().T)
+            eigs = np.linalg.eigvalsh(A)
+            if np.any(np.abs(eigs) < 1e-13 * max_h):
+                if allow_retry:
+                    cp = fast_count(E_eval + 1e-12, allow_retry=False)
+                    cm = fast_count(E_eval - 1e-12, allow_retry=False)
+                    if cp == cm:
+                        return cp
+                    raise RuntimeError(f"Singular pivot in fast_count near E={E_eval}: {cp} vs {cm}")
+                else:
+                    raise RuntimeError(f"Singular pivot in fast_count at E={E_eval}")
+            neg += int(np.sum(eigs < 0.0))
+            Sprev = A
+        return neg
+
+    # 2. Bracket counts
+    E_min = 1e-14
+    E_max = Delta0 * (1.0 - edge_margin)
+    N0 = fast_count(E_min)
+    Nmax = fast_count(E_max)
+
+    available_states = Nmax - N0
+    truncated = False
+    if available_states < n_states:
+        import warnings
+        warnings.warn(
+            f"Requested {n_states} states, but only {available_states} exist in [0, Delta0*(1-edge_margin)]. "
+            "Returning available states (truncated=True).",
+            UserWarning
+        )
+        target_total = available_states
+        truncated = True
+    else:
+        target_total = n_states
+
+    # 3. Spectrum slicing: maintain sorted evaluations [(E, N(E))]
+    evaluations = [(E_min, N0), (E_max, Nmax)]
+
+    energies_list = []
+    residuals_list = []
+    multiplicities_list = []
+    eigenvectors_list = []
+    counts_list = []
+
+    c_target = N0
+    while len(energies_list) < target_total and c_target < Nmax:
+        lo = max(E for E, N in evaluations if N <= c_target)
+        hi = min(E for E, N in evaluations if N >= c_target + 1)
+
+        while (hi - lo) > tol:
+            mid = 0.5 * (lo + hi)
+            N_mid = fast_count(mid)
+            evaluations.append((mid, N_mid))
+            if N_mid <= c_target:
+                lo = mid
+            else:
+                hi = mid
+
+        E_star = 0.5 * (lo + hi)
+        N_lo = max(N for E, N in evaluations if E <= lo)
+        N_hi = min(N for E, N in evaluations if E >= hi)
+        mult = N_hi - N_lo
+        if mult <= 0:
+            c_target += 1
+            continue
+
+        # 4. Certify root with eigh
+        sig_star = sigma_al_bcs(E_star, gamma, Delta0, eta=0.0)
+        H_star = np.zeros((4 * Ls, 4 * Ls), dtype=complex)
+        for i in range(Ls):
+            H_star[4 * i : 4 * i + 4, 4 * i : 4 * i + 4] = A_bare[i] + sig_star
+            if i < Ls - 1:
+                H_star[4 * i : 4 * i + 4, 4 * (i + 1) : 4 * (i + 1) + 4] = B[i]
+                H_star[4 * (i + 1) : 4 * (i + 1) + 4, 4 * i : 4 * i + 4] = B[i].conj().T
+        H_star = 0.5 * (H_star + H_star.conj().T)
+
+        c_lo = N_lo
+        c_hi = N_hi - 1
+        w_sub, v_sub = scipy.linalg.eigh(H_star, subset_by_index=[c_lo, c_hi])
+        res_sub = np.abs(w_sub - E_star)
+
+        # Hellmann-Feynman Newton refinement if residual exceeds 1e-9 near gap edge
+        if np.any(res_sub >= 1e-9):
+            s_val = np.sqrt(Delta0**2 - E_star**2)
+            dSig = -gamma * (Delta0**2 * I4 - Delta0 * E_star * tx) / (s_val**3)
+            v0 = v_sub[:, 0]
+            dlam = sum(np.real(v0[4 * i : 4 * i + 4].conj() @ (dSig @ v0[4 * i : 4 * i + 4])) for i in range(Ls))
+            E_star = float(E_star - (w_sub[0] - E_star) / (dlam - 1.0))
+
+            sig_star = sigma_al_bcs(E_star, gamma, Delta0, eta=0.0)
+            for i in range(Ls):
+                H_star[4 * i : 4 * i + 4, 4 * i : 4 * i + 4] = A_bare[i] + sig_star
+            H_star = 0.5 * (H_star + H_star.conj().T)
+            w_sub, v_sub = scipy.linalg.eigh(H_star, subset_by_index=[c_lo, c_hi])
+            res_sub = np.abs(w_sub - E_star)
+
+        if np.any(res_sub >= 1e-9):
+            raise RuntimeError(f"Root certification failed at E*={E_star}: residuals={res_sub}")
+
+        # Add states up to target_total
+        states_to_add = min(mult, target_total - len(energies_list))
+        for m in range(states_to_add):
+            energies_list.append(float(E_star))
+            residuals_list.append(float(res_sub[m]))
+            multiplicities_list.append(int(mult))
+            eigenvectors_list.append(v_sub[:, m])
+            counts_list.append(int(c_target + m))
+
+        c_target = N_hi
+
+    energies_arr = np.array(energies_list, dtype=float)
+    residuals_arr = np.array(residuals_list, dtype=float)
+    multiplicities_arr = np.array(multiplicities_list, dtype=int)
+    counts_arr = np.array(counts_list, dtype=int)
+    eigenvectors_arr = np.column_stack(eigenvectors_list) if len(eigenvectors_list) > 0 else np.zeros((4 * Ls, 0), dtype=complex)
+
+    return {
+        'energies': energies_arr,
+        'multiplicities': multiplicities_arr,
+        'residuals': residuals_arr,
+        'eigenvectors': eigenvectors_arr,
+        'truncated': truncated,
+        'counts': counts_arr,
+    }
+
+
 ######## Disorder Calculation Helper Functions ########
 
 def calc_weight_localization(rho_M1, rho_M2, weight_threshold=0.9):

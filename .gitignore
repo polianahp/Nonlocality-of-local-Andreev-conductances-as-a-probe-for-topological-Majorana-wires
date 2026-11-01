@@ -9,6 +9,7 @@ local_packages/
 msft_data/
 .trash/
 Scratch/
+scratch/
 scratch/test_*
 scratch/__pycache__/scratch/
 /Postprocessing
