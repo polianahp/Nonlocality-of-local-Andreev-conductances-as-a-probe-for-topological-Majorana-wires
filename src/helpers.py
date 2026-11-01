@@ -1213,16 +1213,21 @@ def sturm_count_exact(fsyst, E: float, Delta0: Optional[float] = None, _allow_re
         # Check for near-singularity
         if np.any(np.abs(eigs) < 1e-13 * max_h):
             if _allow_retry:
-                c_plus = sturm_count_exact(fsyst, E + 1e-12, Delta0=Delta0, _allow_retry=False)
-                c_minus = sturm_count_exact(fsyst, E - 1e-12, Delta0=Delta0, _allow_retry=False)
+                delta = max(1e-11, 2e-13 * max_h)
+                e_plus = min(E + delta, Delta0 * (1.0 - 1e-12)) if Delta0 is not None else E + delta
+                e_minus = max(E - delta, 1e-14)
+                c_plus = sturm_count_exact(fsyst, e_plus, Delta0=Delta0, _allow_retry=False)
+                c_minus = sturm_count_exact(fsyst, e_minus, Delta0=Delta0, _allow_retry=False)
                 if c_plus == c_minus:
                     return c_plus
                 else:
-                    raise RuntimeError(
-                        f"Sturm count near singularity at E={E} did not agree: c+={c_plus}, c-={c_minus}"
-                    )
+                    # E is within delta of an exact eigenvalue of H(E)-E.
+                    # Following LAPACK convention, return c_plus (right-continuous count).
+                    return c_plus
             else:
-                raise RuntimeError(f"Singular pivot in block Sturm count at site {i}, E={E}.")
+                neg_count += int(np.sum(eigs <= 0.0))
+                Sprev = A
+                continue
 
         neg_count += int(np.sum(eigs < 0.0))
         Sprev = A
@@ -1285,6 +1290,7 @@ def solve_exact_spectrum(
     # Fast cached Sturm count evaluator
     I4 = np.eye(4, dtype=complex)
     tx = np.kron(sigma_x, sigma_0)
+    evaluations = []
 
     def fast_count(E_eval, allow_retry=True):
         if abs(E_eval) >= Delta0:
@@ -1296,18 +1302,31 @@ def solve_exact_spectrum(
             A = A_bare[i] + sig_E - E_eval * I4
             if i > 0:
                 b = B[i - 1]
-                A = A - b.conj().T @ np.linalg.solve(Sprev, b)
+                try:
+                    A = A - b.conj().T @ np.linalg.solve(Sprev, b)
+                except np.linalg.LinAlgError:
+                    A = A - b.conj().T @ np.linalg.lstsq(Sprev, b, rcond=1e-14)[0]
             A = 0.5 * (A + A.conj().T)
             eigs = np.linalg.eigvalsh(A)
             if np.any(np.abs(eigs) < 1e-13 * max_h):
                 if allow_retry:
-                    cp = fast_count(E_eval + 1e-12, allow_retry=False)
-                    cm = fast_count(E_eval - 1e-12, allow_retry=False)
+                    delta = max(1e-11, 2e-13 * max_h)
+                    e_plus = min(E_eval + delta, Delta0 * (1.0 - 1e-12))
+                    e_minus = max(E_eval - delta, 1e-14)
+                    cp = fast_count(e_plus, allow_retry=False)
+                    cm = fast_count(e_minus, allow_retry=False)
                     if cp == cm:
                         return cp
-                    raise RuntimeError(f"Singular pivot in fast_count near E={E_eval}: {cp} vs {cm}")
+                    else:
+                        # E_eval is within delta of an exact eigenvalue of H(E)-E.
+                        # Record bracket into evaluations so bisection converges immediately.
+                        evaluations.append((e_minus, cm))
+                        evaluations.append((e_plus, cp))
+                        return cp
                 else:
-                    raise RuntimeError(f"Singular pivot in fast_count at E={E_eval}")
+                    neg += int(np.sum(eigs <= 0.0))
+                    Sprev = A
+                    continue
             neg += int(np.sum(eigs < 0.0))
             Sprev = A
         return neg
@@ -1317,6 +1336,8 @@ def solve_exact_spectrum(
     E_max = Delta0 * (1.0 - edge_margin)
     N0 = fast_count(E_min)
     Nmax = fast_count(E_max)
+    evaluations.append((E_min, N0))
+    evaluations.append((E_max, Nmax))
 
     available_states = Nmax - N0
     truncated = False
@@ -1333,7 +1354,6 @@ def solve_exact_spectrum(
         target_total = n_states
 
     # 3. Spectrum slicing: maintain sorted evaluations [(E, N(E))]
-    evaluations = [(E_min, N0), (E_max, Nmax)]
 
     energies_list = []
     residuals_list = []
@@ -1350,10 +1370,8 @@ def solve_exact_spectrum(
             mid = 0.5 * (lo + hi)
             N_mid = fast_count(mid)
             evaluations.append((mid, N_mid))
-            if N_mid <= c_target:
-                lo = mid
-            else:
-                hi = mid
+            lo = max(E for E, N in evaluations if N <= c_target)
+            hi = min(E for E, N in evaluations if N >= c_target + 1)
 
         E_star = 0.5 * (lo + hi)
         N_lo = max(N for E, N in evaluations if E <= lo)

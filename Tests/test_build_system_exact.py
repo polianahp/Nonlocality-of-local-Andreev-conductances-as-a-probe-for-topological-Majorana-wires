@@ -778,5 +778,44 @@ def test_input_validation():
         hp.calc_conductance_matrix_exact(open_syst, 0.05, solver_type='gpu')
 
 
+# ==============================================================================
+# T16: test_singular_pivot_near_eigenvalue_resilience
+# ==============================================================================
+def test_singular_pivot_near_eigenvalue_resilience():
+    """
+    Verifies that sturm_count_exact and solve_exact_spectrum gracefully handle
+    evaluation directly on or within machine precision of exact eigenvalues
+    without throwing singular pivot exceptions.
+    """
+    t = 16.529
+    gamma = 0.2
+    Delta0 = 0.3
+    alpha = 1.4
+    Ls = 50
+    mu = 0.4
+    V_z = 0.35
+
+    syst = hp.build_system_exact(
+        t=t, mu=mu, gamma=gamma, Delta0=Delta0, V_z=V_z, alpha=alpha,
+        Ls=Ls, closed=True
+    )
+
+    # 1. Solve spectrum with very fine tolerance (tol=1e-12)
+    res = hp.solve_exact_spectrum(syst, n_states=6, gamma=gamma, Delta0=Delta0, tol=1e-12)
+    energies = res['energies']
+    assert len(energies) == 6
+    assert np.all(res['residuals'] < 1e-9)
+
+    # 2. Directly evaluate sturm_count_exact at each exact eigenvalue
+    # Under LAPACK convention, zero pivots are treated as negative (c_plus right-continuous)
+    for E_star in energies:
+        c = hp.sturm_count_exact(syst, E_star, Delta0=Delta0)
+        assert isinstance(c, (int, np.integer))
+        # Ensure count is monotonic with energy
+        c_plus = hp.sturm_count_exact(syst, E_star + 1e-10, Delta0=Delta0)
+        c_minus = hp.sturm_count_exact(syst, max(E_star - 1e-10, 1e-14), Delta0=Delta0)
+        assert c_minus <= c <= c_plus
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
