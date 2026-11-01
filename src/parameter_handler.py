@@ -151,6 +151,11 @@ class SimulationConfig(BaseModel):
     barrier_quadrature_nodes: PositiveInt = 8
     barrier_sweep_only: bool = False
 
+    # Barrier Calibration Settings
+    calibrate_barriers: bool = False
+    target_gns: Optional[List[float]] = None
+    tgp_barrier_arr: Optional[List[float]] = None
+
     class Config:
         arbitrary_types_allowed = True
 
@@ -281,6 +286,31 @@ class SimulationState:
         self.barrier_arr = self.asym_ratios * config.barrier0
         self.energies = np.linspace(-0.5, 0.5, config.num_engs)
         
+        # TGP Stage 1 Cutter Barriers (Calibrated vs Hardcoded)
+        if getattr(config, 'calibrate_barriers', False):
+            import src.barrier_calibration as bc
+            targets = getattr(config, 'target_gns', None)
+            if targets is None:
+                targets = [0.35, 0.49, 0.62, 0.76, 0.90]
+            print(f"--- Running Cutter Barrier Calibration for targets: {targets} ---")
+            calib_res = bc.calibrate_wire_cutters(
+                target_gns=targets,
+                t=self.t,
+                gamma=config.gamma,
+                Delta0=config.Delta_0,
+                alpha=self.alpha,
+                Ln=config.Ln,
+                Lb=config.Lb,
+                Ls=config.Ls,
+                mu_leads=self.mu_leads
+            )
+            self.tgp_barrier_arr = np.array(calib_res['u_left'], dtype=float)
+            print(f"Calibrated TGP Barrier Array: {self.tgp_barrier_arr}")
+        elif getattr(config, 'tgp_barrier_arr', None) is not None:
+            self.tgp_barrier_arr = np.array(config.tgp_barrier_arr, dtype=float)
+        else:
+            self.tgp_barrier_arr = np.array([4.3548, 3.6774, 3.0000, 2.3710, 1.6935], dtype=float)
+
         # Mapping acceleration type to Kwant solver type
         self.solver_type = 'gpu' if config.acceleration_type == 'gpu' else 'cpu'
 
@@ -323,5 +353,6 @@ class SimulationState:
             'barrier_T_mK_list': config.barrier_T_mK_list,
             'barrier_quadrature_nodes': config.barrier_quadrature_nodes,
             'barrier_sweep_only': config.barrier_sweep_only,
-            'hamiltonian_mode': getattr(config, 'hamiltonian_mode', 'legacy')
+            'hamiltonian_mode': getattr(config, 'hamiltonian_mode', 'legacy'),
+            'tgp_barrier_arr': self.tgp_barrier_arr
         }

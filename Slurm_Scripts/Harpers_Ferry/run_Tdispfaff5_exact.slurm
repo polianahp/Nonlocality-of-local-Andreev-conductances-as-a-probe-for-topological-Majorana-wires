@@ -56,7 +56,7 @@ echo "=================================================================="
 
 # 1. Main Parallel Simulation
 echo "Step 1: Running parallel transport & spectral simulation with exact solver..."
-python -u main_parallel.py --config_path Parameters/Tdispfaff5_exact.yaml
+python -u main_parallel.py --config_path Inputs/Parameters/Tdispfaff5_exact.yaml
 SIM_EXIT_CODE=$?
 
 if [ $SIM_EXIT_CODE -ne 0 ]; then

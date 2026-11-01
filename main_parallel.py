@@ -129,12 +129,13 @@ def worker_simulation_step(iter_data, static_params):
                 topological_gap = np.nan
 
 
-        tgp_barrier_arr = np.array([4.3548, 3.6774, 3.0000, 2.3710, 1.6935])
+        tgp_barrier_arr = static_params.get('tgp_barrier_arr', np.array([4.3548, 3.6774, 3.0000, 2.3710, 1.6935]))
         tgp_energies = hp.make_dynamic_grid()
-        tgp_stage1_dIdVl   = np.zeros((5, len(tgp_energies)))
-        tgp_stage1_dIdVr   = np.zeros((5, len(tgp_energies)))
-        tgp_stage1_dIdV_LR = np.zeros((5, len(tgp_energies)))
-        tgp_stage1_dIdV_RL = np.zeros((5, len(tgp_energies)))
+        num_tgp = len(tgp_barrier_arr)
+        tgp_stage1_dIdVl   = np.zeros((num_tgp, len(tgp_energies)))
+        tgp_stage1_dIdVr   = np.zeros((num_tgp, len(tgp_energies)))
+        tgp_stage1_dIdV_LR = np.zeros((num_tgp, len(tgp_energies)))
+        tgp_stage1_dIdV_RL = np.zeros((num_tgp, len(tgp_energies)))
         
         for idx, b_val in enumerate(tgp_barrier_arr):
             if hamiltonian_mode == 'exact':
@@ -467,11 +468,14 @@ if __name__ == "__main__":
 
     print(f"--- Starting Simulation ---")
     print(f"Output Directory: {dirname}")
+    print(f"Hamiltonian Mode: {getattr(config, 'hamiltonian_mode', 'legacy')}")
     print(f"Hopping: {state.t:.4f}, Spin-Orbit: {state.alpha:.4f}, Delta: {state.Delta:.4f}")
     print(f"Disorder File: {fname}")
     print(f"Barrier Length (Lb): {config.Lb}")
     print(f"PDI Barrier Length (Lb_pdi): {config.Lb_pdi}")
     print(f"Acceleration Mode: {config.acceleration_type}")
+    print(f"Barrier Calibration: {getattr(config, 'calibrate_barriers', False)}")
+    print(f"TGP Barrier Array: {state.tgp_barrier_arr}")
     print(f"--------------------------------\n")
     
     # Artifact Logging
@@ -504,10 +508,11 @@ if __name__ == "__main__":
 
     dIdVs_left_arr = np.zeros(shape = (len(params_list), len(energies)))
     lengrid = len(hp.make_dynamic_grid())
-    tgp_stage1_dIdVl   = np.zeros(shape = (len(params_list), 5, lengrid))
-    tgp_stage1_dIdVr   = np.zeros(shape = (len(params_list), 5, lengrid))
-    tgp_stage1_dIdV_LR = np.zeros(shape = (len(params_list), 5, lengrid))
-    tgp_stage1_dIdV_RL = np.zeros(shape = (len(params_list), 5, lengrid))
+    num_tgp = len(state.tgp_barrier_arr) if hasattr(state, 'tgp_barrier_arr') else 5
+    tgp_stage1_dIdVl   = np.zeros(shape = (len(params_list), num_tgp, lengrid))
+    tgp_stage1_dIdVr   = np.zeros(shape = (len(params_list), num_tgp, lengrid))
+    tgp_stage1_dIdV_LR = np.zeros(shape = (len(params_list), num_tgp, lengrid))
+    tgp_stage1_dIdV_RL = np.zeros(shape = (len(params_list), num_tgp, lengrid))
     dIdVs_right_arr = np.zeros(shape = (len(params_list), len(energies)))
     dIdVs_LR_arr = np.zeros(shape = (len(params_list), len(energies)))
     dIdVs_RL_arr = np.zeros(shape = (len(params_list), len(energies)))
@@ -701,8 +706,22 @@ if __name__ == "__main__":
         hp.np_save_wrapped(spectrum_arr, "spectrum_arr", dirname)
         hp.np_save_wrapped(weight_localization_arr, "weight_localization_arr", dirname)
         hp.np_save_wrapped(mzm_separation_arr, "mzm_separation_arr", dirname)
-        if 'tgp_barrier_arr' in locals() and tgp_barrier_arr is not None:
-            hp.np_save_wrapped(tgp_barrier_arr, 'tgp_barrier_arr', dirname)
+        
+        # Save exact cutter barrier array (calibrated or hardcoded)
+        barriers_to_save = state.tgp_barrier_arr if hasattr(state, 'tgp_barrier_arr') else ('tgp_barrier_arr' in locals() and tgp_barrier_arr)
+        if barriers_to_save is not None:
+            hp.np_save_wrapped(barriers_to_save, 'tgp_barrier_arr', dirname)
+            txt_path = PathConfigs.DATA / dirname / "tgp_barriers.txt"
+            with open(txt_path, "w") as f:
+                f.write(f"Simulation Directory: {dirname}\n")
+                f.write(f"Hamiltonian Mode: {static_params.get('hamiltonian_mode', 'legacy')}\n")
+                f.write(f"Barrier Calibration: {getattr(config, 'calibrate_barriers', False)}\n")
+                if getattr(config, 'calibrate_barriers', False):
+                    targets = getattr(config, 'target_gns', [0.35, 0.49, 0.62, 0.76, 0.90])
+                    f.write(f"Target Conductances G_N (e^2/h): {targets}\n")
+                f.write(f"TGP Barrier Array (meV): {barriers_to_save.tolist()}\n")
+                for b_idx, b_val in enumerate(barriers_to_save):
+                    f.write(f"  Barrier {b_idx + 1}: {b_val:.6f} meV\n")
 
     
     t_end = time.perf_counter()
