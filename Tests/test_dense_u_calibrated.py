@@ -65,6 +65,15 @@ def test_yaml_configuration_contracts():
         assert sim_cfg.barrier_u_points == 100
         assert sim_cfg.quadrature_nodes_25 == 51
 
+    # Verify hardcoded comparison config
+    hc_path = REPO_ROOT / "Inputs/Parameters/dense_u_hardcoded_r0.yaml"
+    assert hc_path.exists()
+    with open(hc_path, "r") as f:
+        hc_cfg = yaml.safe_load(f)
+    assert hc_cfg["calibrate_barriers"] is False
+    assert hc_cfg["tgp_barrier_arr"] == [4.3548, 3.6774, 3.0000, 2.3710, 1.6935]
+    assert hc_cfg["dirname"] == "Harpers_Ferry/Dense_U_Hardcoded/Realization_0"
+
 
 def test_slurm_script_contracts():
     """Verify Harper's Ferry SLURM batch scripts."""
@@ -82,6 +91,17 @@ def test_slurm_script_contracts():
         assert "#SBATCH -t 04:00:00" in content
         assert f"dense_u_calibrated_r{r}.yaml" in content
         assert "--workers 255" in content
+
+    # Verify hardcoded comparison slurm script
+    hc_slurm = slurm_dir / "run_dense_u_r0_hardcoded.slurm"
+    assert hc_slurm.exists()
+    hc_content = hc_slurm.read_text()
+    assert "#SBATCH -J dense_u_r0_hardcoded" in hc_content
+    assert "#SBATCH -c 256" in hc_content
+    assert "#SBATCH -p day_3gb" in hc_content
+    assert "#SBATCH -t 04:00:00" in hc_content
+    assert "dense_u_hardcoded_r0.yaml" in hc_content
+    assert "--workers 255" in hc_content
 
     submit_sh = slurm_dir / "submit_all_dense_u.sh"
     assert submit_sh.exists()

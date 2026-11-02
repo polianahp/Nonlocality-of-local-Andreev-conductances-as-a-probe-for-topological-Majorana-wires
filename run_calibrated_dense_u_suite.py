@@ -303,26 +303,34 @@ def run_production(
     )
     vdis_scaled = vdis_raw * cfg.V0
 
-    # 1. Exact Cutter Barrier Calibration
+    # 1. Cutter Barrier Selection (Calibrated vs. Hardcoded)
     targets = cfg.target_gns if cfg.target_gns is not None else [0.35, 0.49, 0.62, 0.76, 0.90]
-    print(f"\n--- Step 1: Exact Cutter Barrier Calibration for targets: {targets} ---")
-    if hasattr(state, 'tgp_barrier_arr') and state.tgp_barrier_arr is not None and len(state.tgp_barrier_arr) == len(targets):
-        u_cutters = np.array(state.tgp_barrier_arr, dtype=float)
-        print("Reusing pre-calibrated barrier array from simulation state.")
+    if not getattr(cfg, 'calibrate_barriers', True):
+        print(f"\n--- Step 1: Using Legacy Hardcoded Cutter Barriers ---")
+        if hasattr(state, 'tgp_barrier_arr') and state.tgp_barrier_arr is not None:
+            u_cutters = np.array(state.tgp_barrier_arr, dtype=float)
+        else:
+            u_cutters = np.array([4.3548, 3.6774, 3.0000, 2.3710, 1.6935], dtype=float)
+        print(f"Hardcoded Cutter Potentials (meV): {u_cutters.tolist()}")
     else:
-        calib_res = bc.calibrate_wire_cutters(
-            target_gns=targets,
-            t=state.t,
-            gamma=cfg.gamma,
-            Delta0=cfg.Delta_0,
-            alpha=state.alpha,
-            Ln=cfg.Ln,
-            Lb=cfg.Lb,
-            Ls=cfg.Ls,
-            mu_leads=state.mu_leads
-        )
-        u_cutters = np.array(calib_res['u_left'], dtype=float)
-    print(f"Calibrated Cutter Potentials (meV): {u_cutters.tolist()}")
+        print(f"\n--- Step 1: Exact Cutter Barrier Calibration for targets: {targets} ---")
+        if hasattr(state, 'tgp_barrier_arr') and state.tgp_barrier_arr is not None and len(state.tgp_barrier_arr) == len(targets):
+            u_cutters = np.array(state.tgp_barrier_arr, dtype=float)
+            print("Reusing pre-calibrated barrier array from simulation state.")
+        else:
+            calib_res = bc.calibrate_wire_cutters(
+                target_gns=targets,
+                t=state.t,
+                gamma=cfg.gamma,
+                Delta0=cfg.Delta_0,
+                alpha=state.alpha,
+                Ln=cfg.Ln,
+                Lb=cfg.Lb,
+                Ls=cfg.Ls,
+                mu_leads=state.mu_leads
+            )
+            u_cutters = np.array(calib_res['u_left'], dtype=float)
+        print(f"Calibrated Cutter Potentials (meV): {u_cutters.tolist()}")
 
     # 2. Precompute Quadratures
     target_temps = [float(T) for T in cfg.barrier_T_mK_list]
@@ -468,8 +476,9 @@ def run_production(
     with open(out_dir / "tgp_barriers.txt", "w") as f:
         f.write(f"Simulation Directory: {cfg.dirname}\n")
         f.write(f"Realization Index: {cfg.realization_index}\n")
+        f.write(f"Barrier Mode: {'calibrated' if getattr(cfg, 'calibrate_barriers', True) else 'hardcoded'}\n")
         f.write(f"Target Conductances G_N (e^2/h): {targets}\n")
-        f.write(f"Calibrated Cutter Potentials (meV): {u_cutters.tolist()}\n")
+        f.write(f"Cutter Potentials (meV): {u_cutters.tolist()}\n")
         for b_i, (tg, uv) in enumerate(zip(targets, u_cutters)):
             f.write(f"  Baseline {b_i} (target {tg:.2f} G_0): {uv:.6f} meV\n")
 
