@@ -29,22 +29,20 @@ def test_sigma_al_bcs_analytic():
     I4 = np.eye(4, dtype=complex)
     tx = np.kron(hp.sigma_x, hp.sigma_0)
 
-    # 1. Zero energy: Sigma(0) = +gamma * tau_x
+    # Zero energy: Sigma(0) = +gamma * tau_x
     sig_zero = hp.sigma_al_bcs(0.0, gamma, Delta0, eta=0.0)
     expected_zero = gamma * tx
     np.testing.assert_allclose(sig_zero, expected_zero, atol=1e-15)
 
-    # 2. Subgap: |omega| < Delta0
+    # Subgap: |omega| < Delta0
     for omega in [-0.25, -0.1, 0.05, 0.2]:
         sig_sub = hp.sigma_al_bcs(omega, gamma, Delta0, eta=0.0)
-        # Must be strictly Hermitian
         np.testing.assert_allclose(sig_sub, sig_sub.conj().T, atol=1e-15)
-        # Analytical formula: -gamma / sqrt(Delta0^2 - omega^2) * (omega * I4 - Delta0 * tx)
         s_val = np.sqrt(Delta0**2 - omega**2)
         expected_sub = -gamma / s_val * (omega * I4 - Delta0 * tx)
         np.testing.assert_allclose(sig_sub, expected_sub, atol=1e-15)
 
-    # 3. Above gap: |omega| > Delta0 for both positive and negative E
+    # Above gap: |omega| > Delta0 for both positive and negative E
     for omega in [0.5, -0.5, 0.35, -0.35]:
         sig_above = hp.sigma_al_bcs(omega, gamma, Delta0, eta=0.0)
         Gamma = 1j * (sig_above - sig_above.conj().T)
@@ -59,19 +57,19 @@ def test_sigma_al_bcs_analytic():
         np.testing.assert_allclose(eigs_gamma, expected_eigs, atol=1e-14)
         assert np.all(eigs_gamma >= 0.0), f"Gamma has negative eigenvalues at omega={omega}"
 
-    # 4. Dynes broadening: eta = 1e-9 matches eta = 0 to 1e-6
+    # Dynes broadening: eta = 1e-9 matches eta = 0 to 1e-6
     for omega in [0.1, 0.5, -0.1, -0.5]:
         sig_clean = hp.sigma_al_bcs(omega, gamma, Delta0, eta=0.0)
         sig_dynes = hp.sigma_al_bcs(omega, gamma, Delta0, eta=1e-9)
         np.testing.assert_allclose(sig_dynes, sig_clean, atol=1e-6)
 
-    # 5. Raises at |omega| == Delta0 when eta == 0
+    # Raises at |omega| == Delta0 when eta == 0
     with pytest.raises(ValueError):
         hp.sigma_al_bcs(Delta0, gamma, Delta0, eta=0.0)
     with pytest.raises(ValueError):
         hp.sigma_al_bcs(-Delta0, gamma, Delta0, eta=0.0)
 
-    # 6. Parameter validation
+    # Parameter validation
     with pytest.raises(ValueError):
         hp.sigma_al_bcs(0.1, -0.2, Delta0)
     with pytest.raises(ValueError):
@@ -103,7 +101,7 @@ def test_exact_self_energy_matrix():
     for E in [0.05, 0.5]:
         sig_E = hp.sigma_al_bcs(E, gamma, Delta0)
 
-        # 1. Closed system
+        # Closed system
         syst_closed_exact = hp.build_system_exact(
             t=t, mu=mu, gamma=gamma, Delta0=Delta0, V_z=V_z, alpha=alpha, Ls=Ls, closed=True
         )
@@ -120,7 +118,7 @@ def test_exact_self_energy_matrix():
             err_msg=f"Closed wire self-energy matrix diff mismatch at E={E}"
         )
 
-        # 2. Open system
+        # Open system
         syst_open_exact = hp.build_system_exact(
             t=t, mu=mu, gamma=gamma, Delta0=Delta0, V_z=V_z, alpha=alpha, Ls=Ls, Lb=Lb,
             closed=False, barrier_l=1.5, barrier_r=2.5
@@ -368,13 +366,13 @@ def test_spectrum_completeness_and_residuals():
         energies = res['energies']
         residuals = res['residuals']
 
-        # 1. Residuals < 1e-9
+        # Residuals < 1e-9
         assert np.all(residuals < 1e-9), f"Pair {i}: Residuals exceeded 1e-9: max={np.max(residuals)}"
 
-        # 2. Energies strictly sorted
+        # Energies strictly sorted
         assert np.all(np.diff(energies) >= -1e-12), f"Pair {i}: Energies not sorted!"
 
-        # 3. Completeness: total states returned equals N(E_hi) - N(0+) or n_target
+        # Completeness: total states returned equals N(E_hi) - N(0+) or n_target
         if not res['truncated']:
             assert len(energies) == n_target
         else:
@@ -490,12 +488,12 @@ def test_valid_regime_eigenvalue_agreement_with_legacy():
         eigs_all = np.sort(np.linalg.eigvalsh(H_legacy))
         legacy_pos = eigs_all[eigs_all > 0]
 
-        # 1. MZM near-zero eigenvalue agrees to atol=1e-5
+        # MZM near-zero eigenvalue agrees to atol=1e-5
         assert abs(exact_eigs[0] - legacy_pos[0]) < 1e-5, (
             f"MZM eigenvalue mismatch: exact={exact_eigs[0]}, legacy={legacy_pos[0]}"
         )
 
-        # 2. States below 0.1 * Delta0 (0.03 meV)
+        # States below 0.1 * Delta0 (0.03 meV)
         sub_mask_exact = exact_eigs < 0.03
         sub_mask_legacy = legacy_pos[:len(exact_eigs)] < 0.03
         mask = sub_mask_exact & sub_mask_legacy
@@ -532,12 +530,12 @@ def test_renormalization_breakdown_near_gap_edge():
     def E_exact(eps):
         return float(brentq(exact_det, 0.0, Delta0 - 1e-6, args=(eps,)))
 
-    # 1. Low-energy valid regime (eps = 0.05 meV << Delta0)
+    # Low-energy valid regime (eps = 0.05 meV << Delta0)
     e_renorm_low = E_renorm(0.05)
     e_exact_low = E_exact(0.05)
     assert abs(e_renorm_low - e_exact_low) < 0.01
 
-    # 2. Breakdown regime near/above gap edge (eps = 0.50 meV > Delta0)
+    # Breakdown regime near/above gap edge (eps = 0.50 meV > Delta0)
     e_renorm_high = E_renorm(0.50)
     e_exact_high = E_exact(0.50)
 
@@ -651,7 +649,7 @@ def test_above_gap_absorption_decoupling_symmetric():
     mu_leads = t
     E = 0.5
 
-    # 1. Left junction decoupling: vary U_R in {0.0, 5.0, 50.0}
+    # Left junction decoupling: vary U_R in {0.0, 5.0, 50.0}
     g_ll_values = []
     ur_values = [0.0, 5.0, 50.0]
     for ur in ur_values:
@@ -667,7 +665,7 @@ def test_above_gap_absorption_decoupling_symmetric():
     spread_l = np.max(g_ll_arr) - np.min(g_ll_arr)
     assert spread_l < 1e-6, f"Left conductance depends on right barrier! spread = {spread_l}"
 
-    # 2. Right junction decoupling: vary U_L in {0.0, 5.0, 50.0}
+    # Right junction decoupling: vary U_L in {0.0, 5.0, 50.0}
     g_rr_values = []
     ul_values = [0.0, 5.0, 50.0]
     for ul in ul_values:
@@ -698,10 +696,10 @@ def test_gamma_zero_matches_transfer_matrix():
     Ls = 300
     E = 0.5
 
-    # 1. Analytical 1D transmission for a single channel
+    # Analytical 1D transmission for a single channel
     T_analytic = compute_1d_analytic_transmission(t=t, mu_leads=mu_leads, Ub=Ub, Lb=Lb, E=E)
 
-    # 2. Kwant system with gamma=0, alpha=0, V_z=0
+    # Kwant system with gamma=0, alpha=0, V_z=0
     syst = hp.build_system_exact(
         t=t, mu=mu_leads, gamma=0.0, Delta0=0.3, V_z=0.0, alpha=0.0,
         Ls=Ls, Lb=Lb, mu_leads=mu_leads, barrier_l=Ub, barrier_r=-mu_leads,
@@ -734,18 +732,18 @@ def test_input_validation():
     gamma = 0.2
     Delta0 = 0.3
 
-    # 1. |E| = Delta0 in Sigma
+    # |E| = Delta0 in Sigma
     with pytest.raises(ValueError):
         hp.sigma_al_bcs(Delta0, gamma, Delta0, eta=0.0)
 
-    # 2. Ln != 0 in build_system_exact
+    # Ln != 0 in build_system_exact
     with pytest.raises(NotImplementedError):
         hp.build_system_exact(
             t=t, mu=0.5, gamma=gamma, Delta0=Delta0, V_z=0.0, alpha=1.4,
             Ls=50, Ln=2, closed=False
         )
 
-    # 3. Open system passed to sturm_count_exact or solve_exact_spectrum
+    # Open system passed to sturm_count_exact or solve_exact_spectrum
     open_syst = hp.build_system_exact(
         t=t, mu=0.5, gamma=gamma, Delta0=Delta0, V_z=0.0, alpha=1.4,
         Ls=50, closed=False
@@ -755,7 +753,7 @@ def test_input_validation():
     with pytest.raises(ValueError, match="closed"):
         hp.solve_exact_spectrum(open_syst, n_states=4, gamma=gamma, Delta0=Delta0)
 
-    # 4. Sturm with eta > 0 in build_system_exact (causes non-Hermitian H)
+    # Sturm with eta > 0 in build_system_exact (causes non-Hermitian H)
     closed_broadened = hp.build_system_exact(
         t=t, mu=0.5, gamma=gamma, Delta0=Delta0, V_z=0.0, alpha=1.4,
         Ls=50, closed=True, eta=1e-4
@@ -763,7 +761,7 @@ def test_input_validation():
     with pytest.raises(ValueError, match="Hermitian"):
         hp.sturm_count_exact(closed_broadened, 0.05, Delta0=Delta0)
 
-    # 5. Sturm at |E| >= Delta0
+    # Sturm at |E| >= Delta0
     closed_syst = hp.build_system_exact(
         t=t, mu=0.5, gamma=gamma, Delta0=Delta0, V_z=0.0, alpha=1.4,
         Ls=50, closed=True
@@ -773,7 +771,7 @@ def test_input_validation():
     with pytest.raises(ValueError, match="Delta0"):
         hp.sturm_count_exact(closed_syst, 0.5, Delta0=Delta0)
 
-    # 6. calc_conductance_matrix_exact with solver_type='gpu'
+    # calc_conductance_matrix_exact with solver_type='gpu'
     with pytest.raises(NotImplementedError):
         hp.calc_conductance_matrix_exact(open_syst, 0.05, solver_type='gpu')
 
@@ -800,13 +798,13 @@ def test_singular_pivot_near_eigenvalue_resilience():
         Ls=Ls, closed=True
     )
 
-    # 1. Solve spectrum with very fine tolerance (tol=1e-12)
+    # Solve spectrum with very fine tolerance (tol=1e-12)
     res = hp.solve_exact_spectrum(syst, n_states=6, gamma=gamma, Delta0=Delta0, tol=1e-12)
     energies = res['energies']
     assert len(energies) == 6
     assert np.all(res['residuals'] < 1e-9)
 
-    # 2. Directly evaluate sturm_count_exact at each exact eigenvalue
+    # Directly evaluate sturm_count_exact at each exact eigenvalue
     # Under LAPACK convention, zero pivots are treated as negative (c_plus right-continuous)
     for E_star in energies:
         c = hp.sturm_count_exact(syst, E_star, Delta0=Delta0)

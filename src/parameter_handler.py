@@ -156,6 +156,14 @@ class SimulationConfig(BaseModel):
     target_gns: Optional[List[float]] = None
     tgp_barrier_arr: Optional[List[float]] = None
 
+    # Dense Barrier U-Sweep Settings
+    barrier_u_min: Optional[float] = None
+    barrier_u_max: Optional[float] = None
+    barrier_u_points: Optional[PositiveInt] = None
+    multi_baseline_barriers: bool = False
+    calc_25_cutter_harmonics: bool = False
+    quadrature_nodes_25: PositiveInt = 51
+
     class Config:
         arbitrary_types_allowed = True
 
@@ -187,7 +195,7 @@ class ConfigManager:
         return ProtocolConfig(**yaml_dict)
 
     @staticmethod
-    def get_config(config_path: str = None) -> SimulationConfig:
+    def get_config(config_path: str = None, cli_args: Optional[List[str]] = None) -> SimulationConfig:
         """
         Parses CLI arguments, optionally loads a YAML base, 
         merges them, and returns a validated SimulationConfig.
@@ -207,7 +215,7 @@ class ConfigManager:
                 # Simple version for primitive types:
                 parser.add_argument(f"--{field_name}", type=field.annotation, default=None)
         
-        args = parser.parse_args()
+        args, _ = parser.parse_known_args(cli_args)
         
         # 1. Load YAML Base if provided
         yaml_dict = {}
@@ -281,9 +289,17 @@ class SimulationState:
         ]
         
         # Constant coordinate arrays
-        # Asymmetry ratios: 41 points from -20 to 20, plus high-asymmetry endpoints -60 and +60 (43 points total)
-        self.asym_ratios = np.concatenate([[-60.0], np.linspace(-20.0, 20.0, 41), [60.0]])
-        self.barrier_arr = self.asym_ratios * config.barrier0
+        if (
+            getattr(config, 'barrier_u_points', None) is not None
+            and getattr(config, 'barrier_u_min', None) is not None
+            and getattr(config, 'barrier_u_max', None) is not None
+        ):
+            self.barrier_arr = np.linspace(config.barrier_u_min, config.barrier_u_max, int(config.barrier_u_points))
+            self.asym_ratios = self.barrier_arr / config.barrier0
+        else:
+            # Asymmetry ratios: 41 points from -20 to 20, plus high-asymmetry endpoints -60 and +60 (43 points total)
+            self.asym_ratios = np.concatenate([[-60.0], np.linspace(-20.0, 20.0, 41), [60.0]])
+            self.barrier_arr = self.asym_ratios * config.barrier0
         self.energies = np.linspace(-0.5, 0.5, config.num_engs)
         
         # TGP Stage 1 Cutter Barriers (Calibrated vs Hardcoded)
@@ -354,5 +370,11 @@ class SimulationState:
             'barrier_quadrature_nodes': config.barrier_quadrature_nodes,
             'barrier_sweep_only': config.barrier_sweep_only,
             'hamiltonian_mode': getattr(config, 'hamiltonian_mode', 'legacy'),
-            'tgp_barrier_arr': self.tgp_barrier_arr
+            'tgp_barrier_arr': self.tgp_barrier_arr,
+            'barrier_u_min': config.barrier_u_min,
+            'barrier_u_max': config.barrier_u_max,
+            'barrier_u_points': config.barrier_u_points,
+            'multi_baseline_barriers': config.multi_baseline_barriers,
+            'calc_25_cutter_harmonics': config.calc_25_cutter_harmonics,
+            'quadrature_nodes_25': config.quadrature_nodes_25
         }

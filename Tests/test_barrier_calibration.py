@@ -11,26 +11,8 @@ import src.barrier_calibration as bc
 
 def compute_1d_analytic_transmission(t, mu_leads, Ub, Lb, E):
     """
-    Exact analytical wave-matching calculation for 1D tight-binding transmission
+    Exact analytical transfer-matrix calculation for 1D tight-binding transmission
     through Lb rectangular barrier sites of height Ub between leads with hopping t.
-
-    Theory:
-      On a 1D lattice, the Schrödinger equation at site j is:
-        (epsilon_j - E) * psi_j - t * psi_{j+1} - t * psi_{j-1} = 0.
-      Rearranging yields the standard 2x2 transfer matrix connecting adjacent sites:
-        [psi_{j+1}, psi_j]^T = M_j @ [psi_j, psi_{j-1}]^T, where
-        M_j = [[(epsilon_j - E)/t, -1], [1, 0]].
-      For a uniform barrier of length Lb, M_total = (M_site)^Lb.
-      In the left lead (j <= 0), psi_j = exp(i*k*j) + r * exp(-i*k*j).
-      In the right lead (j >= Lb), psi_j = t_tr * exp(i*k*j).
-      Matching boundary vectors [psi_0, psi_{-1}]^T and [psi_Lb, psi_{Lb-1}]^T yields
-      a 2x2 linear system for transmission amplitude t_tr and reflection amplitude r.
-      Transmission probability is T_analytic = |t_tr|^2.
-
-    Recommended Reading:
-      - S. Datta, 'Electronic Transport in Mesoscopic Systems' (Cambridge, 1995), Chap 3.
-      - P. Markos & C. M. Soukoulis, 'Wave Scattering in Complex Media' (Princeton, 2008), Chap 6.
-      - C. W. J. Beenakker, Rev. Mod. Phys. 69, 731 (1997), Sec. II.A (Transfer Matrix Formalism).
     """
     # Lead dispersion: E = 2t - mu_leads - 2t cos(k)
     cos_k = (2.0 * t - mu_leads - E) / (2.0 * t)
@@ -44,7 +26,7 @@ def compute_1d_analytic_transmission(t, mu_leads, Ub, Lb, E):
                        [1.0, 0.0]], dtype=complex)
     M_total = np.linalg.matrix_power(M_site, Lb)
     
-    # Wave-matching vectors at barrier boundaries
+    # Boundary state vectors at barrier interfaces
     v_inc = np.array([1.0, np.exp(-1j * k)])
     v_refl = np.array([1.0, np.exp(1j * k)])
     v_R = np.array([np.exp(1j * k * Lb), np.exp(1j * k * (Lb - 1))])
@@ -146,7 +128,7 @@ def test_target_conductance_inversion():
             f"Asymmetry detected on clean wire: left={u_c_left}, right={u_c_right}"
         )
 
-def test_clean_wire_analytical_wavematching():
+def test_clean_wire_analytical_transfer_matrix():
     """
     Test that Kwant 1D scalar transmission matches the exact analytical transfer matrix
     formula to machine precision (atol=1e-12), and that the BdG single-junction normal

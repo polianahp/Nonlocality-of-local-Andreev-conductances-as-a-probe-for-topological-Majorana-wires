@@ -1031,7 +1031,7 @@ def build_system_exact(
     """
     Constructs an exact Kwant system with energy-dependent parent-Al self-energy.
 
-    Physics specification:
+
     Bare semiconductor (Z = 1, bare hopping everywhere):
         h_j = (eps_ref - mu_j) * tau_z (x) sigma_0 + V_z * tau_0 (x) sigma_x + Sigma_Al(omega)
         T = -t * tau_z (x) sigma_0 + 0.5j * alpha * tau_z (x) sigma_y
@@ -1245,7 +1245,6 @@ def solve_exact_spectrum(
 ) -> dict:
     """
     Finds the lowest n_states non-negative fixed points of det[E * I - H_bare - Sigma(E)] = 0
-    via Weyl-monotone block-Sturm bisection and certification.
     """
     import scipy.linalg
 

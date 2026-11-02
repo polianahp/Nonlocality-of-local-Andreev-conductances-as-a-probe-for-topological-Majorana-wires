@@ -59,7 +59,6 @@ def worker_simulation_step(iter_data, static_params):
     num_eigenvalues = static_params['num_eigenvalues']
     eng_window_range = static_params['eng_window_range']
     solver_type = static_params.get('solver_type', 'cpu')
-    hamiltonian_mode = static_params.get('hamiltonian_mode', 'legacy')
     
     # Barrier Sweeps ---
     points = len(barrier_arr)
@@ -91,43 +90,26 @@ def worker_simulation_step(iter_data, static_params):
     barrier_sweep_only = static_params.get('barrier_sweep_only', False)
 
     if not barrier_sweep_only:
-        # BdG Eigenvalues
-        if hamiltonian_mode == 'exact':
-            syst_closed = hp.build_system_exact(
-                t=t, mu=mu, gamma=gamma, Delta0=Delta0, V_z=vz, alpha=alpha,
-                Ls=Ls, Vdisx=Vdisx, closed=True
-            )
-            spec_res = hp.solve_exact_spectrum(
-                syst_closed, n_states=num_eigenvalues, gamma=gamma, Delta0=Delta0
-            )
-            evals = spec_res['energies']
-            evecs = spec_res.get('wavefunctions', None)
-            if static_params['spectra_flag']:
-                spectrum = evals[:4] if len(evals) >= 4 else evals
-            pos_evals = evals[evals >= 0]
-            energy_0 = pos_evals[0] if len(pos_evals) > 0 else np.nan
-            topological_gap = pos_evals[1] if len(pos_evals) > 1 else np.nan
-        else:
-            syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
-            evals, evecs = hp.solve_ham(syst_closed, solver_type=solver_type, k=num_eigenvalues)
-            
-            if static_params['spectra_flag']:
-                spectrum = hp.sort_spectrum(evals, evecs)
-                if len(spectrum) >= 4:
-                    idx_closest = np.argsort(np.abs(spectrum))[:4]
-                    spectrum = np.sort(spectrum[idx_closest])
-                    
-            pos_evals = np.sort(evals[evals >= 0])
-            if len(pos_evals) > 0:
-                energy_0 = pos_evals[0]
-            else:
-                energy_0 = np.nan
+        # BdG Eigenvalues (using renormalized legacy Hamiltonian)
+        syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
+        evals, evecs = hp.solve_ham(syst_closed, solver_type=solver_type, k=num_eigenvalues)
+        
+        if static_params['spectra_flag']:
+            spectrum = hp.sort_spectrum(evals, evecs)
+            if len(spectrum) >= 4:
+                idx_closest = np.argsort(np.abs(spectrum))[:4]
+                spectrum = np.sort(spectrum[idx_closest])
                 
-            if len(pos_evals) > 1:
-                topological_gap = pos_evals[1]
-            else:
-                topological_gap = np.nan
-
+        pos_evals = np.sort(evals[evals >= 0])
+        if len(pos_evals) > 0:
+            energy_0 = pos_evals[0]
+        else:
+            energy_0 = np.nan
+            
+        if len(pos_evals) > 1:
+            topological_gap = pos_evals[1]
+        else:
+            topological_gap = np.nan
 
         tgp_barrier_arr = static_params.get('tgp_barrier_arr', np.array([4.3548, 3.6774, 3.0000, 2.3710, 1.6935]))
         tgp_energies = hp.make_dynamic_grid()
@@ -138,28 +120,15 @@ def worker_simulation_step(iter_data, static_params):
         tgp_stage1_dIdV_RL = np.zeros((num_tgp, len(tgp_energies)))
         
         for idx, b_val in enumerate(tgp_barrier_arr):
-            if hamiltonian_mode == 'exact':
-                syst_tgp = hp.build_system_exact(
-                    t=t, mu=mu, gamma=gamma, Delta0=Delta0, V_z=vz, 
-                    alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
-                    barrier_l=b_val, barrier_r=b_val, Vdisx=Vdisx, closed=False
-                )
-                for k_eng, eng in enumerate(tgp_energies):
-                    Gmat_e = hp.calc_conductance_matrix_exact(syst_tgp, E=float(eng))
-                    tgp_stage1_dIdVl[idx, k_eng] = Gmat_e[0, 0]
-                    tgp_stage1_dIdVr[idx, k_eng] = Gmat_e[1, 1]
-                    tgp_stage1_dIdV_RL[idx, k_eng] = Gmat_e[1, 0]
-                    tgp_stage1_dIdV_LR[idx, k_eng] = Gmat_e[0, 1]
-            else:
-                syst_tgp = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz, 
-                                           alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
-                                           barrier_l=b_val, barrier_r=b_val, Vdisx=Vdisx)
-                
-                dL, dR, dLR, dRL, _ = hp.calc_dIdV(syst_tgp, tgp_energies, solver_type=solver_type)
-                tgp_stage1_dIdVl[idx, :] = dL
-                tgp_stage1_dIdVr[idx, :] = dR
-                tgp_stage1_dIdV_LR[idx, :] = dLR
-                tgp_stage1_dIdV_RL[idx, :] = dRL
+            syst_tgp = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz, 
+                                       alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
+                                       barrier_l=b_val, barrier_r=b_val, Vdisx=Vdisx)
+            
+            dL, dR, dLR, dRL, _ = hp.calc_dIdV(syst_tgp, tgp_energies, solver_type=solver_type)
+            tgp_stage1_dIdVl[idx, :] = dL
+            tgp_stage1_dIdVr[idx, :] = dR
+            tgp_stage1_dIdV_LR[idx, :] = dLR
+            tgp_stage1_dIdV_RL[idx, :] = dRL
     else:
         tgp_barrier_arr = None
 
@@ -196,103 +165,49 @@ def worker_simulation_step(iter_data, static_params):
         }
 
     if static_params.get('conductance_flag', True) or barrier_sweep_only:
-        if hamiltonian_mode == 'exact':
-            syst = hp.build_system_exact(t=t, mu=mu, gamma=gamma, Delta0=Delta0, V_z=vz, 
-                                         alpha=alpha, Ln=Ln, Lb=Lb, 
-                                         Ls=Ls, mu_leads=mu_leads,
-                                         barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx, closed=False)
+        syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz, 
+                               alpha=alpha, Ln=Ln, Lb=Lb, 
+                               Ls=Ls, mu_leads=mu_leads,
+                               barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
+        for T_val in target_temps:
+            if T_val > 0.0:
+                qe, qw = q_nodes[T_val]
+                b_data[T_val]['Gmat'] = hp.calc_conductance_matrix_finite_T(syst, qe, qw, solver_type=solver_type)
+            else:
+                b_data[T_val]['Gmat'] = hp.calc_conductance_matrix(syst, 0.0, solver_type=solver_type)
+
+        for k in range(points):
+            barrier_var_tot = barrier_arr[k] #+ mu
+            
+            # Varying Right Barrier (UR)
+            syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
+                                      V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
+                                      Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
+                                      barrier_r=barrier_var_tot, Vdisx=Vdisx)
             for T_val in target_temps:
                 if T_val > 0.0:
                     qe, qw = q_nodes[T_val]
-                    G_tot = np.zeros((2, 2))
-                    for eng, wt in zip(qe, qw):
-                        G_tot += wt * hp.calc_conductance_matrix_exact(syst, E=float(eng))
-                    b_data[T_val]['Gmat'] = G_tot
+                    Gmat_UR = hp.calc_conductance_matrix_finite_T(syst_UR, qe, qw, solver_type=solver_type)
                 else:
-                    b_data[T_val]['Gmat'] = hp.calc_conductance_matrix_exact(syst, E=0.0)
-
-            for k in range(points):
-                barrier_var_tot = barrier_arr[k]
-                
-                # Varying Right Barrier (UR)
-                syst_UR = hp.build_system_exact(t=t, mu=mu, gamma=gamma, Delta0=Delta0,
-                                                V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
-                                                Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
-                                                barrier_r=barrier_var_tot, Vdisx=Vdisx, closed=False)
-                for T_val in target_temps:
-                    if T_val > 0.0:
-                        qe, qw = q_nodes[T_val]
-                        G_tot = np.zeros((2, 2))
-                        for eng, wt in zip(qe, qw):
-                            G_tot += wt * hp.calc_conductance_matrix_exact(syst_UR, E=float(eng))
-                        Gmat_UR = G_tot
-                    else:
-                        Gmat_UR = hp.calc_conductance_matrix_exact(syst_UR, E=0.0)
-                    b_data[T_val]['b_right_cond_left'][k] = Gmat_UR[0, 0]
-                    b_data[T_val]['b_right_cond_right'][k] = Gmat_UR[1, 1]
-                    b_data[T_val]['b_right_GRL'][k] = Gmat_UR[1, 0]
-                    b_data[T_val]['b_right_GLR'][k] = Gmat_UR[0, 1]
-                
-                # Varying Left Barrier (UL)
-                syst_UL = hp.build_system_exact(t=t, mu=mu, gamma=gamma, Delta0=Delta0,
-                                                V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
-                                                Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot,
-                                                barrier_r=barrier_tot, Vdisx=Vdisx, closed=False)
-                for T_val in target_temps:
-                    if T_val > 0.0:
-                        qe, qw = q_nodes[T_val]
-                        G_tot = np.zeros((2, 2))
-                        for eng, wt in zip(qe, qw):
-                            G_tot += wt * hp.calc_conductance_matrix_exact(syst_UL, E=float(eng))
-                        Gmat_UL = G_tot
-                    else:
-                        Gmat_UL = hp.calc_conductance_matrix_exact(syst_UL, E=0.0)
-                    b_data[T_val]['b_left_cond_left'][k] = Gmat_UL[0, 0]
-                    b_data[T_val]['b_left_cond_right'][k] = Gmat_UL[1, 1]
-        else:
-            syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz, 
-                                   alpha=alpha, Ln=Ln, Lb=Lb, 
-                                   Ls=Ls, mu_leads=mu_leads,
-                                   barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
+                    Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0, solver_type=solver_type)
+                b_data[T_val]['b_right_cond_left'][k] = Gmat_UR[0, 0]
+                b_data[T_val]['b_right_cond_right'][k] = Gmat_UR[1, 1]
+                b_data[T_val]['b_right_GRL'][k] = Gmat_UR[1, 0]
+                b_data[T_val]['b_right_GLR'][k] = Gmat_UR[0, 1]
+            
+            # Varying Left Barrier (UL)
+            syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
+                                      V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
+                                      Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot,
+                                      barrier_r=barrier_tot, Vdisx=Vdisx)
             for T_val in target_temps:
                 if T_val > 0.0:
                     qe, qw = q_nodes[T_val]
-                    b_data[T_val]['Gmat'] = hp.calc_conductance_matrix_finite_T(syst, qe, qw, solver_type=solver_type)
+                    Gmat_UL = hp.calc_conductance_matrix_finite_T(syst_UL, qe, qw, solver_type=solver_type)
                 else:
-                    b_data[T_val]['Gmat'] = hp.calc_conductance_matrix(syst, 0.0, solver_type=solver_type)
-
-            for k in range(points):
-                barrier_var_tot = barrier_arr[k] #+ mu
-                
-                # Varying Right Barrier (UR)
-                syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
-                                          V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
-                                          Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
-                                          barrier_r=barrier_var_tot, Vdisx=Vdisx)
-                for T_val in target_temps:
-                    if T_val > 0.0:
-                        qe, qw = q_nodes[T_val]
-                        Gmat_UR = hp.calc_conductance_matrix_finite_T(syst_UR, qe, qw, solver_type=solver_type)
-                    else:
-                        Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0, solver_type=solver_type)
-                    b_data[T_val]['b_right_cond_left'][k] = Gmat_UR[0, 0]
-                    b_data[T_val]['b_right_cond_right'][k] = Gmat_UR[1, 1]
-                    b_data[T_val]['b_right_GRL'][k] = Gmat_UR[1, 0]
-                    b_data[T_val]['b_right_GLR'][k] = Gmat_UR[0, 1]
-                
-                # Varying Left Barrier (UL)
-                syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
-                                          V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
-                                          Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot,
-                                          barrier_r=barrier_tot, Vdisx=Vdisx)
-                for T_val in target_temps:
-                    if T_val > 0.0:
-                        qe, qw = q_nodes[T_val]
-                        Gmat_UL = hp.calc_conductance_matrix_finite_T(syst_UL, qe, qw, solver_type=solver_type)
-                    else:
-                        Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0, solver_type=solver_type)
-                    b_data[T_val]['b_left_cond_left'][k] = Gmat_UL[0, 0]
-                    b_data[T_val]['b_left_cond_right'][k] = Gmat_UL[1, 1]
+                    Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0, solver_type=solver_type)
+                b_data[T_val]['b_left_cond_left'][k] = Gmat_UL[0, 0]
+                b_data[T_val]['b_left_cond_right'][k] = Gmat_UL[1, 1]
 
     T_default = target_temps[0]
 
@@ -468,7 +383,7 @@ if __name__ == "__main__":
 
     print(f"--- Starting Simulation ---")
     print(f"Output Directory: {dirname}")
-    print(f"Hamiltonian Mode: {getattr(config, 'hamiltonian_mode', 'legacy')}")
+    print(f"Hamiltonian Mode: legacy (renormalized)")
     print(f"Hopping: {state.t:.4f}, Spin-Orbit: {state.alpha:.4f}, Delta: {state.Delta:.4f}")
     print(f"Disorder File: {fname}")
     print(f"Barrier Length (Lb): {config.Lb}")
@@ -714,7 +629,7 @@ if __name__ == "__main__":
             txt_path = PathConfigs.DATA / dirname / "tgp_barriers.txt"
             with open(txt_path, "w") as f:
                 f.write(f"Simulation Directory: {dirname}\n")
-                f.write(f"Hamiltonian Mode: {static_params.get('hamiltonian_mode', 'legacy')}\n")
+                f.write(f"Hamiltonian Mode: legacy (renormalized)\n")
                 f.write(f"Barrier Calibration: {getattr(config, 'calibrate_barriers', False)}\n")
                 if getattr(config, 'calibrate_barriers', False):
                     targets = getattr(config, 'target_gns', [0.35, 0.49, 0.62, 0.76, 0.90])
