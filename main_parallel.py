@@ -16,6 +16,7 @@ import tinyarray
 import multiprocessing as mp
 from tqdm import tqdm
 import src.helpers as hp
+import src.legendre_curvature as lc
 from pathlib import Path
 from src.config import PathConfigs
 import itertools as itr
@@ -89,6 +90,12 @@ def worker_simulation_step(iter_data, static_params):
     
     barrier_sweep_only = static_params.get('barrier_sweep_only', False)
 
+    tgp_barrier_arr = static_params.get('tgp_barrier_arr')
+    if tgp_barrier_arr is None:
+        tgp_barrier_arr = np.array([4.3548, 3.6774, 3.0000, 2.3710, 1.6935])
+    else:
+        tgp_barrier_arr = np.array(tgp_barrier_arr, dtype=float)
+
     if not barrier_sweep_only:
         # BdG Eigenvalues (using renormalized legacy Hamiltonian)
         syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
@@ -111,7 +118,6 @@ def worker_simulation_step(iter_data, static_params):
         else:
             topological_gap = np.nan
 
-        tgp_barrier_arr = static_params.get('tgp_barrier_arr', np.array([4.3548, 3.6774, 3.0000, 2.3710, 1.6935]))
         tgp_energies = hp.make_dynamic_grid()
         num_tgp = len(tgp_barrier_arr)
         tgp_stage1_dIdVl   = np.zeros((num_tgp, len(tgp_energies)))
@@ -130,7 +136,7 @@ def worker_simulation_step(iter_data, static_params):
             tgp_stage1_dIdV_LR[idx, :] = dLR
             tgp_stage1_dIdV_RL[idx, :] = dRL
     else:
-        tgp_barrier_arr = None
+        pass
 
     t_list = static_params.get('barrier_T_mK_list')
     if t_list and len(t_list) > 0:
@@ -164,7 +170,70 @@ def worker_simulation_step(iter_data, static_params):
             'b_left_cond_right': np.zeros(points),
         }
 
-    if static_params.get('conductance_flag', True) or barrier_sweep_only:
+    sweeps_by_baseline = None
+    if static_params.get('multi_baseline_barriers', False):
+        sweeps_by_baseline = []
+        for b_idx, u_base in enumerate(tgp_barrier_arr):
+            base_dict = {}
+            for T_val in target_temps:
+                base_dict[T_val] = {
+                    'Gmat': np.zeros((2, 2)),
+                    'b_right_cond_left': np.zeros(points, dtype=np.float64),
+                    'b_right_cond_right': np.zeros(points, dtype=np.float64),
+                    'b_right_GLR': np.zeros(points, dtype=np.float64),
+                    'b_right_GRL': np.zeros(points, dtype=np.float64),
+                    'b_left_cond_left': np.zeros(points, dtype=np.float64),
+                    'b_left_cond_right': np.zeros(points, dtype=np.float64),
+                }
+
+            syst_base = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
+                                        V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb,
+                                        Ls=Ls, mu_leads=mu_leads,
+                                        barrier_l=u_base, barrier_r=u_base, Vdisx=Vdisx)
+            for T_val in target_temps:
+                if T_val > 0.0:
+                    qe, qw = q_nodes[T_val]
+                    base_dict[T_val]['Gmat'] = hp.calc_conductance_matrix_finite_T(syst_base, qe, qw, solver_type=solver_type)
+                else:
+                    base_dict[T_val]['Gmat'] = hp.calc_conductance_matrix(syst_base, 0.0, solver_type=solver_type)
+
+            for k in range(points):
+                barrier_var_tot = barrier_arr[k]
+
+                # Varying Right Barrier (UL = u_base, UR = barrier_var_tot)
+                syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
+                                          V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb,
+                                          Ls=Ls, mu_leads=mu_leads, barrier_l=u_base,
+                                          barrier_r=barrier_var_tot, Vdisx=Vdisx)
+                for T_val in target_temps:
+                    if T_val > 0.0:
+                        qe, qw = q_nodes[T_val]
+                        Gmat_UR = hp.calc_conductance_matrix_finite_T(syst_UR, qe, qw, solver_type=solver_type)
+                    else:
+                        Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0, solver_type=solver_type)
+                    base_dict[T_val]['b_right_cond_left'][k] = Gmat_UR[0, 0]
+                    base_dict[T_val]['b_right_cond_right'][k] = Gmat_UR[1, 1]
+                    base_dict[T_val]['b_right_GRL'][k] = Gmat_UR[1, 0]
+                    base_dict[T_val]['b_right_GLR'][k] = Gmat_UR[0, 1]
+
+                # Varying Left Barrier (UL = barrier_var_tot, UR = u_base)
+                syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
+                                          V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb,
+                                          Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot,
+                                          barrier_r=u_base, Vdisx=Vdisx)
+                for T_val in target_temps:
+                    if T_val > 0.0:
+                        qe, qw = q_nodes[T_val]
+                        Gmat_UL = hp.calc_conductance_matrix_finite_T(syst_UL, qe, qw, solver_type=solver_type)
+                    else:
+                        Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0, solver_type=solver_type)
+                    base_dict[T_val]['b_left_cond_left'][k] = Gmat_UL[0, 0]
+                    base_dict[T_val]['b_left_cond_right'][k] = Gmat_UL[1, 1]
+
+            sweeps_by_baseline.append(base_dict)
+
+        b_data = sweeps_by_baseline[0]
+    elif static_params.get('conductance_flag', True) or barrier_sweep_only:
         syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz, 
                                alpha=alpha, Ln=Ln, Lb=Lb, 
                                Ls=Ls, mu_leads=mu_leads,
@@ -209,6 +278,81 @@ def worker_simulation_step(iter_data, static_params):
                 b_data[T_val]['b_left_cond_left'][k] = Gmat_UL[0, 0]
                 b_data[T_val]['b_left_cond_right'][k] = Gmat_UL[1, 1]
 
+    # 25-Cutter Harmonics (1w, 2w, 3w) via Double-Exponential Quadrature
+    harmonics_by_temp = None
+    if static_params.get('calc_25_cutter_harmonics', False):
+        num_baselines = len(tgp_barrier_arr)
+        de_quad = static_params.get('de_quad', {})
+
+        harmonics_by_temp = {}
+        for T_val in target_temps:
+            harmonics_by_temp[T_val] = {
+                'L_1w': np.zeros((num_baselines, num_baselines), dtype=np.float64),
+                'R_1w': np.zeros((num_baselines, num_baselines), dtype=np.float64),
+                'RL_2w': np.zeros((num_baselines, num_baselines), dtype=np.float64),
+                'LR_2w': np.zeros((num_baselines, num_baselines), dtype=np.float64),
+                'L_3w': np.zeros((num_baselines, num_baselines), dtype=np.float64),
+                'R_3w': np.zeros((num_baselines, num_baselines), dtype=np.float64),
+            }
+
+        for i_l, ul in enumerate(tgp_barrier_arr):
+            for j_r, ur in enumerate(tgp_barrier_arr):
+                syst_pair = hp.build_system(
+                    t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz,
+                    alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
+                    barrier_l=ul, barrier_r=ur, Vdisx=Vdisx
+                )
+
+                # A. Zero Temperature (T = 0)
+                if 0.0 in target_temps:
+                    G0_zero = hp.calc_conductance_matrix(syst_pair, eng=0.0, solver_type=solver_type)
+                    harmonics_by_temp[0.0]['L_1w'][i_l, j_r] = G0_zero[0, 0]
+                    harmonics_by_temp[0.0]['R_1w'][i_l, j_r] = G0_zero[1, 1]
+                    harmonics_by_temp[0.0]['RL_2w'][i_l, j_r] = G0_zero[1, 0]
+                    harmonics_by_temp[0.0]['LR_2w'][i_l, j_r] = G0_zero[0, 1]
+                    harmonics_by_temp[0.0]['L_3w'][i_l, j_r] = 0.0
+                    harmonics_by_temp[0.0]['R_3w'][i_l, j_r] = 0.0
+
+                # B. Finite Temperatures via 51-node Double-Exponential Quadrature
+                for T_val in target_temps:
+                    if T_val <= 0.0:
+                        continue
+                    q = de_quad.get(T_val)
+                    if q is None:
+                        continue
+                    e_nodes = q['energies']
+                    w_1w = q['weights_1w']
+                    w_2w = q['weights_2w']
+                    w_3w = q['weights_3w']
+
+                    sum_L_1w = 0.0
+                    sum_R_1w = 0.0
+                    sum_RL_2w = 0.0
+                    sum_LR_2w = 0.0
+                    sum_L_3w = 0.0
+                    sum_R_3w = 0.0
+
+                    for k_node, eng in enumerate(e_nodes):
+                        G_mat = hp.calc_conductance_matrix(syst_pair, eng=float(eng), solver_type=solver_type)
+                        g_ll = G_mat[0, 0]
+                        g_rr = G_mat[1, 1]
+                        g_rl = G_mat[1, 0]
+                        g_lr = G_mat[0, 1]
+
+                        sum_L_1w += w_1w[k_node] * g_ll
+                        sum_R_1w += w_1w[k_node] * g_rr
+                        sum_RL_2w += w_2w[k_node] * g_rl
+                        sum_LR_2w += w_2w[k_node] * g_lr
+                        sum_L_3w += w_3w[k_node] * g_ll
+                        sum_R_3w += w_3w[k_node] * g_rr
+
+                    harmonics_by_temp[T_val]['L_1w'][i_l, j_r] = sum_L_1w
+                    harmonics_by_temp[T_val]['R_1w'][i_l, j_r] = sum_R_1w
+                    harmonics_by_temp[T_val]['RL_2w'][i_l, j_r] = sum_RL_2w
+                    harmonics_by_temp[T_val]['LR_2w'][i_l, j_r] = sum_LR_2w
+                    harmonics_by_temp[T_val]['L_3w'][i_l, j_r] = sum_L_3w
+                    harmonics_by_temp[T_val]['R_3w'][i_l, j_r] = sum_R_3w
+
     T_default = target_temps[0]
 
     if barrier_sweep_only:
@@ -222,6 +366,8 @@ def worker_simulation_step(iter_data, static_params):
             'b_left_cond_left': b_data[T_default]['b_left_cond_left'],
             'b_left_cond_right': b_data[T_default]['b_left_cond_right'],
             'b_data': b_data,
+            'sweeps_by_baseline': sweeps_by_baseline,
+            'harmonics_by_temp': harmonics_by_temp,
         }
 
     # --- Conditional Heavy Calculations ---
@@ -254,6 +400,8 @@ def worker_simulation_step(iter_data, static_params):
         'mzm_separation': mzm_separation,
         'tgp_barrier_arr': tgp_barrier_arr,
         'b_data': b_data,
+        'sweeps_by_baseline': sweeps_by_baseline,
+        'harmonics_by_temp': harmonics_by_temp,
     }
     return results
 
@@ -405,6 +553,8 @@ if __name__ == "__main__":
     static_params = state.get_static_params(Vdisx, config)
     
     params_list = state.params_list
+    if getattr(config, 'max_points', None) is not None:
+        params_list = params_list[:config.max_points]
     mu_var = state.mu_var
     Vz_var = state.Vz_var
     barrier_arr = state.barrier_arr
@@ -464,12 +614,25 @@ if __name__ == "__main__":
     topological_gap_arr = np.zeros(shape=(len(params_list)))
     
     results = []
+    de_quad = {}
+    if getattr(config, 'calc_25_cutter_harmonics', False):
+        print(f"--- Precomputing Double-Exponential Quadrature ({config.quadrature_nodes_25} nodes) ---")
+        for T_val in target_temps:
+            if T_val > 0.0:
+                de_quad[T_val] = lc.get_double_exponential_quadrature(
+                    T_mK=T_val, n_nodes=config.quadrature_nodes_25
+                )
+                print(f"  T = {T_val:4.1f} mK: DE ({de_quad[T_val]['n_nodes']} nodes)")
+            else:
+                de_quad[0.0] = None
+    static_params['de_quad'] = de_quad
+
     if config.acceleration_type == 'gpu':
         print("Using GPU acceleration (Serial Sweep).")
         results = [worker_simulation_step(pms, static_params) for pms in tqdm(params_list, desc="mu/Vz Sweep")]
         
     elif config.acceleration_type == 'parallel':
-        num_workers = max(1, mp.cpu_count() - 1)
+        num_workers = config.workers if getattr(config, 'workers', None) is not None else max(1, mp.cpu_count() - 1)
         print(f"Starting Parallel Execution with {num_workers} workers.")
         
         with mp.Pool(processes=num_workers) as pool:
@@ -618,6 +781,7 @@ if __name__ == "__main__":
         hp.np_save_wrapped(tgp_stage1_dIdV_RL, "tgp_stage1_dIdV_RL", dirname)
         hp.np_save_wrapped(topological_gap_arr, "topological_gap", dirname)
         hp.np_save_wrapped(mp_arr, "mp_arr", dirname)
+        hp.np_save_wrapped(mp_eng_arr, "energy_0", dirname)
         hp.np_save_wrapped(spectrum_arr, "spectrum_arr", dirname)
         hp.np_save_wrapped(weight_localization_arr, "weight_localization_arr", dirname)
         hp.np_save_wrapped(mzm_separation_arr, "mzm_separation_arr", dirname)
@@ -637,6 +801,80 @@ if __name__ == "__main__":
                 f.write(f"TGP Barrier Array (meV): {barriers_to_save.tolist()}\n")
                 for b_idx, b_val in enumerate(barriers_to_save):
                     f.write(f"  Barrier {b_idx + 1}: {b_val:.6f} meV\n")
+
+    # Multi-baseline barrier sweeps serialization
+    if getattr(config, 'multi_baseline_barriers', False):
+        obs_keys = [
+            'b_right_cond_left', 'b_right_cond_right',
+            'b_right_GLR', 'b_right_GRL',
+            'b_left_cond_left', 'b_left_cond_right'
+        ]
+        u_cutters = state.tgp_barrier_arr
+        num_baselines = len(u_cutters)
+        t_keys = [f"{int(T)}mK" if T == int(T) else f"{T:.1f}mK" for T in target_temps]
+
+        sweep_tables = []
+        for b_idx in range(num_baselines):
+            b_dict = {}
+            for ok in obs_keys:
+                b_dict[ok] = {tk: np.zeros((len(params_list), num_barrier_points), dtype=np.float64) for tk in t_keys}
+            sweep_tables.append(b_dict)
+
+        for res in results:
+            idx = res['i']
+            if res.get('sweeps_by_baseline') is not None:
+                for b_idx in range(num_baselines):
+                    for T_val, tk in zip(target_temps, t_keys):
+                        p_res = res['sweeps_by_baseline'][b_idx][T_val]
+                        for ok in obs_keys:
+                            sweep_tables[b_idx][ok][tk][idx, :] = p_res[ok]
+
+        targets = getattr(config, 'target_gns', None) or [0.35, 0.49, 0.62, 0.76, 0.90]
+        tag_map = {
+            0.35: "baseline_0_35G0",
+            0.49: "baseline_0_49G0",
+            0.62: "baseline_0_62G0",
+            0.76: "baseline_0_76G0",
+            0.90: "baseline_0_90G0"
+        }
+        barrier_dir = PathConfigs.DATA / dirname / "Barrier_Sweeps"
+        barrier_dir.mkdir(parents=True, exist_ok=True)
+
+        for b_idx, target_gn in enumerate(targets):
+            folder_name = tag_map.get(round(target_gn, 2), f"baseline_{str(target_gn).replace('.', '_')}G0")
+            base_dir = barrier_dir / folder_name
+            base_dir.mkdir(parents=True, exist_ok=True)
+            np.save(base_dir / "barrier_arr.npy", state.barrier_arr)
+
+            for ok in obs_keys:
+                npz_dict = {tk: sweep_tables[b_idx][ok][tk] for tk in t_keys}
+                np.savez_compressed(base_dir / f"{ok}.npz", **npz_dict)
+
+    # 25-Cutter harmonics serialization
+    if getattr(config, 'calc_25_cutter_harmonics', False):
+        harm_keys = ['L_1w', 'R_1w', 'RL_2w', 'LR_2w', 'L_3w', 'R_3w']
+        u_cutters = state.tgp_barrier_arr
+        num_baselines = len(u_cutters)
+        t_keys = [f"{int(T)}mK" if T == int(T) else f"{T:.1f}mK" for T in target_temps]
+
+        harm_tables = {
+            tk: {hk: np.zeros((len(params_list), num_baselines, num_baselines), dtype=np.float64) for hk in harm_keys}
+            for tk in t_keys
+        }
+
+        for res in results:
+            idx = res['i']
+            if res.get('harmonics_by_temp') is not None:
+                for T_val, tk in zip(target_temps, t_keys):
+                    h_res = res['harmonics_by_temp'][T_val]
+                    for hk in harm_keys:
+                        harm_tables[tk][hk][idx, :, :] = h_res[hk]
+
+        harm_dir = PathConfigs.DATA / dirname / "Cutter_Harmonics_25"
+        harm_dir.mkdir(parents=True, exist_ok=True)
+
+        for T_val, tk in zip(target_temps, t_keys):
+            np.savez_compressed(harm_dir / f"harmonics_25_{tk}.npz", **harm_tables[tk])
 
     
     t_end = time.perf_counter()

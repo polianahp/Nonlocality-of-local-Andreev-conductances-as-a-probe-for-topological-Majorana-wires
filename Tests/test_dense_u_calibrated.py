@@ -88,7 +88,8 @@ def test_slurm_script_contracts():
         assert f"#SBATCH -J dense_u_r{r}" in content
         assert "#SBATCH -c 256" in content
         assert "#SBATCH -p day_3gb" in content
-        assert "#SBATCH -t 04:00:00" in content
+        assert "#SBATCH -t 24:00:00" in content
+        assert "main_parallel.py" in content
         assert f"dense_u_calibrated_r{r}.yaml" in content
         assert "--workers 255" in content
 
@@ -99,7 +100,8 @@ def test_slurm_script_contracts():
     assert "#SBATCH -J dense_u_r0_hardcoded" in hc_content
     assert "#SBATCH -c 256" in hc_content
     assert "#SBATCH -p day_3gb" in hc_content
-    assert "#SBATCH -t 04:00:00" in hc_content
+    assert "#SBATCH -t 24:00:00" in hc_content
+    assert "main_parallel.py" in hc_content
     assert "dense_u_hardcoded_r0.yaml" in hc_content
     assert "--workers 255" in hc_content
 
@@ -135,11 +137,18 @@ def test_end_to_end_mini_simulation(tmp_path):
     Executes an end-to-end dry run for 1 pixel with 2 barrier points across all 5 temperatures
     and 25 cutters (51 nodes) to verify the data contract, folder structure, and NPZ keys.
     """
-    from run_calibrated_dense_u_suite import run_production
+    import subprocess
+    import shutil
+    from src.config import PathConfigs
+
+    test_dirname = "Test_Mini_Dense_U_Verification"
+    out_dir = PathConfigs.DATA / test_dirname
+    if out_dir.exists():
+        shutil.rmtree(out_dir, ignore_errors=True)
 
     test_yaml = tmp_path / "test_mini.yaml"
-    cfg_content = """
-dirname: "Test_Mini"
+    cfg_content = f"""
+dirname: "{test_dirname}"
 realization_index: 0
 lambda_dis: 4.5
 V0: 1.2
@@ -173,14 +182,16 @@ Vz_min: 0.5
 Vz_dist: 0.1
 """
     test_yaml.write_text(cfg_content)
-    out_dir = tmp_path / "output_test"
 
-    run_production(
-        config_path=str(test_yaml),
-        workers=1,
-        max_points=1,
-        output_dir=str(out_dir)
-    )
+    cmd = [
+        sys.executable,
+        str(REPO_ROOT / "main_parallel.py"),
+        "--config_path", str(test_yaml),
+        "--workers", "1",
+        "--max_points", "1"
+    ]
+    proc = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True)
+    assert proc.returncode == 0, f"Simulation failed with returncode {proc.returncode}:\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
 
     # 1. Core outputs
     assert (out_dir / "spectrum_arr.npy").exists()
@@ -241,4 +252,7 @@ Vz_dist: 0.1
                 h_arr = h_data[hk]
                 assert h_arr.shape == (1, 5, 5)
                 assert np.all(np.isfinite(h_arr))
+
+    # Clean up test output directory
+    shutil.rmtree(out_dir, ignore_errors=True)
 

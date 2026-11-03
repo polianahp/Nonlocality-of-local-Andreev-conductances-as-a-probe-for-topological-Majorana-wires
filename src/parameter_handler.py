@@ -2,7 +2,7 @@
 import numpy as np
 import itertools as itr
 from pydantic import BaseModel, Field, PositiveInt, PositiveFloat, model_validator
-from typing import List, Any, Optional, Tuple
+from typing import List, Any, Optional, Tuple, Union, get_origin, get_args
 import argparse
 import os
 from pathlib import Path
@@ -164,8 +164,25 @@ class SimulationConfig(BaseModel):
     calc_25_cutter_harmonics: bool = False
     quadrature_nodes_25: PositiveInt = 51
 
+    # Parallel Execution & Point Overrides
+    workers: Optional[PositiveInt] = None
+    max_points: Optional[PositiveInt] = None
+
     class Config:
         arbitrary_types_allowed = True
+
+
+def _resolve_argparse_type(annotation):
+    origin = get_origin(annotation)
+    if origin is Union:
+        args = [a for a in get_args(annotation) if a is not type(None)]
+        if len(args) == 1:
+            return _resolve_argparse_type(args[0])
+    if hasattr(annotation, '__origin__') and hasattr(annotation, '__metadata__'):
+        return _resolve_argparse_type(annotation.__origin__)
+    if annotation in (int, float, str):
+        return annotation
+    return None
 
 
 class ConfigManager:
@@ -201,7 +218,7 @@ class ConfigManager:
         merges them, and returns a validated SimulationConfig.
         """
         parser = argparse.ArgumentParser(description="Run parallel transport and PDI simulation.")
-        parser.add_argument("--config_path", type=str, default=config_path, help="Path to a YAML config file.")
+        parser.add_argument("--config_path", "--config", dest="config_path", type=str, default=config_path, help="Path to a YAML config file.")
         
         # Dynamically add SimulationConfig fields to argparse for overrides
         # Using model_fields to iterate over pydantic fields (v2)
@@ -211,9 +228,11 @@ class ConfigManager:
                 parser.add_argument(f"--{field_name}", action="store_true", dest=field_name, default=None)
                 parser.add_argument(f"--no-{field_name}", action="store_false", dest=field_name, default=None)
             else:
-                # We handle Optionals by getting the inner type if possible
-                # Simple version for primitive types:
-                parser.add_argument(f"--{field_name}", type=field.annotation, default=None)
+                arg_type = _resolve_argparse_type(field.annotation)
+                if arg_type is not None:
+                    parser.add_argument(f"--{field_name}", type=arg_type, default=None)
+                else:
+                    parser.add_argument(f"--{field_name}", default=None)
         
         args, _ = parser.parse_known_args(cli_args)
         
@@ -289,12 +308,13 @@ class SimulationState:
         ]
         
         # Constant coordinate arrays
+        n_pts = getattr(config, 'barrier_u_points', None) or getattr(config, 'Upoints', None)
         if (
-            getattr(config, 'barrier_u_points', None) is not None
+            n_pts is not None
             and getattr(config, 'barrier_u_min', None) is not None
             and getattr(config, 'barrier_u_max', None) is not None
         ):
-            self.barrier_arr = np.linspace(config.barrier_u_min, config.barrier_u_max, int(config.barrier_u_points))
+            self.barrier_arr = np.linspace(config.barrier_u_min, config.barrier_u_max, int(n_pts))
             self.asym_ratios = self.barrier_arr / config.barrier0
         else:
             # Asymmetry ratios: 41 points from -20 to 20, plus high-asymmetry endpoints -60 and +60 (43 points total)
@@ -374,6 +394,7 @@ class SimulationState:
             'barrier_u_min': config.barrier_u_min,
             'barrier_u_max': config.barrier_u_max,
             'barrier_u_points': config.barrier_u_points,
+            'target_gns': config.target_gns,
             'multi_baseline_barriers': config.multi_baseline_barriers,
             'calc_25_cutter_harmonics': config.calc_25_cutter_harmonics,
             'quadrature_nodes_25': config.quadrature_nodes_25
