@@ -161,6 +161,8 @@ class SimulationConfig(BaseModel):
     barrier_u_max: Optional[float] = None
     barrier_u_points: Optional[PositiveInt] = None
     multi_baseline_barriers: bool = False
+    barrier_sweep_indices: Optional[List[int]] = None
+    calc_barrier_sweeps: bool = True
     calc_25_cutter_harmonics: bool = False
     quadrature_nodes_25: PositiveInt = 51
 
@@ -396,6 +398,8 @@ class SimulationState:
             'barrier_u_points': config.barrier_u_points,
             'target_gns': config.target_gns,
             'multi_baseline_barriers': config.multi_baseline_barriers,
+            'barrier_sweep_indices': config.barrier_sweep_indices,
+            'calc_barrier_sweeps': config.calc_barrier_sweeps,
             'calc_25_cutter_harmonics': config.calc_25_cutter_harmonics,
             'quadrature_nodes_25': config.quadrature_nodes_25
         }

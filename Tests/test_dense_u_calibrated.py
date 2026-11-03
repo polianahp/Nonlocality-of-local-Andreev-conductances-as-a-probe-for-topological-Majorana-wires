@@ -256,3 +256,206 @@ Vz_dist: 0.1
     # Clean up test output directory
     shutil.rmtree(out_dir, ignore_errors=True)
 
+
+def test_tier1_correlation_contracts():
+    """Verify Tier 1 Low-Asymmetry Correlation YAML files and SLURM scripts."""
+    for r in range(3):
+        # 1. Parameter file contract
+        cfg_path = REPO_ROOT / f"Inputs/Parameters/dense_u_corr_temp_r{r}.yaml"
+        assert cfg_path.exists(), f"Missing config: {cfg_path}"
+        with open(cfg_path, "r") as f:
+            raw_cfg = yaml.safe_load(f)
+
+        assert raw_cfg["realization_index"] == r
+        assert raw_cfg["target_gns"] == [0.35, 0.90]
+        assert raw_cfg["barrier_u_points"] == 51
+        assert raw_cfg["barrier_u_min"] == -5.0
+        assert raw_cfg["barrier_u_max"] == 5.0
+        assert raw_cfg["barrier_T_mK_list"] == [0.0, 10.0, 20.0, 30.0, 40.0]
+        assert raw_cfg["calc_25_cutter_harmonics"] is False
+        assert raw_cfg["multi_baseline_barriers"] is True
+        assert raw_cfg["dirname"] == f"Harpers_Ferry/Dense_U_Correlation_Temp/Realization_{r}"
+
+        # 2. SLURM script contract
+        slurm_file = REPO_ROOT / f"Slurm_Scripts/Harpers_Ferry/Dense_U_Correlation/run_dense_u_corr_r{r}.slurm"
+        assert slurm_file.exists(), f"Missing slurm: {slurm_file}"
+        content = slurm_file.read_text()
+        assert f"#SBATCH -J dense_u_corr_r{r}" in content
+        assert "#SBATCH -t 06:00:00" in content
+        assert "#SBATCH -c 256" in content
+        assert "#SBATCH -p day_3gb" in content
+        assert f"dense_u_corr_temp_r{r}.yaml" in content
+        assert "--workers 255" in content
+
+    submit_sh = REPO_ROOT / "Slurm_Scripts/Harpers_Ferry/Dense_U_Correlation/submit_dense_u_corr.sh"
+    assert submit_sh.exists()
+    assert oct(submit_sh.stat().st_mode)[-3:] in ["755", "775", "777"]
+
+
+def test_tier2_operating_contracts():
+    """Verify Tier 2 25-Cutter Harmonics Operating YAML files and SLURM scripts."""
+    for r in range(3):
+        # 1. Parameter file contract
+        cfg_path = REPO_ROOT / f"Inputs/Parameters/dense_u_operating_r{r}.yaml"
+        assert cfg_path.exists(), f"Missing config: {cfg_path}"
+        with open(cfg_path, "r") as f:
+            raw_cfg = yaml.safe_load(f)
+
+        assert raw_cfg["realization_index"] == r
+        assert raw_cfg["target_gns"] == [0.35, 0.49, 0.62, 0.76, 0.90]
+        assert raw_cfg["calc_25_cutter_harmonics"] is True
+        assert raw_cfg["quadrature_nodes_25"] == 51
+        assert raw_cfg["barrier_T_mK_list"] == [0.0, 40.0]
+        assert raw_cfg["calc_barrier_sweeps"] is False
+        assert raw_cfg["dirname"] == f"Harpers_Ferry/Dense_U_Operating/Realization_{r}"
+
+        # 2. SLURM script contract
+        slurm_file = REPO_ROOT / f"Slurm_Scripts/Harpers_Ferry/Dense_U_Operating/run_dense_u_op_r{r}.slurm"
+        assert slurm_file.exists(), f"Missing slurm: {slurm_file}"
+        content = slurm_file.read_text()
+        assert f"#SBATCH -J dense_u_op_r{r}" in content
+        assert "#SBATCH -t 02:00:00" in content
+        assert "#SBATCH -c 256" in content
+        assert "#SBATCH -p day_3gb" in content
+        assert f"dense_u_operating_r{r}.yaml" in content
+        assert "--workers 255" in content
+
+    submit_sh = REPO_ROOT / "Slurm_Scripts/Harpers_Ferry/Dense_U_Operating/submit_dense_u_operating.sh"
+    assert submit_sh.exists()
+    assert oct(submit_sh.stat().st_mode)[-3:] in ["755", "775", "777"]
+
+
+def test_tier1_and_tier2_micro_execution(tmp_path):
+    """
+    Executes a fast 1-pixel dry run for both Tier 1 and Tier 2 to verify:
+    1. Tier 1 produces baseline_0_35G0 and baseline_0_90G0 across all 5 temperatures.
+    2. Tier 2 produces Cutter_Harmonics_25 across 0 and 40 mK without barrier sweeps.
+    """
+    import subprocess
+    import shutil
+    from src.config import PathConfigs
+
+    # --- Test Tier 1 ---
+    t1_dirname = "Test_Tier1_Micro"
+    t1_out = PathConfigs.DATA / t1_dirname
+    if t1_out.exists():
+        shutil.rmtree(t1_out, ignore_errors=True)
+
+    t1_yaml = tmp_path / "tier1_micro.yaml"
+    t1_yaml.write_text(f"""
+dirname: "{t1_dirname}"
+realization_index: 0
+lambda_dis: 4.5
+V0: 1.2
+Ls: 300
+Ln: 0
+Lb: 3
+Lb_pdi: 3
+a0: 100.0
+ms: 0.023
+Delta_0: 0.3
+gamma: 0.2
+barrier0: 2.0
+mu_n: 0.0
+qn: 20
+calibrate_barriers: True
+target_gns: [0.35, 0.90]
+barrier_u_min: -1.0
+barrier_u_max: 1.0
+barrier_u_points: 2
+multi_baseline_barriers: True
+calc_barrier_sweeps: True
+calc_25_cutter_harmonics: False
+barrier_conductance_mode: "finite_temperature"
+barrier_T_mK_list: [0.0, 10.0, 20.0, 30.0, 40.0]
+barrier_quadrature_nodes: 4
+mu_max: 1.0
+mu_min: 1.0
+mu_dist: 0.1
+Vz_max: 0.5
+Vz_min: 0.5
+Vz_dist: 0.1
+""")
+
+    cmd1 = [
+        sys.executable,
+        str(REPO_ROOT / "main_parallel.py"),
+        "--config_path", str(t1_yaml),
+        "--workers", "1",
+        "--max_points", "1"
+    ]
+    proc1 = subprocess.run(cmd1, cwd=REPO_ROOT, capture_output=True, text=True)
+    assert proc1.returncode == 0, f"Tier 1 micro execution failed:\n{proc1.stderr}"
+
+    assert (t1_out / "Barrier_Sweeps" / "baseline_0_35G0").exists()
+    assert (t1_out / "Barrier_Sweeps" / "baseline_0_90G0").exists()
+    assert not (t1_out / "Barrier_Sweeps" / "baseline_0_49G0").exists()
+    assert not (t1_out / "Cutter_Harmonics_25").exists()
+
+    npz_check = np.load(t1_out / "Barrier_Sweeps" / "baseline_0_35G0" / "b_right_cond_left.npz")
+    assert set(npz_check.files) == {"0mK", "10mK", "20mK", "30mK", "40mK"}
+    assert npz_check["0mK"].shape == (1, 2)
+    shutil.rmtree(t1_out, ignore_errors=True)
+
+    # --- Test Tier 2 Option A (Delta) ---
+    t2_dirname = "Test_Tier2_Micro"
+    t2_out = PathConfigs.DATA / t2_dirname
+    if t2_out.exists():
+        shutil.rmtree(t2_out, ignore_errors=True)
+
+    t2_yaml = tmp_path / "tier2_micro.yaml"
+    t2_yaml.write_text(f"""
+dirname: "{t2_dirname}"
+realization_index: 0
+lambda_dis: 4.5
+V0: 1.2
+Ls: 300
+Ln: 0
+Lb: 3
+Lb_pdi: 3
+a0: 100.0
+ms: 0.023
+Delta_0: 0.3
+gamma: 0.2
+barrier0: 2.0
+mu_n: 0.0
+qn: 20
+calibrate_barriers: True
+target_gns: [0.35, 0.49, 0.62, 0.76, 0.90]
+calc_barrier_sweeps: False
+multi_baseline_barriers: False
+calc_25_cutter_harmonics: True
+quadrature_nodes_25: 51
+barrier_conductance_mode: "finite_temperature"
+barrier_T_mK_list: [0.0, 40.0]
+barrier_quadrature_nodes: 4
+mu_max: 1.0
+mu_min: 1.0
+mu_dist: 0.1
+Vz_max: 0.5
+Vz_min: 0.5
+Vz_dist: 0.1
+""")
+
+    cmd2 = [
+        sys.executable,
+        str(REPO_ROOT / "main_parallel.py"),
+        "--config_path", str(t2_yaml),
+        "--workers", "1",
+        "--max_points", "1"
+    ]
+    proc2 = subprocess.run(cmd2, cwd=REPO_ROOT, capture_output=True, text=True)
+    assert proc2.returncode == 0, f"Tier 2 micro execution failed:\n{proc2.stderr}"
+
+    assert not (t2_out / "Barrier_Sweeps").exists()
+    assert (t2_out / "Cutter_Harmonics_25").exists()
+    assert (t2_out / "Cutter_Harmonics_25" / "harmonics_25_0mK.npz").exists()
+    assert (t2_out / "Cutter_Harmonics_25" / "harmonics_25_40mK.npz").exists()
+    assert not (t2_out / "Cutter_Harmonics_25" / "harmonics_25_10mK.npz").exists()
+
+    harm_check = np.load(t2_out / "Cutter_Harmonics_25" / "harmonics_25_40mK.npz")
+    assert harm_check["L_1w"].shape == (1, 5, 5)
+    shutil.rmtree(t2_out, ignore_errors=True)
+
+
+

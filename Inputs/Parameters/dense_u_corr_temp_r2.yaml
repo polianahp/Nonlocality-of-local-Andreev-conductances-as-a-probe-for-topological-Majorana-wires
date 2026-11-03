@@ -1,0 +1,71 @@
+# ==============================================================================
+# dense_u_corr_temp_r2.yaml
+# Tier 1 Production Configuration: Low-Asymmetry Correlation vs Temperature
+# Evaluates 51-point dense U-sweeps for lowest (0.35 G0) and highest (0.90 G0) baselines
+# Across all 5 experimental temperatures [0, 10, 20, 30, 40] mK
+# Disorder Realization 2 (Harpers Ferry Production Run: ~4.35 hours on 255 workers)
+# ==============================================================================
+
+# Disorder Management
+dirname: "Harpers_Ferry/Dense_U_Correlation_Temp/Realization_2"
+realization_index: 2
+lambda_dis: 4.5
+V0: 1.2
+
+# Geometry and Physics
+Ls: 300
+Ln: 0
+Lb: 3
+Lb_pdi: 3
+a0: 100.0
+ms: 0.023
+Delta_0: 0.3
+gamma: 0.2
+barrier0: 2.0
+mu_n: 0.0
+qn: 20
+
+# Barrier Calibration Settings (Extreme Baselines Only)
+calibrate_barriers: True
+target_gns: [0.35, 0.90]
+
+# Dense Barrier U-Sweep Configuration (51 points in [-5, +5] meV)
+barrier_u_min: -5.0
+barrier_u_max: 5.0
+barrier_u_points: 51
+Upoints: 51
+multi_baseline_barriers: True
+calc_barrier_sweeps: True
+
+# 25-Cutter Harmonics: Disabled for Tier 1
+calc_25_cutter_harmonics: False
+
+# Thermal Broadening Suite (5 Temperatures)
+barrier_conductance_mode: "finite_temperature"
+barrier_T_mK_list: [0.0, 10.0, 20.0, 30.0, 40.0]
+barrier_quadrature_nodes: 8
+
+# Sweep Ranges (Full Production Grid: 225 x 70 = 15,750 points)
+mu_max: 4.5
+mu_min: 0.0
+mu_dist: 0.02
+
+Vz_max: 1.4
+Vz_min: 0.0
+Vz_dist: 0.02
+
+# Simulation Resolution
+num_engs: 51
+num_eigenvalues: 12
+eng_window_range: 51
+weight_threshold: 0.8
+separation_threshold: 0.65
+
+# Execution and Observables
+acceleration_type: "parallel"
+conductance_flag: True
+spectra_flag: True
+localization_flag: True
+pdi_flag: True
+calc_pfaffian: True
+pfaffian_delta_N: 0

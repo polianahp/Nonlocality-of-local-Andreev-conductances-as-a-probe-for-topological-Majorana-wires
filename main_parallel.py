@@ -171,39 +171,96 @@ def worker_simulation_step(iter_data, static_params):
         }
 
     sweeps_by_baseline = None
-    if static_params.get('multi_baseline_barriers', False):
-        sweeps_by_baseline = []
-        for b_idx, u_base in enumerate(tgp_barrier_arr):
-            base_dict = {}
-            for T_val in target_temps:
-                base_dict[T_val] = {
-                    'Gmat': np.zeros((2, 2)),
-                    'b_right_cond_left': np.zeros(points, dtype=np.float64),
-                    'b_right_cond_right': np.zeros(points, dtype=np.float64),
-                    'b_right_GLR': np.zeros(points, dtype=np.float64),
-                    'b_right_GRL': np.zeros(points, dtype=np.float64),
-                    'b_left_cond_left': np.zeros(points, dtype=np.float64),
-                    'b_left_cond_right': np.zeros(points, dtype=np.float64),
-                }
+    if static_params.get('calc_barrier_sweeps', True):
+        if static_params.get('multi_baseline_barriers', False):
+            sweeps_by_baseline = {}
+            sweep_indices = static_params.get('barrier_sweep_indices')
+            if sweep_indices is None:
+                active_baselines = list(enumerate(tgp_barrier_arr))
+            else:
+                active_baselines = [(idx, tgp_barrier_arr[idx]) for idx in sweep_indices if idx < len(tgp_barrier_arr)]
 
-            syst_base = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
-                                        V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb,
-                                        Ls=Ls, mu_leads=mu_leads,
-                                        barrier_l=u_base, barrier_r=u_base, Vdisx=Vdisx)
+            for b_idx, u_base in active_baselines:
+                base_dict = {}
+                for T_val in target_temps:
+                    base_dict[T_val] = {
+                        'Gmat': np.zeros((2, 2)),
+                        'b_right_cond_left': np.zeros(points, dtype=np.float64),
+                        'b_right_cond_right': np.zeros(points, dtype=np.float64),
+                        'b_right_GLR': np.zeros(points, dtype=np.float64),
+                        'b_right_GRL': np.zeros(points, dtype=np.float64),
+                        'b_left_cond_left': np.zeros(points, dtype=np.float64),
+                        'b_left_cond_right': np.zeros(points, dtype=np.float64),
+                    }
+
+                syst_base = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
+                                            V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb,
+                                            Ls=Ls, mu_leads=mu_leads,
+                                            barrier_l=u_base, barrier_r=u_base, Vdisx=Vdisx)
+                for T_val in target_temps:
+                    if T_val > 0.0:
+                        qe, qw = q_nodes[T_val]
+                        base_dict[T_val]['Gmat'] = hp.calc_conductance_matrix_finite_T(syst_base, qe, qw, solver_type=solver_type)
+                    else:
+                        base_dict[T_val]['Gmat'] = hp.calc_conductance_matrix(syst_base, 0.0, solver_type=solver_type)
+
+                for k in range(points):
+                    barrier_var_tot = barrier_arr[k]
+
+                    # Varying Right Barrier (UL = u_base, UR = barrier_var_tot)
+                    syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
+                                              V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb,
+                                              Ls=Ls, mu_leads=mu_leads, barrier_l=u_base,
+                                              barrier_r=barrier_var_tot, Vdisx=Vdisx)
+                    for T_val in target_temps:
+                        if T_val > 0.0:
+                            qe, qw = q_nodes[T_val]
+                            Gmat_UR = hp.calc_conductance_matrix_finite_T(syst_UR, qe, qw, solver_type=solver_type)
+                        else:
+                            Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0, solver_type=solver_type)
+                        base_dict[T_val]['b_right_cond_left'][k] = Gmat_UR[0, 0]
+                        base_dict[T_val]['b_right_cond_right'][k] = Gmat_UR[1, 1]
+                        base_dict[T_val]['b_right_GRL'][k] = Gmat_UR[1, 0]
+                        base_dict[T_val]['b_right_GLR'][k] = Gmat_UR[0, 1]
+
+                    # Varying Left Barrier (UL = barrier_var_tot, UR = u_base)
+                    syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
+                                              V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb,
+                                              Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot,
+                                              barrier_r=u_base, Vdisx=Vdisx)
+                    for T_val in target_temps:
+                        if T_val > 0.0:
+                            qe, qw = q_nodes[T_val]
+                            Gmat_UL = hp.calc_conductance_matrix_finite_T(syst_UL, qe, qw, solver_type=solver_type)
+                        else:
+                            Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0, solver_type=solver_type)
+                        base_dict[T_val]['b_left_cond_left'][k] = Gmat_UL[0, 0]
+                        base_dict[T_val]['b_left_cond_right'][k] = Gmat_UL[1, 1]
+
+                sweeps_by_baseline[b_idx] = base_dict
+
+            if len(sweeps_by_baseline) > 0:
+                first_key = next(iter(sweeps_by_baseline))
+                b_data = sweeps_by_baseline[first_key]
+        elif static_params.get('conductance_flag', True) or barrier_sweep_only:
+            syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz, 
+                                   alpha=alpha, Ln=Ln, Lb=Lb, 
+                                   Ls=Ls, mu_leads=mu_leads,
+                                   barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
             for T_val in target_temps:
                 if T_val > 0.0:
                     qe, qw = q_nodes[T_val]
-                    base_dict[T_val]['Gmat'] = hp.calc_conductance_matrix_finite_T(syst_base, qe, qw, solver_type=solver_type)
+                    b_data[T_val]['Gmat'] = hp.calc_conductance_matrix_finite_T(syst, qe, qw, solver_type=solver_type)
                 else:
-                    base_dict[T_val]['Gmat'] = hp.calc_conductance_matrix(syst_base, 0.0, solver_type=solver_type)
+                    b_data[T_val]['Gmat'] = hp.calc_conductance_matrix(syst, 0.0, solver_type=solver_type)
 
             for k in range(points):
-                barrier_var_tot = barrier_arr[k]
-
-                # Varying Right Barrier (UL = u_base, UR = barrier_var_tot)
+                barrier_var_tot = barrier_arr[k] #+ mu
+                
+                # Varying Right Barrier (UR)
                 syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
-                                          V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb,
-                                          Ls=Ls, mu_leads=mu_leads, barrier_l=u_base,
+                                          V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
+                                          Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
                                           barrier_r=barrier_var_tot, Vdisx=Vdisx)
                 for T_val in target_temps:
                     if T_val > 0.0:
@@ -211,72 +268,24 @@ def worker_simulation_step(iter_data, static_params):
                         Gmat_UR = hp.calc_conductance_matrix_finite_T(syst_UR, qe, qw, solver_type=solver_type)
                     else:
                         Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0, solver_type=solver_type)
-                    base_dict[T_val]['b_right_cond_left'][k] = Gmat_UR[0, 0]
-                    base_dict[T_val]['b_right_cond_right'][k] = Gmat_UR[1, 1]
-                    base_dict[T_val]['b_right_GRL'][k] = Gmat_UR[1, 0]
-                    base_dict[T_val]['b_right_GLR'][k] = Gmat_UR[0, 1]
-
-                # Varying Left Barrier (UL = barrier_var_tot, UR = u_base)
+                    b_data[T_val]['b_right_cond_left'][k] = Gmat_UR[0, 0]
+                    b_data[T_val]['b_right_cond_right'][k] = Gmat_UR[1, 1]
+                    b_data[T_val]['b_right_GRL'][k] = Gmat_UR[1, 0]
+                    b_data[T_val]['b_right_GLR'][k] = Gmat_UR[0, 1]
+                
+                # Varying Left Barrier (UL)
                 syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
-                                          V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb,
+                                          V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
                                           Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot,
-                                          barrier_r=u_base, Vdisx=Vdisx)
+                                          barrier_r=barrier_tot, Vdisx=Vdisx)
                 for T_val in target_temps:
                     if T_val > 0.0:
                         qe, qw = q_nodes[T_val]
                         Gmat_UL = hp.calc_conductance_matrix_finite_T(syst_UL, qe, qw, solver_type=solver_type)
                     else:
                         Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0, solver_type=solver_type)
-                    base_dict[T_val]['b_left_cond_left'][k] = Gmat_UL[0, 0]
-                    base_dict[T_val]['b_left_cond_right'][k] = Gmat_UL[1, 1]
-
-            sweeps_by_baseline.append(base_dict)
-
-        b_data = sweeps_by_baseline[0]
-    elif static_params.get('conductance_flag', True) or barrier_sweep_only:
-        syst = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz, 
-                               alpha=alpha, Ln=Ln, Lb=Lb, 
-                               Ls=Ls, mu_leads=mu_leads,
-                               barrier_l=barrier_tot, barrier_r=barrier_tot, Vdisx=Vdisx)
-        for T_val in target_temps:
-            if T_val > 0.0:
-                qe, qw = q_nodes[T_val]
-                b_data[T_val]['Gmat'] = hp.calc_conductance_matrix_finite_T(syst, qe, qw, solver_type=solver_type)
-            else:
-                b_data[T_val]['Gmat'] = hp.calc_conductance_matrix(syst, 0.0, solver_type=solver_type)
-
-        for k in range(points):
-            barrier_var_tot = barrier_arr[k] #+ mu
-            
-            # Varying Right Barrier (UR)
-            syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
-                                      V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
-                                      Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_tot,
-                                      barrier_r=barrier_var_tot, Vdisx=Vdisx)
-            for T_val in target_temps:
-                if T_val > 0.0:
-                    qe, qw = q_nodes[T_val]
-                    Gmat_UR = hp.calc_conductance_matrix_finite_T(syst_UR, qe, qw, solver_type=solver_type)
-                else:
-                    Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0, solver_type=solver_type)
-                b_data[T_val]['b_right_cond_left'][k] = Gmat_UR[0, 0]
-                b_data[T_val]['b_right_cond_right'][k] = Gmat_UR[1, 1]
-                b_data[T_val]['b_right_GRL'][k] = Gmat_UR[1, 0]
-                b_data[T_val]['b_right_GLR'][k] = Gmat_UR[0, 1]
-            
-            # Varying Left Barrier (UL)
-            syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
-                                      V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb, 
-                                      Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot,
-                                      barrier_r=barrier_tot, Vdisx=Vdisx)
-            for T_val in target_temps:
-                if T_val > 0.0:
-                    qe, qw = q_nodes[T_val]
-                    Gmat_UL = hp.calc_conductance_matrix_finite_T(syst_UL, qe, qw, solver_type=solver_type)
-                else:
-                    Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0, solver_type=solver_type)
-                b_data[T_val]['b_left_cond_left'][k] = Gmat_UL[0, 0]
-                b_data[T_val]['b_left_cond_right'][k] = Gmat_UL[1, 1]
+                    b_data[T_val]['b_left_cond_left'][k] = Gmat_UL[0, 0]
+                    b_data[T_val]['b_left_cond_right'][k] = Gmat_UL[1, 1]
 
     # 25-Cutter Harmonics (1w, 2w, 3w) via Double-Exponential Quadrature
     harmonics_by_temp = None
@@ -803,33 +812,42 @@ if __name__ == "__main__":
                     f.write(f"  Barrier {b_idx + 1}: {b_val:.6f} meV\n")
 
     # Multi-baseline barrier sweeps serialization
-    if getattr(config, 'multi_baseline_barriers', False):
+    if getattr(config, 'multi_baseline_barriers', False) and getattr(config, 'calc_barrier_sweeps', True):
         obs_keys = [
             'b_right_cond_left', 'b_right_cond_right',
             'b_right_GLR', 'b_right_GRL',
             'b_left_cond_left', 'b_left_cond_right'
         ]
         u_cutters = state.tgp_barrier_arr
+        targets = getattr(config, 'target_gns', None) or [0.35, 0.49, 0.62, 0.76, 0.90]
         num_baselines = len(u_cutters)
         t_keys = [f"{int(T)}mK" if T == int(T) else f"{T:.1f}mK" for T in target_temps]
 
-        sweep_tables = []
-        for b_idx in range(num_baselines):
+        sweep_indices = getattr(config, 'barrier_sweep_indices', None)
+        if sweep_indices is None:
+            active_indices = list(range(num_baselines))
+        else:
+            active_indices = [idx for idx in sweep_indices if idx < num_baselines]
+
+        sweep_tables = {}
+        for b_idx in active_indices:
             b_dict = {}
             for ok in obs_keys:
                 b_dict[ok] = {tk: np.zeros((len(params_list), num_barrier_points), dtype=np.float64) for tk in t_keys}
-            sweep_tables.append(b_dict)
+            sweep_tables[b_idx] = b_dict
 
         for res in results:
             idx = res['i']
             if res.get('sweeps_by_baseline') is not None:
-                for b_idx in range(num_baselines):
-                    for T_val, tk in zip(target_temps, t_keys):
-                        p_res = res['sweeps_by_baseline'][b_idx][T_val]
-                        for ok in obs_keys:
-                            sweep_tables[b_idx][ok][tk][idx, :] = p_res[ok]
+                s_dict = res['sweeps_by_baseline']
+                for b_idx in active_indices:
+                    base_data = s_dict.get(b_idx) if isinstance(s_dict, dict) else (s_dict[b_idx] if b_idx < len(s_dict) else None)
+                    if base_data is not None:
+                        for T_val, tk in zip(target_temps, t_keys):
+                            p_res = base_data[T_val]
+                            for ok in obs_keys:
+                                sweep_tables[b_idx][ok][tk][idx, :] = p_res[ok]
 
-        targets = getattr(config, 'target_gns', None) or [0.35, 0.49, 0.62, 0.76, 0.90]
         tag_map = {
             0.35: "baseline_0_35G0",
             0.49: "baseline_0_49G0",
@@ -840,7 +858,8 @@ if __name__ == "__main__":
         barrier_dir = PathConfigs.DATA / dirname / "Barrier_Sweeps"
         barrier_dir.mkdir(parents=True, exist_ok=True)
 
-        for b_idx, target_gn in enumerate(targets):
+        for b_idx in active_indices:
+            target_gn = targets[b_idx] if b_idx < len(targets) else b_idx
             folder_name = tag_map.get(round(target_gn, 2), f"baseline_{str(target_gn).replace('.', '_')}G0")
             base_dir = barrier_dir / folder_name
             base_dir.mkdir(parents=True, exist_ok=True)
