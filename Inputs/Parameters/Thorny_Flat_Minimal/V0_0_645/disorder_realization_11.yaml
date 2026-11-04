@@ -1,0 +1,26 @@
+dirname: Disorder_Realizations_ThornyFlat_Minimal/V0_0_645/disorder_realization_11
+realization_index: 11
+lambda_dis: 4.5
+V0: 0.645
+Ls: 300
+a0: 100.0
+barrier0: 2.0
+barrier_u_min: -5.0
+barrier_u_max: 5.0
+barrier_u_points: 20
+mu_max: 4.5
+mu_min: 0.0
+mu_dist: 0.02
+Vz_max: 1.4
+Vz_min: 0.0
+Vz_dist: 0.02
+acceleration_type: parallel
+barrier_conductance_mode: finite_temperature
+barrier_T_mK_list:
+- 0.0
+- 10.0
+- 20.0
+- 30.0
+- 40.0
+barrier_quadrature_nodes: 8
+barrier_sweep_only: true
