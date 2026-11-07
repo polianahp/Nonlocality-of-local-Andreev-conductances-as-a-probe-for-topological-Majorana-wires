@@ -1,0 +1,121 @@
+# MSFT TGP Conductance-Space Correlation Hybrids (Calibrated 25-Cutter Harmonics)
+keep_data: false
+sweep_instances:
+  # ==============================================================================
+  # 1. Baseline References (Standard Boundary 0.60 vs Removed 0.0)
+  # ==============================================================================
+  - instance_name: "tgp_std_bnd060_reference"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+  - instance_name: "tgp_nobnd_bnd000_reference"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.0
+
+  # ==============================================================================
+  # 2. Conductance-Space Correlation (Lead R) across thresholds (bnd = 0.60)
+  # ==============================================================================
+  - instance_name: "tgp_bnd060_condcorr_R_th070"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_conductance_space_corr.enabled: true
+      fpe_conductance_space_corr.lead: "R"
+      fpe_conductance_space_corr.corr_threshold: 0.70
+      fpe_conductance_space_corr.baseline_gn: 0.55
+
+  - instance_name: "tgp_bnd060_condcorr_R_th075"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_conductance_space_corr.enabled: true
+      fpe_conductance_space_corr.lead: "R"
+      fpe_conductance_space_corr.corr_threshold: 0.75
+      fpe_conductance_space_corr.baseline_gn: 0.55
+
+  - instance_name: "tgp_bnd060_condcorr_R_th080"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_conductance_space_corr.enabled: true
+      fpe_conductance_space_corr.lead: "R"
+      fpe_conductance_space_corr.corr_threshold: 0.80
+      fpe_conductance_space_corr.baseline_gn: 0.55
+
+  - instance_name: "tgp_bnd060_condcorr_R_th085"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_conductance_space_corr.enabled: true
+      fpe_conductance_space_corr.lead: "R"
+      fpe_conductance_space_corr.corr_threshold: 0.85
+      fpe_conductance_space_corr.baseline_gn: 0.55
+
+  - instance_name: "tgp_bnd060_condcorr_R_th090"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_conductance_space_corr.enabled: true
+      fpe_conductance_space_corr.lead: "R"
+      fpe_conductance_space_corr.corr_threshold: 0.90
+      fpe_conductance_space_corr.baseline_gn: 0.55
+
+  # ==============================================================================
+  # 3. Conductance-Space Correlation (Both Leads min_LR) across thresholds (bnd = 0.60)
+  # ==============================================================================
+  - instance_name: "tgp_bnd060_condcorr_minLR_th070"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_conductance_space_corr.enabled: true
+      fpe_conductance_space_corr.lead: "min_LR"
+      fpe_conductance_space_corr.corr_threshold: 0.70
+      fpe_conductance_space_corr.baseline_gn: 0.55
+
+  - instance_name: "tgp_bnd060_condcorr_minLR_th075"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_conductance_space_corr.enabled: true
+      fpe_conductance_space_corr.lead: "min_LR"
+      fpe_conductance_space_corr.corr_threshold: 0.75
+      fpe_conductance_space_corr.baseline_gn: 0.55
+
+  - instance_name: "tgp_bnd060_condcorr_minLR_th080"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_conductance_space_corr.enabled: true
+      fpe_conductance_space_corr.lead: "min_LR"
+      fpe_conductance_space_corr.corr_threshold: 0.80
+      fpe_conductance_space_corr.baseline_gn: 0.55
+
+  - instance_name: "tgp_bnd060_condcorr_minLR_th085"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_conductance_space_corr.enabled: true
+      fpe_conductance_space_corr.lead: "min_LR"
+      fpe_conductance_space_corr.corr_threshold: 0.85
+      fpe_conductance_space_corr.baseline_gn: 0.55
+
+  - instance_name: "tgp_bnd060_condcorr_minLR_th090"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_conductance_space_corr.enabled: true
+      fpe_conductance_space_corr.lead: "min_LR"
+      fpe_conductance_space_corr.corr_threshold: 0.90
+      fpe_conductance_space_corr.baseline_gn: 0.55
+
+  # ==============================================================================
+  # 4. Dyad Hybrids: Conductance-Space Correlation + Lead Symmetry Balance
+  # ==============================================================================
+  - instance_name: "tgp_bnd060_condcorr_R080_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_conductance_space_corr.enabled: true
+      fpe_conductance_space_corr.lead: "R"
+      fpe_conductance_space_corr.corr_threshold: 0.80
+      fpe_conductance_space_corr.baseline_gn: 0.55
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20
+
+  - instance_name: "tgp_bnd060_condcorr_minLR080_sym020"
+    parameters:
+      tgp_base.boundary_pct_threshold: 0.60
+      fpe_conductance_space_corr.enabled: true
+      fpe_conductance_space_corr.lead: "min_LR"
+      fpe_conductance_space_corr.corr_threshold: 0.80
+      fpe_conductance_space_corr.baseline_gn: 0.55
+      fpe_lead_symmetry_balance.enabled: true
+      fpe_lead_symmetry_balance.s_max: 0.20

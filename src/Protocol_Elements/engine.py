@@ -374,16 +374,20 @@ def discover_realization_tasks(
     tasks: List[Tuple[str, str, float]] = []
     if root.is_dir() and root.name.startswith("V0_"):
         v0_dirs = [root]
+    elif root.is_dir() and any(d.is_dir() and "realization" in d.name.lower() for d in root.iterdir()):
+        # Directly pointed to a directory containing realizations (e.g. Dense_U_Operating)
+        v0_dirs = [root]
     else:
         v0_dirs = sorted([d for d in root.iterdir() if d.is_dir() and d.name.startswith("V0_")])
     for v0_dir in v0_dirs:
         if v0_filter and v0_dir.name not in v0_filter:
             continue
+        v0_lbl = v0_dir.name if v0_dir.name.startswith("V0_") else "V0_1_2"
         r_dirs = sorted(
             [
                 d
                 for d in v0_dir.iterdir()
-                if d.is_dir() and "realization" in d.name and (d / "all_params.npz").exists()
+                if d.is_dir() and "realization" in d.name.lower() and (d / "all_params.npz").exists()
             ],
             key=_realization_sort_key,
         )
@@ -391,7 +395,7 @@ def discover_realization_tasks(
             r_dirs = r_dirs[: int(max_realizations_per_v0)]
         for t_mK in temperatures_mK:
             for r_dir in r_dirs:
-                tasks.append((str(r_dir), v0_dir.name, float(t_mK)))
+                tasks.append((str(r_dir), v0_lbl, float(t_mK)))
     return tasks
 
 

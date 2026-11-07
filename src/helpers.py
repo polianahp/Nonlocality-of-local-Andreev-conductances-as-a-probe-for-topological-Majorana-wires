@@ -1,4 +1,4 @@
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 from tqdm import tqdm
 import kwant
 import tinyarray
@@ -1122,15 +1122,11 @@ def smatrix_exact(fsyst, E: float):
     return kwant.smatrix(fsyst, energy=E, params=dict(omega=E), check_hermiticity=False)
 
 
-def calc_conductance_matrix_exact(fsyst, E: float, solver_type: str = 'cpu') -> np.ndarray:
+def calc_conductance_matrix_exact(fsyst, E: float) -> np.ndarray:
     """
     Computes 2x2 differential conductance matrix [G_LL, G_LR; G_RL, G_RR] in units of e^2/h
     for an exact energy-dependent Kwant system at bias E.
     """
-    if solver_type == 'gpu':
-        raise NotImplementedError("solver_type='gpu' is not supported for exact systems with energy-dependent params.")
-    elif solver_type != 'cpu':
-        raise ValueError(f"Unknown solver_type '{solver_type}'. Must be 'cpu'.")
 
     smatrix = smatrix_exact(fsyst, E)
     Rl = 0.0
@@ -1618,9 +1614,30 @@ def calc_mzm_separability(rho_left, rho_right, continuous=True, auto_orient=True
     return (s_val, best_x) if return_cut else s_val
 
 
-def generate_disorder_from_raw(vdk_vec, lambda_val, Ls):
+def generate_disorder_from_fourier(vdk_vec: np.ndarray, lambda_dis: float, Ls: int) -> np.ndarray:
+    """
+    Synthesizes a 1D real-space disorder potential V_dis(x) from Fourier 
+    mode components vdk_vec via envelope filter Q_dis(k) and inverse Discrete Sine Transform (DST-I).
+
+    Parameters:
+    -----------
+    vdk_vec : np.ndarray
+        Fourier mode components of length Ls.
+    lambda_dis : float
+        Spatial correlation length in units of lattice sites.
+    Ls : int
+        Nanowire length in lattice sites.
+
+    Returns:
+    --------
+    np.ndarray
+        Zero-mean, unit-variance real-space disorder array of length Ls.
+    """
+    if len(vdk_vec) != Ls:
+        raise ValueError(f"Fourier vector length {len(vdk_vec)} does not match wire length Ls={Ls}.")
+
     ii = np.arange(1, Ls + 1)
-    Qdis = np.tanh(ii / 2.0) * np.exp(-(ii**2) * (lambda_val**2) / (4.0 * (Ls**2)))
+    Qdis = np.tanh(ii / 2.0) * np.exp(-(ii**2) * (lambda_dis**2) / (4.0 * (Ls**2)))
     
     vdkq = vdk_vec * Qdis
     
@@ -1634,30 +1651,62 @@ def generate_disorder_from_raw(vdk_vec, lambda_val, Ls):
     return vtp / np.sqrt(v2)
 
 
-def initialize_vdis_from_data(path, lambda_dis=None, Ls=None, is_real_space=False):
-    path_str = str(path)
-    
-    is_raw_disorder = ("Raw_Disorders" in path_str) and (not is_real_space)
-    
-    if is_raw_disorder and lambda_dis is None:
-        raise ValueError("lambda_dis cannot be None when using a raw disorder file from Raw_Disorders.")
-    if lambda_dis is not None and not is_raw_disorder:
-        raise ValueError("lambda_dis is provided, but the file path does not contain 'Raw_Disorders'.")
-        
-    if is_raw_disorder:
-        raw_vector = np.load(path_str)
-        if Ls is None:
-            raise ValueError("Ls must be provided for raw disorder reconstruction.")
-        return generate_disorder_from_raw(raw_vector, lambda_dis, Ls)
-    else:
-        loaded = np.load(path_str)
+# Backward-compatibility alias
+generate_disorder_from_raw = generate_disorder_from_fourier
+
+
+def initialize_vdis_from_data(
+    path: Union[str, Path], 
+    lambda_dis: Optional[float] = None, 
+    Ls: Optional[int] = None, 
+    is_real_space: bool = False
+) -> np.ndarray:
+    """
+    Loads or synthesizes the 1D spatial disorder array V_dis(x).
+
+    Parameters:
+    -----------
+    path : str or Path
+        Path to the disorder file (.npy or .npz).
+    lambda_dis : Optional[float]
+        Spatial correlation length (required when is_real_space is False).
+    Ls : Optional[int]
+        Expected length of the nanowire scattering region.
+    is_real_space : bool
+        If True, treats the file as precomputed real-space disorder V_dis(x).
+        If False, treats the file as Fourier mode components and transforms to real space.
+    """
+    file_path = Path(path)
+    if not file_path.exists():
+        raise FileNotFoundError(f"Disorder file not found: {file_path}")
+
+    loaded = np.load(file_path)
+
+    # Precomputed Real-Space Disorder
+    if is_real_space:
         if isinstance(loaded, np.lib.npyio.NpzFile):
-            x = loaded['Vdisx']
+            vdis = loaded['Vdisx']
         else:
-            x = loaded
-        if Ls is not None and len(x) != Ls:
-            raise ValueError(f"Disorder length mismatch: loaded disorder array has length {len(x)}, but Ls={Ls} was configured in parameters.")
-        return x
+            vdis = loaded
+
+        if Ls is not None and len(vdis) != Ls:
+            raise ValueError(
+                f"Disorder length mismatch: loaded array has length {len(vdis)}, but expected Ls={Ls}."
+            )
+        return vdis
+
+    # Fourier Component Mode Synthesis (is_real_space is False)
+    if lambda_dis is None:
+        raise ValueError(
+            f"lambda_dis cannot be None when synthesizing real-space disorder from Fourier components: {file_path}"
+        )
+    if Ls is None:
+        raise ValueError(
+            f"Ls cannot be None when synthesizing real-space disorder from Fourier components: {file_path}"
+        )
+
+    fourier_vec = loaded['Vdisx'] if isinstance(loaded, np.lib.npyio.NpzFile) else loaded
+    return generate_disorder_from_fourier(fourier_vec, lambda_dis=lambda_dis, Ls=Ls)
 
 
 
@@ -1852,7 +1901,7 @@ szsy = np.kron(sz_pdi, sy_pdi)
 
 
 # =============================================================================
-# Exact Mathematica PDI Translation
+# Mathematica PDI Translation
 # =============================================================================
 
 class PDICalculator:
@@ -2741,8 +2790,7 @@ def compute_gapped_islands_and_boundaries(
 
 def make_dynamic_grid(k_half: int = None):
     '''
-    Generates a dynamic bias grid. Defaults to k_half=None (unpruned 97-point grid
-    spanning [-134, +134] ueV) for physically valid transport gap extraction.
+
     '''
 
     dfgd = np.asarray([0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 , 0.004 ,

@@ -14,21 +14,26 @@ lambda_dis: 4.5
 V0: 1.2
 
 # Geometry and Physics
-Ls: 300
-Ln: 0
-Lb: 3
-Lb_pdi: 3
-a0: 100.0
-ms: 0.023
-Delta_0: 0.3
-gamma: 0.2
-barrier0: 2.0
+Ls: 300 #length of the wire
+Ln: 0   #additional non superconducting region
+Lb: 3   # length of the barrier
+
+a0: 100.0 #lattice constant in angstroms
+ms: 0.023 #effective mass
+Delta_0: 0.3 #parent SC gap (meV)
+gamma: 0.2  # SM-SC coupling
 mu_n: 0.0
 qn: 20
 
 # Barrier Calibration Settings (All 5 Target Conductances for 25 Cutters)
 calibrate_barriers: True
-target_gns: [0.35, 0.49, 0.62, 0.76, 0.90]
+target_gns: [0.25, 0.35, 0.45, 0.55, 0.65]
+tgp_barrier_pairs:
+  - [2.71906, 3.05435]
+  - [1.90376, 2.16704]
+  - [1.32122, 1.53203]
+  - [0.57238, 1.03654]
+  - [-0.12125, 0.62787]
 
 # Barrier Sweeps: Disabled (Option A: Delta-Only, already in Tier 1)
 calc_barrier_sweeps: False

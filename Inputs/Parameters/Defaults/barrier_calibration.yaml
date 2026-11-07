@@ -1,0 +1,30 @@
+# ==============================================================================
+# barrier_calibration.yaml
+# Default parameters for simultaneous nanowire cutter calibration (Aghaee 2023)
+# Solves for the symmetric barrier pair (UL, UR) yielding target G_N on each lead.
+# ==============================================================================
+
+# Target normal-state differential conductances G_N in units of e^2/h for the 5 cutter gates
+# Each target defines a symmetric operating configuration [G_N, [UL, UR]]
+target_gns: [0.25, 0.35, 0.45, 0.55, 0.65]
+
+# Optional pre-calibrated [[UL, UR], ...] pairs, one per target_gns entry.
+# null -> run the calibration; a list -> use it and skip calibration.
+tgp_barrier_pairs: null
+
+
+# Above-gap bias energy in meV (E > Delta_0) where Andreev reflection is suppressed
+# Isolates normal-state electron transmission into the proximitized wire
+energy: 0.5
+
+# Convergence tolerance on cutter potential in meV for Brent's method (brentq)
+tol: 1e-4
+
+# Maximum solver iterations allowed for root finding
+max_iter: 50
+
+# Subband chemical potential sampling window in meV for median-averaging
+# Evaluates equidistant chemical potentials spanning the lowest subband
+n_mu_points: 15
+mu_min: 0.0
+mu_max: 2.0

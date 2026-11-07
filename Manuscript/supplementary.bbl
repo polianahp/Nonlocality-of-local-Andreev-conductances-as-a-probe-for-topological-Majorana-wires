@@ -1,0 +1,93 @@
+%apsrev4-2.bst 2019-01-14 (MD) hand-edited version of apsrev4-1.bst
+%Control: key (0)
+%Control: author (8) initials jnrlst
+%Control: editor formatted (1) identically to author
+%Control: production of article title (0) allowed
+%Control: page (0) single
+%Control: year (1) truncated
+%Control: production of eprint (0) enabled
+\begin{thebibliography}{3}%
+\makeatletter
+\providecommand \@ifxundefined [1]{%
+ \@ifx{#1\undefined}
+}%
+\providecommand \@ifnum [1]{%
+ \ifnum #1\expandafter \@firstoftwo
+ \else \expandafter \@secondoftwo
+ \fi
+}%
+\providecommand \@ifx [1]{%
+ \ifx #1\expandafter \@firstoftwo
+ \else \expandafter \@secondoftwo
+ \fi
+}%
+\providecommand \natexlab [1]{#1}%
+\providecommand \enquote  [1]{``#1''}%
+\providecommand \bibnamefont  [1]{#1}%
+\providecommand \bibfnamefont [1]{#1}%
+\providecommand \citenamefont [1]{#1}%
+\providecommand \href@noop [0]{\@secondoftwo}%
+\providecommand \href [0]{\begingroup \@sanitize@url \@href}%
+\providecommand \@href[1]{\@@startlink{#1}\@@href}%
+\providecommand \@@href[1]{\endgroup#1\@@endlink}%
+\providecommand \@sanitize@url [0]{\catcode `\\12\catcode `\$12\catcode
+  `\&12\catcode `\#12\catcode `\^12\catcode `\_12\catcode `\%12\relax}%
+\providecommand \@@startlink[1]{}%
+\providecommand \@@endlink[0]{}%
+\providecommand \url  [0]{\begingroup\@sanitize@url \@url }%
+\providecommand \@url [1]{\endgroup\@href {#1}{\urlprefix }}%
+\providecommand \urlprefix  [0]{URL }%
+\providecommand \Eprint [0]{\href }%
+\providecommand \doibase [0]{https://doi.org/}%
+\providecommand \selectlanguage [0]{\@gobble}%
+\providecommand \bibinfo  [0]{\@secondoftwo}%
+\providecommand \bibfield  [0]{\@secondoftwo}%
+\providecommand \translation [1]{[#1]}%
+\providecommand \BibitemOpen [0]{}%
+\providecommand \bibitemStop [0]{}%
+\providecommand \bibitemNoStop [0]{.\EOS\space}%
+\providecommand \EOS [0]{\spacefactor3000\relax}%
+\providecommand \BibitemShut  [1]{\csname bibitem#1\endcsname}%
+\let\auto@bib@innerbib\@empty
+%</preamble>
+\bibitem [{\citenamefont {Dourado}\ \emph {et~al.}(2024)\citenamefont
+  {Dourado}, \citenamefont {Penteado},\ and\ \citenamefont
+  {Egues}}]{Dourado2024}%
+  \BibitemOpen
+  \bibfield  {author} {\bibinfo {author} {\bibfnamefont {L.~S.}\ \bibnamefont
+  {Dourado}}, \bibinfo {author} {\bibfnamefont {P.~H.}\ \bibnamefont
+  {Penteado}},\ and\ \bibinfo {author} {\bibfnamefont {J.~C.}\ \bibnamefont
+  {Egues}},\ }\bibfield  {title} {\bibinfo {title} {Conductance-based
+  nonlocality signatures of {M}ajorana zero modes in disordered nanowires},\
+  }\href {https://doi.org/10.1103/PhysRevB.110.014504} {\bibfield  {journal}
+  {\bibinfo  {journal} {Phys. Rev. B}\ }\textbf {\bibinfo {volume} {110}},\
+  \bibinfo {pages} {014504} (\bibinfo {year} {2024})}\BibitemShut {NoStop}%
+\bibitem [{\citenamefont {Dourado}\ \emph {et~al.}(2025)\citenamefont
+  {Dourado}, \citenamefont {Egues},\ and\ \citenamefont
+  {Penteado}}]{Dourado2025}%
+  \BibitemOpen
+  \bibfield  {author} {\bibinfo {author} {\bibfnamefont {L.~S.}\ \bibnamefont
+  {Dourado}}, \bibinfo {author} {\bibfnamefont {J.~C.}\ \bibnamefont {Egues}},\
+  and\ \bibinfo {author} {\bibfnamefont {P.~H.}\ \bibnamefont {Penteado}},\
+  }\bibfield  {title} {\bibinfo {title} {Two-site low-energy model for
+  {M}ajorana wires with quantum dots: Local and non-local transport
+  signatures},\ }\href@noop {} {\bibfield  {journal} {\bibinfo  {journal}
+  {arXiv preprint arXiv:2501.19376}\ } (\bibinfo {year} {2025})}\BibitemShut
+  {NoStop}%
+\bibitem [{\citenamefont {Aghaee}\ \emph {et~al.}(2026)\citenamefont {Aghaee},
+  \citenamefont {Alam}, \citenamefont {Ali}, \citenamefont {Ramirez},
+  \citenamefont {Andrzejczuk}, \citenamefont {Antipov}, \citenamefont {Aseev},
+  \citenamefont {Bauer} \emph {et~al.}}]{Aghaee2026}%
+  \BibitemOpen
+  \bibfield  {author} {\bibinfo {author} {\bibfnamefont {M.}~\bibnamefont
+  {Aghaee}}, \bibinfo {author} {\bibfnamefont {Z.}~\bibnamefont {Alam}},
+  \bibinfo {author} {\bibfnamefont {R.}~\bibnamefont {Ali}}, \bibinfo {author}
+  {\bibfnamefont {A.}~\bibnamefont {Ramirez}}, \bibinfo {author} {\bibfnamefont
+  {M.}~\bibnamefont {Andrzejczuk}}, \bibinfo {author} {\bibfnamefont {A.~E.}\
+  \bibnamefont {Antipov}}, \bibinfo {author} {\bibfnamefont {P.}~\bibnamefont
+  {Aseev}}, \bibinfo {author} {\bibfnamefont {B.}~\bibnamefont {Bauer}}, \emph
+  {et~al.},\ }\bibfield  {title} {\bibinfo {title} {20 {S}econd parity lifetime
+  in an {I}n{A}s-{P}b tetron device},\ }\href@noop {} {\bibfield  {journal}
+  {\bibinfo  {journal} {arXiv preprint arXiv:2606.03884}\ } (\bibinfo {year}
+  {2026})}\BibitemShut {NoStop}%
+\end{thebibliography}%

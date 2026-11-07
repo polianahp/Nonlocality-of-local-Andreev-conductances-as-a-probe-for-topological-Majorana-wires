@@ -1,6 +1,6 @@
 r"""Option 2: Local Quadrature Modulation Protocol (`LQM-P`) (`2026-10-21`).
 
-Implements Consciousness Council Option 2:
+
 1. `step_1_fpe_pinch_off`: Pinch-off suppression gate $G_{\alpha\alpha}^{\text{pinch}} < G_{\text{thresh}}$
 2. `step_2_fpe_detrended_power`: Detrended oscillatory power $P_\alpha(V_z, \mu) \ge \theta_P$
 3. `step_3_fpe_quadrature_coherence`: Savitzky-Golay quadrature cross-envelope coherence

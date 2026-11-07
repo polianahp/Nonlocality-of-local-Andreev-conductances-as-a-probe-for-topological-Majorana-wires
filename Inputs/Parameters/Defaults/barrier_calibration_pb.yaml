@@ -1,0 +1,27 @@
+# ==============================================================================
+# barrier_calibration_pb.yaml
+# Default parameters for simultaneous nanowire cutter calibration on Pb platform
+# (Delta_0 = 1.3 meV, Aghaee et al. arXiv:2606.03884v1)
+# ==============================================================================
+
+# Target normal-state differential conductances G_N in units of e^2/h for 5 cutter gates
+target_gns: [0.25, 0.35, 0.45, 0.55, 0.65]
+
+# Root search bracket boundaries for cutter gate potentials in meV
+# Widened to 15.0 meV due to higher kinetic energy at above-gap bias E = 2.0 meV
+u_min: -5.0
+u_max: 15.0
+
+# Above-gap bias energy in meV (E > Delta_0 = 1.3 meV) where Andreev reflection is suppressed
+energy: 2.0
+
+# Convergence tolerance on cutter potential in meV for Brent's method (brentq)
+tol: 1e-4
+
+# Maximum solver iterations allowed for root finding
+max_iter: 50
+
+# Subband chemical potential sampling window in meV for median-averaging
+n_mu_points: 15
+mu_min: 0.0
+mu_max: 2.0

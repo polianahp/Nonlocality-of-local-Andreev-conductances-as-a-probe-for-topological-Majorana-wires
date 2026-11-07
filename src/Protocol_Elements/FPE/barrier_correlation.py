@@ -288,3 +288,100 @@ def fpe_cross_barrier_conjugate_correlation(
         norm_floor=norm_floor,
     )
     return corr >= float(corr_threshold)
+
+
+def extract_conductance_space_barrier_correlations(
+    cache: RealizationFeatureCache,
+    *,
+    baseline_gn: float = 0.55,
+    mean_subtract: bool = True,
+    norm_floor: float = 1e-12,
+) -> Tuple[np.ndarray, np.ndarray]:
+    r"""Compute memoized Left-sweep and Right-sweep barrier reflection correlations in calibrated conductance space.
+
+    Evaluates the response along rows/columns of the `(5, 5)` tensor grid in `Cutter_Harmonics_25`
+    around a specified baseline normal-state conductance `baseline_gn`.
+    - Right sweep: fixes Lead L at $U_L^*(G_N^*)$ and sweeps Lead R across calibrated $U_R^*(G_{N, k})$.
+    - Left sweep: fixes Lead R at $U_R^*(G_N^*)$ and sweeps Lead L across calibrated $U_L^*(G_{N, k})$.
+
+    Returns `(cL, cR)` each of shape `(N_mu, N_Vz)`.
+    """
+    key = (
+        "conductance_space_barrier_corr_maps",
+        round(float(baseline_gn), 3),
+        bool(mean_subtract),
+        float(norm_floor),
+    )
+
+    def _compute() -> Tuple[np.ndarray, np.ndarray]:
+        hdata = cache.get_harmonics_25_data()
+        target_gns = hdata["target_gns"]
+        idx = int(np.argmin(np.abs(target_gns - float(baseline_gn))))
+
+        L1w = np.nan_to_num(hdata["L_1w"], nan=0.0)  # (N_mu, N_Vz, N_c, N_c)
+        R1w = np.nan_to_num(hdata["R_1w"], nan=0.0)  # (N_mu, N_Vz, N_c, N_c)
+
+        # Right sweep: hold left cutter at baseline idx, vary right cutter across column j_r
+        # x = G_LL response, y = G_RR response
+        x_R = L1w[:, :, idx, :].copy()  # (N_mu, N_Vz, N_c)
+        y_R = R1w[:, :, idx, :].copy()
+
+        # Left sweep: hold right cutter at baseline idx, vary left cutter across row i_l
+        x_L = L1w[:, :, :, idx].copy()  # (N_mu, N_Vz, N_c)
+        y_L = R1w[:, :, :, idx].copy()
+
+        def _calc_corr(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+            if mean_subtract:
+                x = x - np.mean(x, axis=-1, keepdims=True)
+                y = y - np.mean(y, axis=-1, keepdims=True)
+            num = np.sum(x * y, axis=-1)
+            nx = np.linalg.norm(x, axis=-1)
+            ny = np.linalg.norm(y, axis=-1)
+            denom = nx * ny
+            valid = denom > float(norm_floor)
+            corr = np.full(x.shape[:2], -1.0, dtype=np.float64)
+            corr[valid] = np.clip(num[valid] / denom[valid], -1.0, 1.0)
+            return corr
+
+        cR = _calc_corr(x_R, y_R)
+        cL = _calc_corr(x_L, y_L)
+        return cL, cR
+
+    return cache.get_or_compute(key, _compute)
+
+
+def fpe_conductance_space_barrier_correlation(
+    cache: RealizationFeatureCache,
+    *,
+    baseline_gn: float = 0.55,
+    corr_threshold: float = 0.85,
+    lead: Literal["L", "R", "min_LR", "max_LR", "mean_LR"] = "R",
+    mean_subtract: bool = True,
+    norm_floor: float = 1e-12,
+) -> np.ndarray:
+    r"""Barrier reflection correlation FPE in calibrated conductance space $C_{\text{cond}}(G_N^*) \ge \theta_{\text{corr}}$.
+
+    Evaluates cross-barrier Pearson/cosine correlation directly across the calibrated conductance
+    targets in `Cutter_Harmonics_25` around baseline `baseline_gn`.
+
+    Returns a Rank-2 boolean mask of shape `(N_mu, N_Vz)`.
+    """
+    cL, cR = extract_conductance_space_barrier_correlations(
+        cache,
+        baseline_gn=baseline_gn,
+        mean_subtract=mean_subtract,
+        norm_floor=norm_floor,
+    )
+    if lead == "L":
+        obs = cL
+    elif lead == "R":
+        obs = cR
+    elif lead == "min_LR":
+        obs = np.minimum(cL, cR)
+    elif lead == "max_LR":
+        obs = np.maximum(cL, cR)
+    elif lead == "mean_LR":
+        obs = 0.5 * (cL + cR)
+    else:
+        raise ValueError(f"Unknown lead mode '{lead}' in fpe_conductance_space_barrier_correlation.")
+    return obs >= float(corr_threshold)

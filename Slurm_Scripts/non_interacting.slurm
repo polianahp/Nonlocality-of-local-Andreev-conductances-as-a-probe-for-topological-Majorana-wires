@@ -17,7 +17,7 @@ conda activate kwant_fresh
 cd $SCRATCH/nonlocalcond
 
 # Running with the non-interacting configuration. 
-# Conductance and PDI flags are enabled by default in SimulationConfig and the YAML.
+# Conductance and PDI flags are enabled by default in ConfigManager defaults and the YAML.
 python -u main_parallel.py --config_path Parameters/non_interacting.yaml
 
 conda deactivate

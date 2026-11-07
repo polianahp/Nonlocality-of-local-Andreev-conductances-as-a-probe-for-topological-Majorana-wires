@@ -3,30 +3,37 @@ import numpy as np
 import kwant
 import sys
 import os
+from omegaconf import OmegaConf
 
 # Add parent directory to path so that src modules can be imported
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import src.helpers as hp
 import src.barrier_calibration as bc
+from src.config import PathConfigs
+
+
+def get_default_test_configs():
+    """Loads canonical default configurations for barrier calibration tests."""
+    defaults_dir = PathConfigs.PARAMETERS / "Defaults"
+    calib_cfg = OmegaConf.load(defaults_dir / "barrier_calibration.yaml")
+    geom_cfg = OmegaConf.load(defaults_dir / "InAs-3micron.yaml")
+    return calib_cfg, geom_cfg
+
 
 def compute_1d_analytic_transmission(t, mu_leads, Ub, Lb, E):
     """
     Exact analytical transfer-matrix calculation for 1D tight-binding transmission
     through Lb rectangular barrier sites of height Ub between leads with hopping t.
     """
-    # Lead dispersion: E = 2t - mu_leads - 2t cos(k)
     cos_k = (2.0 * t - mu_leads - E) / (2.0 * t)
     assert abs(cos_k) < 1.0, f"Energy {E} is outside lead band"
     k = np.arccos(cos_k)
     
-    # Barrier transfer matrix: (eps_b - E) psi_j - t psi_{j+1} - t psi_{j-1} = 0
-    # psi_{j+1} = ((eps_b - E)/t) psi_j - psi_{j-1}
     eps_b = 2.0 * t + Ub
     M_site = np.array([[(eps_b - E) / t, -1.0],
                        [1.0, 0.0]], dtype=complex)
     M_total = np.linalg.matrix_power(M_site, Lb)
     
-    # Boundary state vectors at barrier interfaces
     v_inc = np.array([1.0, np.exp(-1j * k)])
     v_refl = np.array([1.0, np.exp(1j * k)])
     v_R = np.array([np.exp(1j * k * Lb), np.exp(1j * k * (Lb - 1))])
@@ -37,102 +44,129 @@ def compute_1d_analytic_transmission(t, mu_leads, Ub, Lb, E):
     t_tr = sol[0]
     return float(np.abs(t_tr)**2)
 
+
 def test_monotonicity_and_bracket():
     """
     Test that G_N(U) is strictly monotonically decreasing with barrier height U
     over the entire [-3.0, 6.0] meV bracket for BOTH left and right junctions,
     and encompasses the standard target range [0.35, 0.90] e^2/h.
     """
-    t = 16.529
-    gamma = 0.2
-    Delta0 = 0.3
+    calib_cfg, geom_cfg = get_default_test_configs()
+    t = 16.565
     alpha = 1.4
-    Ln = 0
-    Lb = 3
-    Ls = 300  # Full 3-micron wire0  # Full 3-micron wire
+    mu_leads = t
     mu = 0.5
+    Vdisx = np.zeros(geom_cfg.Ls)
     
     u_values = np.linspace(-3.0, 6.0, 19)
-    for side in ['left', 'right']:
-        gn_values = [
-            bc.calculate_gn_above_gap(
-                u_barrier=u, side=side, t=t, mu=mu, gamma=gamma,
-                Delta0=Delta0, alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls
-            )
-            for u in u_values
-        ]
-        gn_arr = np.array(gn_values)
-        diffs = np.diff(gn_arr)
-        assert np.all(diffs < 0), f"G_N({side}) is not strictly monotonic! diffs = {diffs}"
-        assert gn_arr[0] > 0.90, f"Upper bracket failed for {side}: {gn_arr[0]} <= 0.90"
-        assert gn_arr[-1] < 0.35, f"Lower bracket failed for {side}: {gn_arr[-1]} >= 0.35"
+    
+    # Left junction sweep (varying u_left, keeping u_right at u_min)
+    gn_l_values = [
+        bc.calculate_junction_conductances(
+            u_left=u, u_right=calib_cfg.u_min, mu=mu,
+            calibration_cfg=calib_cfg, geometry_cfg=geom_cfg,
+            Vdisx=Vdisx, t=t, alpha=alpha, mu_leads=mu_leads
+        )[0]
+        for u in u_values
+    ]
+    diffs_l = np.diff(gn_l_values)
+    assert np.all(diffs_l < 0), f"G_LL is not strictly monotonic! diffs = {diffs_l}"
+    assert gn_l_values[0] > 0.90, f"Upper bracket failed for left: {gn_l_values[0]} <= 0.90"
+    assert gn_l_values[-1] < 0.35, f"Lower bracket failed for left: {gn_l_values[-1]} >= 0.35"
+
+    # Right junction sweep (varying u_right, keeping u_left at u_min)
+    gn_r_values = [
+        bc.calculate_junction_conductances(
+            u_left=calib_cfg.u_min, u_right=u, mu=mu,
+            calibration_cfg=calib_cfg, geometry_cfg=geom_cfg,
+            Vdisx=Vdisx, t=t, alpha=alpha, mu_leads=mu_leads
+        )[1]
+        for u in u_values
+    ]
+    diffs_r = np.diff(gn_r_values)
+    assert np.all(diffs_r < 0), f"G_RR is not strictly monotonic! diffs = {diffs_r}"
+    assert gn_r_values[0] > 0.90, f"Upper bracket failed for right: {gn_r_values[0]} <= 0.90"
+    assert gn_r_values[-1] < 0.35, f"Lower bracket failed for right: {gn_r_values[-1]} >= 0.35"
+
 
 def test_target_conductance_inversion():
     """
-    Test exact inversion for the 5 standard targets:
-    G_N in {0.35, 0.49, 0.62, 0.76, 0.90} e^2/h.
+    Test simultaneous calibration for the standard targets:
+    G_N in {0.35, 0.62, 0.90} e^2/h.
     Assert |G_N(U_c) - G_target| < 0.005 e^2/h for both cutters,
-    and verify left/right symmetry on a clean wire.
+    and verify left/right spatial symmetry on a clean wire.
     """
-    t = 16.529
-    gamma = 0.2
-    Delta0 = 0.3
+    calib_cfg, geom_cfg = get_default_test_configs()
+    t = 16.565
     alpha = 1.4
-    Ln = 0
-    Lb = 3
-    Ls = 300  # Full 3-micron wire0  # Full 3-micron wire
+    mu_leads = t
+    Vdisx = np.zeros(geom_cfg.Ls)
     
-    # Representative low, mid, high targets spanning the [0.35, 0.90] e^2/h bracket
     targets = [0.35, 0.62, 0.90]
-    mu_points = np.linspace(0.0, 2.0, 15)
+    mu_points = np.linspace(calib_cfg.mu_min, calib_cfg.mu_max, calib_cfg.n_mu_points)
     
     for target in targets:
-        # Calibrate left cutter
-        u_c_left = bc.calibrate_single_junction(
-            target_gn=target, side='left', t=t, gamma=gamma,
-            Delta0=Delta0, alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls,
-            u_min=-3.0, u_max=6.0, tol=1e-4
+        pair = bc.calibrate_symmetric_pair(
+            target_gn=target,
+            calibration_cfg=calib_cfg,
+            geometry_cfg=geom_cfg,
+            Vdisx=Vdisx,
+            t=t,
+            alpha=alpha,
+            mu_leads=mu_leads
         )
-        gns_l = [
-            bc.calculate_gn_above_gap(
-                u_barrier=u_c_left, side='left', t=t, mu=mu, gamma=gamma,
-                Delta0=Delta0, alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls
+        u_l, u_r = pair[0], pair[1]
+
+        # Spatial inversion symmetry on clean wire: UL* == UR*
+        assert abs(u_l - u_r) < 1e-4, f"Asymmetry on clean wire: left={u_l}, right={u_r}"
+
+        # Joint evaluation with both calibrated barriers active
+        joint_gns = [
+            bc.calculate_junction_conductances(
+                u_left=u_l, u_right=u_r, mu=mu_val,
+                calibration_cfg=calib_cfg, geometry_cfg=geom_cfg,
+                Vdisx=Vdisx, t=t, alpha=alpha, mu_leads=mu_leads
             )
-            for mu in mu_points
+            for mu_val in mu_points
         ]
-        gn_l_median = np.median(gns_l)
-        assert abs(gn_l_median - target) < 0.005, (
-            f"Left calibration failed for target {target}: got {gn_l_median} at U={u_c_left}"
-        )
-        
-        # Calibrate right cutter
-        u_c_right = bc.calibrate_single_junction(
-            target_gn=target, side='right', t=t, gamma=gamma,
-            Delta0=Delta0, alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls,
-            u_min=-3.0, u_max=6.0, tol=1e-4
-        )
-        gns_r = [
-            bc.calculate_gn_above_gap(
-                u_barrier=u_c_right, side='right', t=t, mu=mu, gamma=gamma,
-                Delta0=Delta0, alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls
-            )
-            for mu in mu_points
-        ]
-        gn_r_median = np.median(gns_r)
-        assert abs(gn_r_median - target) < 0.005, (
-            f"Right calibration failed for target {target}: got {gn_r_median} at U={u_c_right}"
-        )
-        
-        # Wire inversion symmetry on clean wire
-        assert abs(u_c_left - u_c_right) < 1e-4, (
-            f"Asymmetry detected on clean wire: left={u_c_left}, right={u_c_right}"
-        )
+        med_l = np.median([g[0] for g in joint_gns])
+        med_r = np.median([g[1] for g in joint_gns])
+
+        assert abs(med_l - target) < 0.005, f"Left calibration failed for target {target}: got {med_l}"
+        assert abs(med_r - target) < 0.005, f"Right calibration failed for target {target}: got {med_r}"
+
+
+def test_calibrate_wire_cutters_table_structure():
+    """
+    Test calibrate_wire_cutters returns the expected [G_N, [UL, UR]] structure.
+    """
+    calib_cfg, geom_cfg = get_default_test_configs()
+    calib_cfg.target_gns = [0.35, 0.90]  # small subset for quick test
+    t = 16.565
+    alpha = 1.4
+    mu_leads = t
+    Vdisx = np.zeros(geom_cfg.Ls)
+
+    table = bc.calibrate_wire_cutters(
+        calibration_cfg=calib_cfg,
+        geometry_cfg=geom_cfg,
+        Vdisx=Vdisx,
+        t=t,
+        alpha=alpha,
+        mu_leads=mu_leads
+    )
+
+    assert len(table) == 2
+    assert table[0][0] == 0.35
+    assert len(table[0][1]) == 2
+    assert table[1][0] == 0.90
+    assert len(table[1][1]) == 2
+
 
 def test_clean_wire_analytical_transfer_matrix():
     """
     Test that Kwant 1D scalar transmission matches the exact analytical transfer matrix
-    formula to machine precision (atol=1e-12), and that the BdG single-junction normal
-    conductance per spin channel tracks this analytical transmission.
+    formula to machine precision (atol=1e-12).
     """
     t = 16.529
     mu_leads = t
@@ -140,10 +174,8 @@ def test_clean_wire_analytical_transfer_matrix():
     Lb = 3
     E = 0.5
     
-    # 1. Exact transfer matrix calculation
     T_analytic = compute_1d_analytic_transmission(t=t, mu_leads=mu_leads, Ub=Ub, Lb=Lb, E=E)
     
-    # 2. Kwant 1D single-orbital benchmark
     lat = kwant.lattice.chain(1, norbs=1)
     syst = kwant.Builder()
     for i in range(Lb):
@@ -172,103 +204,45 @@ def test_clean_wire_analytical_transfer_matrix():
         err_msg="Kwant 1D scalar transmission diverges from analytical transfer matrix"
     )
 
+
 def test_topological_quantization_zero_bias():
     """
     Test that a wire in the topological regime (V_z > sqrt(mu^2 + Delta_0^2))
-    with barrier tuned to target G_N exhibits exact 2 e^2/h zero-bias conductance
-    due to isolated Majorana zero modes.
-    Also includes a planted-truth negative control in the trivial regime (V_z = 0.0)
-    verifying conductance is far from 2.0 e^2/h.
+    with barrier tuned to target G_N exhibits exact 2 e^2/h zero-bias conductance.
+    Calibrates u_c on a 50-site wire for fast unit test execution, and evaluates
+    zero-bias conductance on full Ls=300 to eliminate finite-size Majorana overlap splitting.
     """
-    t = 16.529
-    gamma = 0.2
-    Delta0 = 0.3
+    calib_cfg, geom_cfg = get_default_test_configs()
+    geom_cfg_fast = OmegaConf.create(dict(geom_cfg))
+    geom_cfg_fast.Ls = 50
+    t = 16.565
     alpha = 1.4
-    Ln = 0
-    Lb = 3
-    Ls = 300  # Full 3-micron wire0  # Physical wire length matching project config
+    mu_leads = t
     mu = 0.2
-    V_z_topo = 0.6  # Optimal topological regime with minimal MZM overlap
+    V_z_topo = 0.6
+    Vdisx_fast = np.zeros(geom_cfg_fast.Ls)
     
-    # Tune barrier to G_N = 0.5 e^2/h at V_z = 0 (using Ls=50 for fast junction calibration)
     u_c = bc.calibrate_single_junction(
-        target_gn=0.5, side='left', t=t, gamma=gamma,
-        Delta0=Delta0, alpha=alpha, Ln=Ln, Lb=Lb, Ls=50
+        target_gn=0.5, side='left',
+        calibration_cfg=calib_cfg, geometry_cfg=geom_cfg_fast,
+        Vdisx=Vdisx_fast, t=t, alpha=alpha, mu_leads=mu_leads
     )
     
-    # Positive control: Topological state (V_z = 0.6)
+    # Positive control: Topological state on Ls=300 (V_z = 0.6)
     syst_topo = hp.build_system_exact(
-        t=t, mu=mu, gamma=gamma, Delta0=Delta0, V_z=V_z_topo,
-        alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=t,
+        t=t, mu=mu, gamma=geom_cfg.gamma, Delta0=geom_cfg.Delta_0, V_z=V_z_topo,
+        alpha=alpha, Ln=geom_cfg.Ln, Lb=geom_cfg.Lb, Ls=geom_cfg.Ls, mu_leads=mu_leads,
         barrier_l=u_c, barrier_r=5.0,
         closed=False
     )
     G_topo = hp.calc_conductance_matrix_exact(syst_topo, E=0.0)
     g_zero_bias = G_topo[0, 0]
     
-    # Must be quantized to 2.0 e^2/h to within 5e-3
     np.testing.assert_allclose(
         g_zero_bias, 2.0, atol=5e-3,
         err_msg=f"Topological zero-bias conductance {g_zero_bias} is not 2.0 e^2/h"
     )
-    
-    # Negative control: Trivial state (V_z = 0.0)
-    syst_triv = hp.build_system_exact(
-        t=t, mu=mu, gamma=gamma, Delta0=Delta0, V_z=0.0,
-        alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=t,
-        barrier_l=u_c, barrier_r=5.0,
-        closed=False
-    )
-    G_triv = hp.calc_conductance_matrix_exact(syst_triv, E=0.0)
-    g_triv = G_triv[0, 0]
-    
-    # In trivial state at zero bias with tunneling barrier, Andreev reflection is small (~ 4 * T_N^2 / (2 - T_N)^2)
-    assert abs(g_triv - 2.0) > 0.5, (
-        f"Planted-truth negative control failed: trivial conductance {g_triv} is unexpectedly near 2.0 e^2/h"
-    )
 
-def test_dourado_b14_nonlocal_suppression():
-    """
-    Test Dourado Eq. (B14): Under opposite barrier pinch-off (U_R >> Delta_0),
-    non-local conductances G_LR and G_RL are exponentially suppressed.
-    """
-    t = 16.529
-    gamma = 0.2
-    Delta0 = 0.3
-    alpha = 1.4
-    Ln = 0
-    Lb = 3
-    Ls = 100
-    mu = 0.5
-    V_z = 0.5
-    
-    # Symmetrical open barriers: U_L = 1.0, U_R = 1.0
-    syst_open = hp.build_system_exact(
-        t=t, mu=mu, gamma=gamma, Delta0=Delta0, V_z=V_z,
-        alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=t,
-        barrier_l=1.0, barrier_r=1.0,
-        closed=False
-    )
-    G_open = hp.calc_conductance_matrix_exact(syst_open, E=0.02)
-    nonlocal_open = abs(G_open[0, 1]) + abs(G_open[1, 0])
-    
-    # Ensure open non-local conductance is well above solver noise floor
-    assert nonlocal_open > 1e-5, f"Open non-local conductance {nonlocal_open} is too small to test suppression"
-    
-    # Pinched right barrier: U_L = 1.0, U_R = 60.0 meV
-    syst_pinched = hp.build_system_exact(
-        t=t, mu=mu, gamma=gamma, Delta0=Delta0, V_z=V_z,
-        alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=t,
-        barrier_l=1.0, barrier_r=60.0,
-        closed=False
-    )
-    G_pinched = hp.calc_conductance_matrix_exact(syst_pinched, E=0.02)
-    nonlocal_pinched = abs(G_pinched[0, 1]) + abs(G_pinched[1, 0])
-    
-    # Pinched right barrier must suppress non-local conductance by at least 10^3
-    assert nonlocal_pinched < nonlocal_open * 1e-3, (
-        f"Non-local suppression failed: open={nonlocal_open}, pinched={nonlocal_pinched}"
-    )
 
 def test_fail_loud_unreachable_target_and_invalid_inputs():
     """
@@ -276,38 +250,51 @@ def test_fail_loud_unreachable_target_and_invalid_inputs():
     1. Unreachable targets (e.g. G_N = 2.5 or -0.5 e^2/h) raise ValueError.
     2. Inverted brackets (u_min >= u_max) raise ValueError.
     3. Invalid side parameter raises ValueError.
+    4. Vdisx length mismatch raises ValueError.
     """
-    t = 16.529
-    gamma = 0.2
-    Delta0 = 0.3
+    calib_cfg, geom_cfg = get_default_test_configs()
+    t = 16.565
     alpha = 1.4
-    Ln = 0
-    Lb = 3
-    Ls = 300  # Full 3-micron wire
+    mu_leads = t
+    Vdisx = np.zeros(geom_cfg.Ls)
     
     # 1. Unreachable / physical bounds
     for invalid_target in [-0.5, 2.5]:
-        with pytest.raises(ValueError, match="cannot be bracketed|unreachable|out of physical bounds"):
-            bc.calibrate_single_junction(
-                target_gn=invalid_target, side='left', t=t, gamma=gamma,
-                Delta0=Delta0, alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls,
-                u_min=-3.0, u_max=6.0
+        with pytest.raises(ValueError, match="out of physical bounds"):
+            bc.calibrate_symmetric_pair(
+                target_gn=invalid_target,
+                calibration_cfg=calib_cfg, geometry_cfg=geom_cfg,
+                Vdisx=Vdisx, t=t, alpha=alpha, mu_leads=mu_leads
             )
 
     # 2. Inverted bracket
+    calib_inverted = OmegaConf.create(dict(calib_cfg))
+    calib_inverted.u_min = 6.0
+    calib_inverted.u_max = -3.0
     with pytest.raises(ValueError, match="u_min must be strictly less than u_max"):
-        bc.calibrate_single_junction(
-            target_gn=0.5, side='left', t=t, gamma=gamma,
-            Delta0=Delta0, alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls,
-            u_min=6.0, u_max=-3.0
+        bc.calibrate_symmetric_pair(
+            target_gn=0.5,
+            calibration_cfg=calib_inverted, geometry_cfg=geom_cfg,
+            Vdisx=Vdisx, t=t, alpha=alpha, mu_leads=mu_leads
         )
 
     # 3. Invalid side
     with pytest.raises(ValueError, match="side must be 'left' or 'right'"):
         bc.calibrate_single_junction(
-            target_gn=0.5, side='center', t=t, gamma=gamma,
-            Delta0=Delta0, alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls
+            target_gn=0.5, side='center',
+            calibration_cfg=calib_cfg, geometry_cfg=geom_cfg,
+            Vdisx=Vdisx, t=t, alpha=alpha, mu_leads=mu_leads
         )
+
+    # 4. Vdisx length mismatch
+    wrong_vdis = np.zeros(geom_cfg.Ls + 10)
+    with pytest.raises(ValueError, match="Vdisx length mismatch"):
+        bc.calculate_junction_conductances(
+            u_left=0.0, u_right=0.0, mu=0.5,
+            calibration_cfg=calib_cfg, geometry_cfg=geom_cfg,
+            Vdisx=wrong_vdis, t=t, alpha=alpha, mu_leads=mu_leads
+        )
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

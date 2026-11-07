@@ -2,7 +2,7 @@
 Legendre Curvature & Lock-in Harmonics Module
 ============================================
 
-Implements the tanh-mapped Gauss-Legendre quadrature ("Legendre sum") to rapidly
+Implements the tanh-mapped Gauss-Legendre quadrature ("Legendre sum") to
 compute zero-bias Andreev conductance (1w), nonlocal slope (2w), and zero-bias
 curvature (3w) across the 25 asymmetric cutter gate configurations:
   (U_c,L^{(i)}, U_c,R^{(j)}) for i, j in {0, 1, 2, 3, 4}

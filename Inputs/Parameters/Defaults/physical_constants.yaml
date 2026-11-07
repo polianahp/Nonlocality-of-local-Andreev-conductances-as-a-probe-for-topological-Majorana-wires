@@ -1,0 +1,39 @@
+# ==============================================================================
+# physical_constants.yaml
+# Fundamental and derived physical constants (CODATA 2018 / SI Standard)
+# ==============================================================================
+
+# Reduced Planck constant hbar = h / (2 * pi)
+# Units: eV * s (electron-volt seconds)
+hbar: 6.582119569e-16
+
+# Electron rest mass m_0
+# Units: kg (kilograms)
+m0: 9.10938356e-31
+
+# Elementary electric charge e
+# Units: C (Coulombs)
+e0: 1.602176634e-19
+
+# Free-electron dispersion coefficient eta_m = (hbar^2 / m_0)
+#   t = 1000 * eta_m / (2 * a_0^2 * m*)  [meV]
+# Calculation: (hbar [eV*s])^2 * (e0 [J/eV]) * (1e20 [Angstrom^2 / m^2]) / (m0 [kg])
+# Units: eV * Angstrom^2 (~7.619964 eV * Angstrom^2)
+eta_m: 7.6199642
+
+# Bohr magneton mu_B = e * hbar / (2 * m_0)
+# Units: meV / T (milli-electron-volts per Tesla)
+mu_B: 0.057883818066
+
+# Boltzmann constant k_B
+# Units: eV / K (electron-volts per Kelvin)
+k_B_eV_per_K: 8.617333262e-5
+
+# Boltzmann constant k_B converted to meV / mK
+# (8.617333262e-5 eV/K * 1e3 meV/eV) / (1e3 mK/K) = 8.617333262e-5 meV/mK
+# Units: meV / mK (milli-electron-volts per milli-Kelvin)
+k_B: 8.617333262e-5
+
+# Conductance quantum G_0 = e^2 / h
+# Units: S (Siemens / Ohm^-1)
+G0_Siemens: 3.87404614e-5

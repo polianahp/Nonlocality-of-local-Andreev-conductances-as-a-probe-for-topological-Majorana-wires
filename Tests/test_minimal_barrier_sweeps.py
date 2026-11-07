@@ -82,7 +82,7 @@ def test_worker_numerical_parity_against_main_parallel():
     state = SimulationState(config)
 
     # Load disorder seed
-    resolved_path = PathConfigs.RUN_FILES / f"Raw_Disorders/raw_disorder_{config.realization_index}.npy"
+    resolved_path = PathConfigs.RUN_FILES / f"Fourier_Component_Disorders/fourier_disorder_{config.realization_index}.npy"
     Vdisx = hp.initialize_vdis_from_data(
         resolved_path,
         lambda_dis=config.lambda_dis,

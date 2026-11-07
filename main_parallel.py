@@ -23,6 +23,8 @@ import itertools as itr
 from functools import partial
 import argparse
 import scipy.sparse.linalg as sla
+import sys
+from omegaconf import OmegaConf, DictConfig
 from src.parameter_handler import ConfigManager, SimulationState
 
 
@@ -125,10 +127,17 @@ def worker_simulation_step(iter_data, static_params):
         tgp_stage1_dIdV_LR = np.zeros((num_tgp, len(tgp_energies)))
         tgp_stage1_dIdV_RL = np.zeros((num_tgp, len(tgp_energies)))
         
-        for idx, b_val in enumerate(tgp_barrier_arr):
+        tgp_barrier_pairs = static_params.get('tgp_barrier_pairs')
+        for idx in range(num_tgp):
+            if tgp_barrier_pairs is not None:
+                b_l = tgp_barrier_pairs[idx, 0]
+                b_r = tgp_barrier_pairs[idx, 1]
+            else:
+                b_l = tgp_barrier_arr[idx]
+                b_r = tgp_barrier_arr[idx]
             syst_tgp = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz, 
                                        alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
-                                       barrier_l=b_val, barrier_r=b_val, Vdisx=Vdisx)
+                                       barrier_l=b_l, barrier_r=b_r, Vdisx=Vdisx)
             
             dL, dR, dLR, dRL, _ = hp.calc_dIdV(syst_tgp, tgp_energies, solver_type=solver_type)
             tgp_stage1_dIdVl[idx, :] = dL
@@ -175,12 +184,16 @@ def worker_simulation_step(iter_data, static_params):
         if static_params.get('multi_baseline_barriers', False):
             sweeps_by_baseline = {}
             sweep_indices = static_params.get('barrier_sweep_indices')
+            tgp_barrier_pairs = static_params.get('tgp_barrier_pairs')
             if sweep_indices is None:
                 active_baselines = list(enumerate(tgp_barrier_arr))
             else:
                 active_baselines = [(idx, tgp_barrier_arr[idx]) for idx in sweep_indices if idx < len(tgp_barrier_arr)]
 
             for b_idx, u_base in active_baselines:
+                ul_base = tgp_barrier_pairs[b_idx, 0] if tgp_barrier_pairs is not None else u_base
+                ur_base = tgp_barrier_pairs[b_idx, 1] if tgp_barrier_pairs is not None else u_base
+
                 base_dict = {}
                 for T_val in target_temps:
                     base_dict[T_val] = {
@@ -196,7 +209,7 @@ def worker_simulation_step(iter_data, static_params):
                 syst_base = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
                                             V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb,
                                             Ls=Ls, mu_leads=mu_leads,
-                                            barrier_l=u_base, barrier_r=u_base, Vdisx=Vdisx)
+                                            barrier_l=ul_base, barrier_r=ur_base, Vdisx=Vdisx)
                 for T_val in target_temps:
                     if T_val > 0.0:
                         qe, qw = q_nodes[T_val]
@@ -207,10 +220,10 @@ def worker_simulation_step(iter_data, static_params):
                 for k in range(points):
                     barrier_var_tot = barrier_arr[k]
 
-                    # Varying Right Barrier (UL = u_base, UR = barrier_var_tot)
+                    # Varying Right Barrier (UL = ul_base, UR = barrier_var_tot)
                     syst_UR = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
                                               V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb,
-                                              Ls=Ls, mu_leads=mu_leads, barrier_l=u_base,
+                                              Ls=Ls, mu_leads=mu_leads, barrier_l=ul_base,
                                               barrier_r=barrier_var_tot, Vdisx=Vdisx)
                     for T_val in target_temps:
                         if T_val > 0.0:
@@ -223,11 +236,11 @@ def worker_simulation_step(iter_data, static_params):
                         base_dict[T_val]['b_right_GRL'][k] = Gmat_UR[1, 0]
                         base_dict[T_val]['b_right_GLR'][k] = Gmat_UR[0, 1]
 
-                    # Varying Left Barrier (UL = barrier_var_tot, UR = u_base)
+                    # Varying Left Barrier (UL = barrier_var_tot, UR = ur_base)
                     syst_UL = hp.build_system(t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma,
                                               V_z=vz, alpha=alpha, Ln=Ln, Lb=Lb,
                                               Ls=Ls, mu_leads=mu_leads, barrier_l=barrier_var_tot,
-                                              barrier_r=u_base, Vdisx=Vdisx)
+                                              barrier_r=ur_base, Vdisx=Vdisx)
                     for T_val in target_temps:
                         if T_val > 0.0:
                             qe, qw = q_nodes[T_val]
@@ -304,8 +317,11 @@ def worker_simulation_step(iter_data, static_params):
                 'R_3w': np.zeros((num_baselines, num_baselines), dtype=np.float64),
             }
 
-        for i_l, ul in enumerate(tgp_barrier_arr):
-            for j_r, ur in enumerate(tgp_barrier_arr):
+        tgp_barrier_pairs = static_params.get('tgp_barrier_pairs')
+        for i_l in range(num_baselines):
+            ul = tgp_barrier_pairs[i_l, 0] if tgp_barrier_pairs is not None else tgp_barrier_arr[i_l]
+            for j_r in range(num_baselines):
+                ur = tgp_barrier_pairs[j_r, 1] if tgp_barrier_pairs is not None else tgp_barrier_arr[j_r]
                 syst_pair = hp.build_system(
                     t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz,
                     alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
@@ -414,6 +430,7 @@ def worker_simulation_step(iter_data, static_params):
     }
     return results
 
+#TODO: refactor this name to "worker_pfaffian_step"
 def worker_pdi_step(iter_data, static_params):
     """
     Worker function for the PDI calculation loop (Loop 2).
@@ -429,38 +446,24 @@ def worker_pdi_step(iter_data, static_params):
     V0 = static_params['V0']
     qn = static_params['qn']
     Delta0 = static_params['Delta0']
+    pfaffian_delta_N = static_params["pfaffian_delta_N"]
 
     # Apply Renormalization Factor Z to align with Kwant 
     #Z = Delta0 / (Delta0 + gamma)
-    Z = 1
+    Z = 1 #TODO: double check this, should be find but need to check! If so need to remove it to avoid further confusion
     ts *= Z
     alphas *= Z
     gamma *= Z
     V0 *= Z
     mu_pm *= Z
     vz *= Z
-
-    NL_val = qn
     
     pdi_value = 0
-    if False:
-        # Pass the already-renormalized parameters
-        Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, NL_val)        
-        if 0.05 < abs(Q_nu - int(Q_nu)) < 0.95:
-            Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 2 * NL_val)
 
-            if 0.1 < abs(Q_nu - int(Q_nu)) < 0.9:
-                Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 5 * NL_val)
-
-                if 0.1 < abs(Q_nu - int(Q_nu)) < 0.9:
-                    Q_nu = hp.calculate_pdi(ts, alphas, gamma, Ls, Vdisx, V0, vz, mu_pm, 10 * NL_val)    # round the converged invariant to the nearest integer
-    
-        pdi_value = int(np.round(Q_nu))
     
     result = [mu_pm, vz, pdi_value]
     
     if static_params.get('calc_pfaffian', False):
-        pfaffian_delta_N = static_params.get('pfaffian_delta_N', 0)
         # Delta0 is multiplied by the same renormalization factor Z as other parameters
         pfaff_val = hp.cal_pfaffian_invariant(
             ts=ts, 
@@ -480,90 +483,85 @@ def worker_pdi_step(iter_data, static_params):
 
 
 
-#### constants: 
-hbar = 6.582119569e-16  # eV·s
-m0   = 9.10938356e-31  # kg
-e0   = 1.602176634e-19   # C
-eta_m = (hbar ** 2 * e0) * (1e20)/m0 # hbar^2/m0 in eV A^2
-mu_B =  5.7883818066e-2  #in meV/T
-meVpK = 8.6173325e-2 # Kelvin into meV 
-
-
-
 if __name__ == "__main__":
     t_start = time.perf_counter()
     
-    # Hardcoded Configuration Path 
-    # Set this to a path like "Parameters/my_config.yaml" to use it as the default.
-    CONFIG_PATH = "Parameters/tgp_test.yaml" 
-    # ------------------------------------------------------------
+    parser = argparse.ArgumentParser(description="Nanowire simulation driver.")
+    parser.add_argument("config_file", nargs="?", default=None, help="Path to config YAML file.")
+    parser.add_argument("--config_path", "--config", dest="config_path", type=str, default=None, help="Path to config YAML file.")
+    parser.add_argument("--workers", dest="workers", type=int, default=None, help="Number of workers.")
+    parser.add_argument("--max_points", dest="max_points", type=int, default=None, help="Max points to simulate.")
+    cli_args, remaining = parser.parse_known_args()
 
-    # Configuration
-    config = ConfigManager.get_config(config_path=CONFIG_PATH)
+    config_path = cli_args.config_file or cli_args.config_path or "Inputs/Parameters/fixing_code.yaml"
+    config = ConfigManager.get_config(config_path=config_path, cli_args=remaining or None)
+    if cli_args.workers is not None:
+        config.workers = cli_args.workers
+    if cli_args.max_points is not None:
+        config.max_points = cli_args.max_points
+
     state = SimulationState(config)
     
-    dirname = config.dirname
-    
-    resolved_path = None
-    if config.realization_index is not None:
-        resolved_path = PathConfigs.RUN_FILES / f"Raw_Disorders/raw_disorder_{config.realization_index}.npy"
-    elif config.fname:
-        raw_p = Path(config.fname)
-        candidates = [
-            PathConfigs.RUN_FILES / config.fname,
-            raw_p.resolve() if raw_p.is_absolute() else None,
-            Path(config.fname).resolve() if Path(config.fname).exists() else None,
-            PathConfigs.RUN_FILES / "New_Disorders" / config.fname,
-            PathConfigs.RUN_FILES / "six_micron_analysis" / "6micron" / "New_Disorders" / raw_p.name,
-            PathConfigs.RUN_FILES / "six_micron_analysis" / "3micron" / "New_Disorders" / raw_p.name,
-            PathConfigs.RUN_FILES / "six_micron" / "New_Disorders" / raw_p.name,
-        ]
-        for c in candidates:
-            if c and c.exists():
-                resolved_path = c.resolve()
-                break
-
-        if resolved_path is None:
-            # Fallback: search recursively for filename under RUN_FILES
-            matches = list(PathConfigs.RUN_FILES.glob(f"**/{raw_p.name}"))
-            if matches:
-                resolved_path = matches[0].resolve()
-            else:
-                resolved_path = PathConfigs.RUN_FILES / config.fname
+    if hasattr(config, 'outputs') and hasattr(config.outputs, 'dirname'):
+        dirname = config.outputs.dirname
     else:
-        resolved_path = PathConfigs.RUN_FILES / "New_Disorders/Tdis.npz"
+        dirname = getattr(config, 'dirname', 'default_run')
 
-    try:
-        fname = str(resolved_path.relative_to(PathConfigs.RUN_FILES))
-    except (ValueError, Exception):
-        fname = str(resolved_path)
-
+    if hasattr(config, 'simulation') and hasattr(config.simulation, 'geometry'):
+        geom = config.simulation.geometry
+        disorder_cfg = config.simulation.disorder
+        res_cfg = config.simulation.resolution
+        calc_cfg = getattr(config, 'calculation_includes', None)
+        disorder_file = getattr(disorder_cfg, 'disorder_dirname', getattr(disorder_cfg, 'fname', 'Tdis.npz'))
+        Lb = geom.Lb
+        Lb_pdi = getattr(geom, 'Lb_pdi', geom.Lb)
+        Ls = geom.Ls
+        Ln = geom.Ln
+        t_list = getattr(res_cfg, 'temperatures', getattr(res_cfg, 'barrier_T_mK_list', None))
+        target_temps = [float(t) for t in t_list] if t_list else [0.0]
+        quadrature_nodes_25 = getattr(res_cfg, 'quadrature_nodes_25', 51)
+        barrier_sweep_only = getattr(calc_cfg, 'barrier_sweep_only', False) if calc_cfg else False
+        pdi_flag = getattr(calc_cfg, 'pdi_flag', False) if calc_cfg else getattr(config, 'pdi_flag', False)
+        calc_25_harmonics = getattr(calc_cfg, 'calc_25_cutter_harmonics', False) if calc_cfg else getattr(config, 'calc_25_cutter_harmonics', False)
+    else:
+        disorder_file = getattr(config, 'fname', 'Tdis.npz')
+        Lb = config.Lb
+        Lb_pdi = getattr(config, 'Lb_pdi', config.Lb)
+        Ls = config.Ls
+        Ln = config.Ln
+        t_list = getattr(config, 'barrier_T_mK_list', None)
+        target_temps = [float(t) for t in t_list] if t_list else [0.0]
+        quadrature_nodes_25 = getattr(config, 'quadrature_nodes_25', 51)
+        barrier_sweep_only = getattr(config, 'barrier_sweep_only', False)
+        pdi_flag = getattr(config, 'pdi_flag', False)
+        calc_25_harmonics = getattr(config, 'calc_25_cutter_harmonics', False)
+    
     print(f"--- Starting Simulation ---")
     print(f"Output Directory: {dirname}")
     print(f"Hamiltonian Mode: legacy (renormalized)")
     print(f"Hopping: {state.t:.4f}, Spin-Orbit: {state.alpha:.4f}, Delta: {state.Delta:.4f}")
-    print(f"Disorder File: {fname}")
-    print(f"Barrier Length (Lb): {config.Lb}")
-    print(f"PDI Barrier Length (Lb_pdi): {config.Lb_pdi}")
+    print(f"Disorder File: {disorder_file}")
+    print(f"Barrier Length (Lb): {Lb}")
+    print(f"PDI Barrier Length (Lb_pdi): {Lb_pdi}")
     print(f"Acceleration Mode: {config.acceleration_type}")
-    print(f"Barrier Calibration: {getattr(config, 'calibrate_barriers', False)}")
+    print(f"Barrier Calibration: {hasattr(state, 'symmetric_barrier_configs')}")
     print(f"TGP Barrier Array: {state.tgp_barrier_arr}")
     print(f"--------------------------------\n")
     
-    # Artifact Logging
+    # Artifact Log
+    #TODO: make sure this logs the exact sim state as well
     ConfigManager.log_artifact(config, PathConfigs.DATA / dirname)
     
     # Initialize Disorder
     print(f"Run Files Path Exists: {os.path.exists(PathConfigs.RUN_FILES)}")
-    path = resolved_path
-    Vdisx = hp.initialize_vdis_from_data(path, lambda_dis=config.lambda_dis, Ls=config.Ls, is_real_space=getattr(config, 'is_real_space', False))
 
     # Parameter Preparation
-    static_params = state.get_static_params(Vdisx, config)
+    static_params = state.get_static_params(state.Vdisx, config)
     
     params_list = state.params_list
-    if getattr(config, 'max_points', None) is not None:
-        params_list = params_list[:config.max_points]
+    max_pts = config.get('max_points', None) if hasattr(config, 'get') else getattr(config, 'max_points', None)
+    if max_pts is not None:
+        params_list = params_list[:max_pts]
     mu_var = state.mu_var
     Vz_var = state.Vz_var
     barrier_arr = state.barrier_arr
@@ -573,7 +571,7 @@ if __name__ == "__main__":
     print("spectra_flag:", f"{static_params['spectra_flag']}")
 
     # Pre-allocate main arrays
-    lenw = config.Ls + 2*(config.Lb + config.Ln)
+    lenw = Ls + 2*(Lb + Ln)
     num_orbitals = lenw * 4
     print(f"LEN: {num_orbitals}")
     #ldos_arr = np.zeros(shape = (len(params_list), len(energies), num_orbitals)) 
@@ -590,14 +588,6 @@ if __name__ == "__main__":
     dIdVs_right_arr = np.zeros(shape = (len(params_list), len(energies)))
     dIdVs_LR_arr = np.zeros(shape = (len(params_list), len(energies)))
     dIdVs_RL_arr = np.zeros(shape = (len(params_list), len(energies)))
-
-    t_list = config.barrier_T_mK_list
-    if t_list and len(t_list) > 0:
-        target_temps = [float(t) for t in t_list]
-    elif config.barrier_conductance_mode == "finite_temperature" and config.barrier_T_mK > 0.0:
-        target_temps = [float(config.barrier_T_mK)]
-    else:
-        target_temps = [0.0]
 
     num_barrier_points = len(barrier_arr)
     conductance_data_by_temp = {}
@@ -618,18 +608,18 @@ if __name__ == "__main__":
     mzm_separation_arr = np.zeros(len(params_list))
     gamma_sq_arr = np.zeros_like(params_list, dtype=complex)
     mp_eng_arr = np.zeros_like(params_list)
-    lenw = config.Ls #+ 2*(Lb + Ln)
+    lenw = Ls #+ 2*(Lb + Ln)
     mp_arr = np.zeros(shape= (len(params_list), lenw))
     topological_gap_arr = np.zeros(shape=(len(params_list)))
     
     results = []
     de_quad = {}
-    if getattr(config, 'calc_25_cutter_harmonics', False):
-        print(f"--- Precomputing Double-Exponential Quadrature ({config.quadrature_nodes_25} nodes) ---")
+    if calc_25_harmonics:
+        print(f"--- Precomputing Double-Exponential Quadrature ({quadrature_nodes_25} nodes) ---")
         for T_val in target_temps:
             if T_val > 0.0:
                 de_quad[T_val] = lc.get_double_exponential_quadrature(
-                    T_mK=T_val, n_nodes=config.quadrature_nodes_25
+                    T_mK=T_val, n_nodes=quadrature_nodes_25
                 )
                 print(f"  T = {T_val:4.1f} mK: DE ({de_quad[T_val]['n_nodes']} nodes)")
             else:
@@ -641,7 +631,7 @@ if __name__ == "__main__":
         results = [worker_simulation_step(pms, static_params) for pms in tqdm(params_list, desc="mu/Vz Sweep")]
         
     elif config.acceleration_type == 'parallel':
-        num_workers = config.workers if getattr(config, 'workers', None) is not None else max(1, mp.cpu_count() - 1)
+        num_workers = config.get('workers', None) if (hasattr(config, 'get') and config.get('workers', None) is not None) else max(1, mp.cpu_count() - 1)
         print(f"Starting Parallel Execution with {num_workers} workers.")
         
         with mp.Pool(processes=num_workers) as pool:
@@ -652,7 +642,7 @@ if __name__ == "__main__":
         for pms in tqdm(params_list, desc="mu/Vz Sweep"):
             results.append(worker_simulation_step(pms, static_params))
 
-    if config.barrier_sweep_only:
+    if barrier_sweep_only:
         for res in results:
             idx = res['i']
             if 'b_data' in res:
@@ -720,7 +710,7 @@ if __name__ == "__main__":
         
     pdi_data = np.array([])
 
-    if config.pdi_flag and not config.barrier_sweep_only:
+    if pdi_flag and not barrier_sweep_only:
         print("\nStarting PDI Calculation Loop.")
         pdi_results = []
         if config.acceleration_type == 'gpu':
@@ -728,7 +718,7 @@ if __name__ == "__main__":
             pdi_results = [worker_pdi_step(pms, static_params) for pms in tqdm(params_list, desc="PDI Sweep")]
 
         elif config.acceleration_type == 'parallel':
-            num_workers = max(1, mp.cpu_count() - 1)
+            num_workers = config.get('workers', None) if (hasattr(config, 'get') and config.get('workers', None) is not None) else max(1, mp.cpu_count() - 1)
             print(f"Starting Parallel Execution with {num_workers} workers.")
 
             with mp.Pool(processes=num_workers) as pool:
@@ -780,8 +770,8 @@ if __name__ == "__main__":
     hp.np_save_wrapped(barrier_arr, "barrier_arr", dirname)
     hp.np_save_wrapped(params_list, "params_list", dirname)
 
-    if not config.barrier_sweep_only:
-        hp.np_save_wrapped(Vdisx, "Vdisx", dirname)
+    if not barrier_sweep_only:
+        hp.np_save_wrapped(state.Vdisx, "Vdisx", dirname)
         hp.np_save_wrapped(pdi_data, "pdi_data", dirname)
         hp.np_save_wrapped(energies, "energies", dirname)
         hp.np_save_wrapped(tgp_stage1_dIdVl, "tgp_stage1_dIdVl", dirname)
@@ -799,31 +789,43 @@ if __name__ == "__main__":
         barriers_to_save = state.tgp_barrier_arr if hasattr(state, 'tgp_barrier_arr') else ('tgp_barrier_arr' in locals() and tgp_barrier_arr)
         if barriers_to_save is not None:
             hp.np_save_wrapped(barriers_to_save, 'tgp_barrier_arr', dirname)
+            if hasattr(state, 'tgp_barrier_pairs') and state.tgp_barrier_pairs is not None:
+                hp.np_save_wrapped(state.tgp_barrier_pairs, 'tgp_barrier_pairs', dirname)
             txt_path = PathConfigs.DATA / dirname / "tgp_barriers.txt"
             with open(txt_path, "w") as f:
                 f.write(f"Simulation Directory: {dirname}\n")
                 f.write(f"Hamiltonian Mode: legacy (renormalized)\n")
-                f.write(f"Barrier Calibration: {getattr(config, 'calibrate_barriers', False)}\n")
-                if getattr(config, 'calibrate_barriers', False):
-                    targets = getattr(config, 'target_gns', [0.35, 0.49, 0.62, 0.76, 0.90])
+                calib_flag = (hasattr(state, 'symmetric_barrier_configs') or hasattr(state, 'tgp_barrier_pairs'))
+                f.write(f"Barrier Calibration: {calib_flag}\n")
+                targets = getattr(state, 'target_gns', None) or (config.get('target_gns', None) if hasattr(config, 'get') else getattr(config, 'target_gns', None))
+                if targets is not None:
                     f.write(f"Target Conductances G_N (e^2/h): {targets}\n")
                 f.write(f"TGP Barrier Array (meV): {barriers_to_save.tolist()}\n")
-                for b_idx, b_val in enumerate(barriers_to_save):
-                    f.write(f"  Barrier {b_idx + 1}: {b_val:.6f} meV\n")
+                if hasattr(state, 'tgp_barrier_pairs') and state.tgp_barrier_pairs is not None:
+                    f.write(f"TGP Barrier Pairs (UL, UR meV):\n")
+                    for b_idx, pair in enumerate(state.tgp_barrier_pairs):
+                        tg_label = targets[b_idx] if (targets is not None and b_idx < len(targets)) else b_idx
+                        f.write(f"  Target {tg_label}: UL={pair[0]:.6f} meV, UR={pair[1]:.6f} meV\n")
+                else:
+                    for b_idx, b_val in enumerate(barriers_to_save):
+                        f.write(f"  Barrier {b_idx + 1}: {b_val:.6f} meV\n")
 
     # Multi-baseline barrier sweeps serialization
-    if getattr(config, 'multi_baseline_barriers', False) and getattr(config, 'calc_barrier_sweeps', True):
+    multi_baseline = config.get('multi_baseline_barriers', False) if hasattr(config, 'get') else getattr(config, 'multi_baseline_barriers', False)
+    calc_sweeps = config.get('calc_barrier_sweeps', True) if hasattr(config, 'get') else getattr(config, 'calc_barrier_sweeps', True)
+    if multi_baseline and calc_sweeps:
         obs_keys = [
             'b_right_cond_left', 'b_right_cond_right',
             'b_right_GLR', 'b_right_GRL',
             'b_left_cond_left', 'b_left_cond_right'
         ]
         u_cutters = state.tgp_barrier_arr
-        targets = getattr(config, 'target_gns', None) or [0.35, 0.49, 0.62, 0.76, 0.90]
+        targets = getattr(state, 'target_gns', None) or (config.get('target_gns', None) if hasattr(config, 'get') else getattr(config, 'target_gns', None))
+        targets = targets or [0.35, 0.49, 0.62, 0.76, 0.90]
         num_baselines = len(u_cutters)
         t_keys = [f"{int(T)}mK" if T == int(T) else f"{T:.1f}mK" for T in target_temps]
 
-        sweep_indices = getattr(config, 'barrier_sweep_indices', None)
+        sweep_indices = config.get('barrier_sweep_indices', None) if hasattr(config, 'get') else getattr(config, 'barrier_sweep_indices', None)
         if sweep_indices is None:
             active_indices = list(range(num_baselines))
         else:
@@ -870,7 +872,7 @@ if __name__ == "__main__":
                 np.savez_compressed(base_dir / f"{ok}.npz", **npz_dict)
 
     # 25-Cutter harmonics serialization
-    if getattr(config, 'calc_25_cutter_harmonics', False):
+    if calc_25_harmonics:
         harm_keys = ['L_1w', 'R_1w', 'RL_2w', 'LR_2w', 'L_3w', 'R_3w']
         u_cutters = state.tgp_barrier_arr
         num_baselines = len(u_cutters)
@@ -906,8 +908,15 @@ if __name__ == "__main__":
     print(f"Total Runtime: {total_runtime_sec:.2f} s ({total_runtime_min:.2f} min / {total_runtime_hrs:.3f} hrs)")
     print("=" * 65 + "\n")
 
+    if isinstance(config, DictConfig):
+        cfg_dict = OmegaConf.to_container(config, resolve=True)
+    elif hasattr(config, 'model_dump'):
+        cfg_dict = config.model_dump()
+    else:
+        cfg_dict = dict(config)
+
     all_params = {
-        **config.model_dump(),  # unpacks all input parameters from SimulationConfig
+        **cfg_dict,  # unpacks all input parameters
         **static_params,        # unpacks 't', 'mu_n', 'Delta', 'alpha', etc. (overrides None with calculated values)
         'total_runtime_seconds': total_runtime_sec,
         'total_runtime_minutes': total_runtime_min,

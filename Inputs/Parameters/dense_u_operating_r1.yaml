@@ -28,7 +28,13 @@ qn: 20
 
 # Barrier Calibration Settings (All 5 Target Conductances for 25 Cutters)
 calibrate_barriers: True
-target_gns: [0.35, 0.49, 0.62, 0.76, 0.90]
+target_gns: [0.25, 0.35, 0.45, 0.55, 0.65]
+tgp_barrier_pairs:
+  - [3.70166, 0.51688]
+  - [2.72414, -0.49467]
+  - [2.02246, -1.23079]
+  - [1.47386, -1.81453]
+  - [1.02083, -2.30388]
 
 # Barrier Sweeps: Disabled (Option A: Delta-Only, already in Tier 1)
 calc_barrier_sweeps: False

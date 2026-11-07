@@ -32,7 +32,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.parameter_handler import ConfigManager, SimulationConfig
+from src.parameter_handler import ConfigManager
 
 
 def test_yaml_configuration_contracts():
@@ -60,7 +60,7 @@ def test_yaml_configuration_contracts():
         assert raw_cfg["target_gns"] == [0.35, 0.49, 0.62, 0.76, 0.90]
         assert raw_cfg["dirname"] == f"Harpers_Ferry/Dense_U_Calibrated/Realization_{expected_r}"
 
-        # Pydantic validation
+        # ConfigManager validation
         sim_cfg = ConfigManager.get_config(config_path=str(full_path), cli_args=[])
         assert sim_cfg.barrier_u_points == 100
         assert sim_cfg.quadrature_nodes_25 == 51

@@ -16,8 +16,10 @@ from .barrier_asymmetry import (
 )
 from .barrier_correlation import (
     extract_barrier_reflection_correlations,
+    extract_conductance_space_barrier_correlations,
     extract_cross_barrier_correlations,
     fpe_barrier_reflection_correlation,
+    fpe_conductance_space_barrier_correlation,
     fpe_cross_barrier_conjugate_correlation,
     fpe_local_vz_oscillation_correlation,
 )
@@ -58,6 +60,7 @@ FPE_REGISTRY = {
     "fpe_barrier_max_at_symmetric": fpe_barrier_max_at_symmetric,
     # 2. Barrier Reflection & Local Vz Correlations
     "fpe_barrier_reflection_correlation": fpe_barrier_reflection_correlation,
+    "fpe_conductance_space_barrier_correlation": fpe_conductance_space_barrier_correlation,
     "fpe_cross_barrier_conjugate_correlation": fpe_cross_barrier_conjugate_correlation,
     "fpe_local_vz_oscillation_correlation": fpe_local_vz_oscillation_correlation,
     # 3. 1D Zeeman Foliation & Quadrature Envelopes
@@ -83,6 +86,7 @@ __all__ = list(FPE_REGISTRY.keys()) + [
     "FPE_REGISTRY",
     "extract_lead_acd_maps",
     "extract_barrier_reflection_correlations",
+    "extract_conductance_space_barrier_correlations",
     "extract_ac_rms_fields",
     "extract_lqmp_fields",
     "extract_zero_bias_curvature_3d",

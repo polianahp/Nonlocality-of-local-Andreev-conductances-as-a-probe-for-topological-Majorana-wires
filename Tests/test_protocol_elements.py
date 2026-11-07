@@ -300,3 +300,53 @@ def test_run_protocol_specs_rebuilds_master_leaderboard(tmp_path: Path):
     assert master.exists()
     text = master.read_text()
     assert "## Overall" in text and "$V_0 = 0.645$ meV" in text and "$V_0 = 0.872$ meV" in text
+
+
+def test_conductance_space_barrier_correlation():
+    realization_dir = REPO_ROOT / "Outputs" / "Data" / "Dense_U_Operating" / "Realization_2"
+    if not realization_dir.exists():
+        pytest.skip(f"Test realization {realization_dir} not present")
+
+    cache = RealizationFeatureCache(realization_dir, temperature_mK=40.0)
+    assert cache.has_harmonics_25_data
+
+    hdata = cache.get_harmonics_25_data()
+    assert "L_1w" in hdata and "R_1w" in hdata
+    assert hdata["L_1w"].shape == (cache.n_mu, cache.n_vz, 5, 5)
+
+    cL, cR = FPE.extract_conductance_space_barrier_correlations(cache, baseline_gn=0.55)
+    assert cL.shape == (cache.n_mu, cache.n_vz)
+    assert cR.shape == (cache.n_mu, cache.n_vz)
+    assert np.all(cL >= -1.0) and np.all(cL <= 1.0)
+    assert np.all(cR >= -1.0) and np.all(cR <= 1.0)
+
+    # Test FPE boolean masks across lead options
+    for lead in ["L", "R", "min_LR", "max_LR", "mean_LR"]:
+        mask = FPE.fpe_conductance_space_barrier_correlation(
+            cache, baseline_gn=0.55, corr_threshold=0.85, lead=lead
+        )
+        assert mask.shape == (cache.n_mu, cache.n_vz)
+        assert mask.dtype == bool
+
+
+def test_msft_tgp_hybrids_with_conductance_space_corr():
+    realization_dir = REPO_ROOT / "Outputs" / "Data" / "Dense_U_Operating" / "Realization_2"
+    if not realization_dir.exists():
+        pytest.skip(f"Test realization {realization_dir} not present")
+
+    cache = RealizationFeatureCache(realization_dir, temperature_mK=40.0)
+    from Protocols.MSFT_TGP_Hybrids.protocol import Protocol as MSFTHybridsProtocol
+
+    proto = MSFTHybridsProtocol()
+    overrides = {
+        "fpe_conductance_space_corr.enabled": True,
+        "fpe_conductance_space_corr.corr_threshold": 0.80,
+    }
+    params = proto.resolve_and_validate_params(swept_overrides=overrides)
+
+    steps = proto.evaluate_steps(cache, params)
+    assert "step_4b_fpe_conductance_space_corr" in steps
+    mask = steps["step_4b_fpe_conductance_space_corr"]
+    assert mask.shape == (cache.n_mu, cache.n_vz)
+    assert mask.dtype == bool
+    assert "step_8_dpe_C4_final_mask" in steps

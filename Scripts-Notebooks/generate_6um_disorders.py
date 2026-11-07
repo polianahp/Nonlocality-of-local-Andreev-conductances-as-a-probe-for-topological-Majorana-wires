@@ -10,7 +10,7 @@ Geometry:
   Discrete Sine Transform (DST) basis: psiKx(n, i) = sqrt(2 / (Nx + 1)) * sin(i * n * pi / (Nx + 1)).
 
 Outputs:
-  1. Inputs/Run_Files/six_micron/Raw_Disorders/raw_disorder_6um_realization_{0,1,2}.npy
+  1. Inputs/Run_Files/six_micron/Fourier_Component_Disorders/fourier_disorder_6um_realization_{0,1,2}.npy
   2. Inputs/Run_Files/six_micron/New_Disorders/V0_{tag}_6um_realization_{r}.npz
   3. Inputs/Parameters/six_micron/V0_{tag}_realization_{r}.yaml
   4. Inputs/Slurms/six_micron/run_V0_{tag}_realization_{r}.slurm
@@ -45,14 +45,14 @@ BENCHMARK_DISORDERS = [
 
 # Destination paths
 RUN_FILES_6UM = ROOT_DIR / "Inputs" / "Run_Files" / "six_micron"
-RAW_DIR = RUN_FILES_6UM / "Raw_Disorders"
+FOURIER_DIR = RUN_FILES_6UM / "Fourier_Component_Disorders"
 NEW_DIR = RUN_FILES_6UM / "New_Disorders"
 PARAM_DIR_6UM = ROOT_DIR / "Inputs" / "Parameters" / "six_micron"
 SLURM_DIR_6UM = ROOT_DIR / "Inputs" / "Slurms" / "six_micron"
 DATA_DIR_6UM = ROOT_DIR / "Outputs" / "Data" / "six_micron"
 
 def setup_directories():
-    for d in [RAW_DIR, NEW_DIR, PARAM_DIR_6UM, SLURM_DIR_6UM, DATA_DIR_6UM]:
+    for d in [FOURIER_DIR, NEW_DIR, PARAM_DIR_6UM, SLURM_DIR_6UM, DATA_DIR_6UM]:
         d.mkdir(parents=True, exist_ok=True)
     print(f"Directory scaffolding complete under {ROOT_DIR}")
 
@@ -83,10 +83,10 @@ def generate_disorders():
         vdk = np.random.uniform(-1.0, 1.0, Nx)
         raw_realizations.append(vdk)
 
-        # Save raw disorder vector
-        raw_path = RAW_DIR / f"raw_disorder_6um_realization_{r}.npy"
-        np.save(raw_path, vdk)
-        print(f"Saved: {raw_path}")
+        # Save Fourier component disorder vector
+        fourier_path = FOURIER_DIR / f"fourier_disorder_6um_realization_{r}.npy"
+        np.save(fourier_path, vdk)
+        print(f"Saved: {fourier_path}")
 
         # 2. Filter frequencies with envelope and project via DST basis
         vdkq = vdk * Qdis

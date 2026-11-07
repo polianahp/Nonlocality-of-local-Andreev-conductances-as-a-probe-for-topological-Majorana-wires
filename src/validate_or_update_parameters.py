@@ -6,7 +6,7 @@ Audit, modernize, and refactor YAML parameter files for disorder realizations.
 1. Safely archives legacy flat YAML files into Legacy_Flat/
 2. Generates modernized, schema-compliant YAML files organized by benchmark disorder strength:
    Inputs/Parameters/Disorder_Realizations/V0_<strength>/disorder_realization_<idx>.yaml
-3. Validates all generated configurations against Pydantic v2 SimulationConfig.
+3. Validates all generated configurations using ConfigManager.
 """
 
 import os
@@ -20,7 +20,7 @@ from omegaconf import OmegaConf
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from src.parameter_handler import SimulationConfig
+from src.parameter_handler import ConfigManager
 
 DISORDER_PARAM_DIR = ROOT_DIR / "Inputs" / "Parameters" / "Disorder_Realizations"
 LEGACY_DIR = DISORDER_PARAM_DIR / "Legacy_Flat"
@@ -101,8 +101,8 @@ def generate_disorder_strength_subfolders():
     print(f"Successfully generated {total_created} parameter files across {len(BENCHMARK_DISORDERS)} directories.")
 
 def validate_all_generated_parameters():
-    """Validates all generated parameter YAML files against SimulationConfig."""
-    print("Validating all parameter files against Pydantic v2 SimulationConfig...")
+    """Validates all generated parameter YAML files using ConfigManager."""
+    print("Validating all parameter files using ConfigManager...")
     errors = []
     validated_count = 0
 
@@ -114,8 +114,7 @@ def validate_all_generated_parameters():
 
         for yf in yaml_files:
             try:
-                raw_dict = OmegaConf.to_container(OmegaConf.load(str(yf)), resolve=True)
-                cfg = SimulationConfig(**raw_dict)
+                cfg = ConfigManager.get_config(config_path=str(yf), cli_args=[])
                 assert cfg.Ls == 300, f"Ls mismatch in {yf}"
                 assert cfg.a0 == 100.0, f"a0 mismatch in {yf}"
                 assert cfg.barrier0 == 2.0, f"barrier0 mismatch in {yf}"
@@ -134,7 +133,7 @@ def validate_all_generated_parameters():
             print(f"  {err}")
         raise RuntimeError("Parameter validation failed.")
     else:
-        print(f"SUCCESS: All {validated_count} parameter files validated cleanly against SimulationConfig!")
+        print(f"SUCCESS: All {validated_count} parameter files validated cleanly using ConfigManager!")
 
 if __name__ == "__main__":
     archive_legacy_flat_files()

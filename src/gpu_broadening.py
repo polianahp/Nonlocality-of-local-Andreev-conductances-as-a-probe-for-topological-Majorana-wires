@@ -33,8 +33,7 @@ def broaden_with_temperature_gpu(
     chunk_size: int = 10000,
 ) -> xr.Dataset:
     """
-    GPU-accelerated thermal broadening matching Microsoft's tgp.prepare.broaden_with_temperature
-    to full machine precision (10^-15) on both uniform and non-uniform grids using CuPy FFT convolution
+    GPU-accelerated thermal broadening matching Microsoft's tgp.prepare.broaden_with_temperature using CuPy FFT convolution
     and vectorized 1D interpolation/extrapolation.
     """
     k_B = physical_constants["Boltzmann constant in eV/K"][0]

@@ -2,296 +2,336 @@
 Barrier Calibration Module (Aghaee et al. 2023)
 ================================================
 
-Calibrates nanowire cutter gate potentials (U_c,L and U_c,R) to achieve target
-normal-state differential conductances G_N at zero magnetic field (V_z = 0) and
-above-gap bias (E = 0.5 meV).
 
-- Proximitized superconductor sites include the physical BCS parent-Al self-energy
-  Sigma_Al(omega) = -gamma / s(omega) * (omega * tau_0 - Delta0 * tau_x) (x) sigma_0,
-  with s(omega) = sqrt(Delta0^2 - omega^2) for |omega| < Delta0 and
-  s(omega) = -i * sgn(omega) * sqrt(omega^2 - Delta0^2) for |omega| > Delta0.
-  At omega = 0, Sigma_Al(0) = +gamma * tau_x (x) sigma_0.
-- This drains transmitted quasiparticles into the grounded parent Al reservoir,
-  eliminating finite-size cavity reflections and strictly decoupling G_LL from U_R
-  (and G_RR from U_L).
-- Target inversion: The normal conductance G_N(U) is monotonic with barrier height U.
-  We invert G_N(U_c) = G_target by computing the median conductance across 15
-  equidistant chemical potential points in the lowest subband (mu in [0.0, 2.0] meV)
-  via Brent's root-finding method (scipy.optimize.brentq).
+    
 """
 
-from typing import Optional, List, Dict, Union
+from typing import List, Tuple, Any
 import numpy as np
 from scipy.optimize import brentq
-import kwant
+from omegaconf import DictConfig
 
 import src.helpers as hp
 
 
-def calculate_gn_above_gap(
-    u_barrier: float,
-    side: str,
-    t: float,
+def calculate_junction_conductances(
+    u_left: float,
+    u_right: float,
     mu: float,
-    gamma: float,
-    Delta0: float,
+    calibration_cfg: DictConfig,
+    geometry_cfg: DictConfig,
+    Vdisx: np.ndarray,
+    t: float,
     alpha: float,
-    Ln: int = 0,
-    Lb: int = 3,
-    Ls: int = 300,
-    mu_leads: Optional[float] = None,
-    energy: float = 0.5,
-    solver_type: str = 'cpu'
-) -> float:
+    mu_leads: float,
+    solver_type: str = "cpu"
+) -> Tuple[float, float]:
     """
-    Computes single-junction normal conductance G_N at energy E > Delta0 for a given barrier height.
+    Simultaneously computes left and right normal conductances (G_LL, G_RR)
+    for a wire with cutter gate pair (u_left, u_right) at bias energy > Delta_0.
 
-    Parameters
-    ----------
-    u_barrier : float
-        Cutter gate potential in meV.
-    side : str
-        'left' or 'right' indicating which junction to measure.
-    t : float
-        Hopping energy in meV.
+    Parameters:
+    -----------
+    u_left : float
+        Left cutter gate potential in meV.
+    u_right : float
+        Right cutter gate potential in meV.
     mu : float
         Superconductor chemical potential in meV.
-    gamma : float
-        SM-SC coupling parameter in meV.
-    Delta0 : float
-        Bulk superconducting gap in meV.
+    calibration_cfg : DictConfig
+        Configuration dictionary for barrier calibration (from barrier_calibration.yaml).
+    geometry_cfg : DictConfig
+        Configuration dictionary for wire geometry and material parameters.
+    Vdisx : np.ndarray
+        1D spatial disorder profile of length geometry_cfg.Ls.
+    t : float
+        Hopping energy in meV (derived in SimulationState).
     alpha : float
-        Rashba spin-orbit coupling in meV.
-    Ln : int
-        Normal region length in lattice sites (default: 0).
-    Lb : int
-        Barrier length in lattice sites (default: 3).
-    Ls : int
-        Superconductor length in lattice sites (default: 300).
-    mu_leads : float, optional
-        Lead chemical potential in meV (default: t).
-    energy : float
-        Above-gap bias energy in meV (default: 0.5).
+        Rashba spin-orbit coupling in meV (derived in SimulationState).
+    mu_leads : float
+        Chemical potential in the normal leads in meV (derived in SimulationState).
     solver_type : str
-        'cpu' or 'gpu'.
+        Kwant solver type ('cpu' or 'gpu').
 
-    Returns
-    -------
-    float
-        Differential conductance in units of e^2/h.
+    Returns:
+    --------
+    Tuple[float, float]
+        (G_LL, G_RR) differential conductances in units of e^2/h.
     """
-    if side not in ('left', 'right'):
-        raise ValueError(f"side must be 'left' or 'right', got '{side}'")
-
-    if energy <= Delta0:
+    if len(Vdisx) != geometry_cfg.Ls:
         raise ValueError(
-            f"energy ({energy} meV) must be strictly greater than Delta0 ({Delta0} meV) "
-            "for normal above-gap calibration."
+            f"Vdisx length mismatch: got {len(Vdisx)}, expected geometry Ls={geometry_cfg.Ls}"
         )
 
-    # Pin remote barrier to ensure strong decoupling even on small test wires
-    remote_barrier = 50.0
-
-    if side == 'left':
-        barrier_l = float(u_barrier)
-        barrier_r = remote_barrier
-    else:
-        barrier_l = remote_barrier
-        barrier_r = float(u_barrier)
+    energy = calibration_cfg.energy
+    Delta0 = geometry_cfg.Delta_0
+    if energy <= Delta0:
+        raise ValueError(
+            f"Calibration bias energy ({energy} meV) must be strictly greater than Delta_0 ({Delta0} meV)"
+        )
 
     syst = hp.build_system_exact(
         t=t,
         mu=mu,
-        gamma=gamma,
+        gamma=geometry_cfg.gamma,
         Delta0=Delta0,
         V_z=0.0,
         alpha=alpha,
-        Ln=Ln,
-        Lb=Lb,
-        Ls=Ls,
+        Ln=geometry_cfg.Ln,
+        Lb=geometry_cfg.Lb,
+        Ls=geometry_cfg.Ls,
         mu_leads=mu_leads,
-        barrier_l=barrier_l,
-        barrier_r=barrier_r,
+        barrier_l=u_left,
+        barrier_r=u_right,
+        Vdisx=Vdisx,
         closed=False
     )
 
-    G_mat = hp.calc_conductance_matrix_exact(
-        syst,
-        E=energy,
-        solver_type=solver_type
+    G_mat = hp.calc_conductance_matrix_exact(syst, E=energy)
+    return G_mat[0, 0], G_mat[1, 1]
+
+
+def calibrate_symmetric_pair(
+    target_gn: float,
+    calibration_cfg: DictConfig,
+    geometry_cfg: DictConfig,
+    Vdisx: np.ndarray,
+    t: float,
+    alpha: float,
+    mu_leads: float,
+    solver_type: str = "cpu"
+) -> List[float]:
+    """
+    Finds the symmetric cutter gate pair [U_L*, U_R*] that simultaneously satisfies:
+        median_mu[G_LL(U_L*, U_R*)] = target_gn
+        median_mu[G_RR(U_L*, U_R*)] = target_gn
+
+    Returns:
+    --------
+    List[float]
+        [U_L*, U_R*] in meV.
+    """
+    u_min = calibration_cfg.u_min
+    u_max = calibration_cfg.u_max
+    tol = calibration_cfg.tol
+    max_iter = calibration_cfg.max_iter
+
+    if u_min >= u_max:
+        raise ValueError(f"u_min must be strictly less than u_max: u_min={u_min}, u_max={u_max}")
+
+    if target_gn <= 0.0 or target_gn >= 2.0:
+        raise ValueError(f"Target G_N = {target_gn} out of physical bounds (0, 2) e^2/h")
+
+    mu_points = np.linspace(
+        calibration_cfg.mu_min,
+        calibration_cfg.mu_max,
+        calibration_cfg.n_mu_points
     )
 
-    if side == 'left':
-        return float(G_mat[0, 0])
-    else:
-        return float(G_mat[1, 1])
+    # 1. Symmetric baseline solve: find u_sym where the average conductance matches target_gn
+    def objective_symmetric(u: float) -> float:
+        joint_gns = [
+            calculate_junction_conductances(
+                u_left=u,
+                u_right=u,
+                mu=mu_val,
+                calibration_cfg=calibration_cfg,
+                geometry_cfg=geometry_cfg,
+                Vdisx=Vdisx,
+                t=t,
+                alpha=alpha,
+                mu_leads=mu_leads,
+                solver_type=solver_type
+            )
+            for mu_val in mu_points
+        ]
+        avg_g = np.median([(g[0] + g[1]) / 2.0 for g in joint_gns])
+        return avg_g - target_gn
+
+    f_sym_min = objective_symmetric(u_min)
+    f_sym_max = objective_symmetric(u_max)
+    if f_sym_min * f_sym_max > 0:
+        raise ValueError(
+            f"Target G_N={target_gn} cannot be bracketed in [{u_min}, {u_max}]: "
+            f"f({u_min})={f_sym_min:+.4f}, f({u_max})={f_sym_max:+.4f}"
+        )
+
+    u_sym = brentq(objective_symmetric, u_min, u_max, xtol=tol, maxiter=max_iter)
+
+    # 2. Refine left and right barriers around u_sym to account for spatial disorder asymmetry
+    def objective_left(ul: float) -> float:
+        g_lefts = [
+            calculate_junction_conductances(
+                u_left=ul,
+                u_right=u_sym,
+                mu=mu_val,
+                calibration_cfg=calibration_cfg,
+                geometry_cfg=geometry_cfg,
+                Vdisx=Vdisx,
+                t=t,
+                alpha=alpha,
+                mu_leads=mu_leads,
+                solver_type=solver_type
+            )[0]
+            for mu_val in mu_points
+        ]
+        return np.median(g_lefts) - target_gn
+
+    def objective_right(ur: float) -> float:
+        g_rights = [
+            calculate_junction_conductances(
+                u_left=u_sym,
+                u_right=ur,
+                mu=mu_val,
+                calibration_cfg=calibration_cfg,
+                geometry_cfg=geometry_cfg,
+                Vdisx=Vdisx,
+                t=t,
+                alpha=alpha,
+                mu_leads=mu_leads,
+                solver_type=solver_type
+            )[1]
+            for mu_val in mu_points
+        ]
+        return np.median(g_rights) - target_gn
+
+    f_l_min = objective_left(u_min)
+    f_l_max = objective_left(u_max)
+    if f_l_min * f_l_max > 0:
+        raise ValueError(
+            f"Target G_N={target_gn} cannot be bracketed on Left junction in [{u_min}, {u_max}]: "
+            f"f({u_min})={f_l_min:+.4f}, f({u_max})={f_l_max:+.4f}. "
+            f"Impurity scattering or potential limits may restrict maximum attainable transmission."
+        )
+
+    f_r_min = objective_right(u_min)
+    f_r_max = objective_right(u_max)
+    if f_r_min * f_r_max > 0:
+        raise ValueError(
+            f"Target G_N={target_gn} cannot be bracketed on Right junction in [{u_min}, {u_max}]: "
+            f"f({u_min})={f_r_min:+.4f}, f({u_max})={f_r_max:+.4f}. "
+            f"Impurity scattering or potential limits may restrict maximum attainable transmission."
+        )
+
+    u_l_star = brentq(objective_left, u_min, u_max, xtol=tol, maxiter=max_iter)
+    u_r_star = brentq(objective_right, u_min, u_max, xtol=tol, maxiter=max_iter)
+
+    # 2. Joint verification with both calibrated gates active simultaneously
+    joint_conductances = [
+        calculate_junction_conductances(
+            u_left=u_l_star,
+            u_right=u_r_star,
+            mu=mu_val,
+            calibration_cfg=calibration_cfg,
+            geometry_cfg=geometry_cfg,
+            Vdisx=Vdisx,
+            t=t,
+            alpha=alpha,
+            mu_leads=mu_leads,
+            solver_type=solver_type
+        )
+        for mu_val in mu_points
+    ]
+    med_gll = np.median([g[0] for g in joint_conductances])
+    med_grr = np.median([g[1] for g in joint_conductances])
+
+    err_l = abs(med_gll - target_gn)
+    err_r = abs(med_grr - target_gn)
+    # Allow 2 * tol for residual joint coupling
+    tolerance_threshold = max(2.0 * tol, 0.005)
+    if err_l > tolerance_threshold or err_r > tolerance_threshold:
+        raise RuntimeError(
+            f"Simultaneous calibration failed tolerance for G_N={target_gn}: "
+            f"G_LL error={err_l:.4f}, G_RR error={err_r:.4f} (threshold={tolerance_threshold})"
+        )
+
+    return [u_l_star, u_r_star]
 
 
 def calibrate_single_junction(
     target_gn: float,
     side: str,
+    calibration_cfg: DictConfig,
+    geometry_cfg: DictConfig,
+    Vdisx: np.ndarray,
     t: float,
-    gamma: float,
-    Delta0: float,
     alpha: float,
-    Ln: int = 0,
-    Lb: int = 3,
-    Ls: int = 300,
-    mu_leads: Optional[float] = None,
-    u_min: float = -3.0,
-    u_max: float = 6.0,
-    energy: float = 0.5,
-    mu_points: Optional[np.ndarray] = None,
-    tol: float = 1e-4,
-    max_iter: int = 50
+    mu_leads: float,
+    solver_type: str = "cpu"
 ) -> float:
     """
-    Inverts the normal-state conductance to find the cutter barrier potential U_c
-    satisfying median_{mu}[G_N(U_c, mu)] = target_gn.
-
-    Parameters
-    ----------
-    target_gn : float
-        Target differential conductance in units of e^2/h.
-    side : str
-        'left' or 'right'.
-    t, gamma, Delta0, alpha, Ln, Lb, Ls, mu_leads : float / int
-        Nanowire Hamiltonian parameters.
-    u_min, u_max : float
-        Search bracket boundaries in meV.
-    energy : float
-        Above-gap bias energy in meV.
-    mu_points : np.ndarray, optional
-        Array of chemical potentials to median-average over (default: 15 points in [0.0, 2.0] meV).
-    tol : float
-        Tolerance on root finding in meV.
-    max_iter : int
-        Maximum iterations for brentq.
-
-    Returns
-    -------
-    float
-        Calibrated cutter gate potential U_c in meV.
+    Calibrates a single junction ('left' or 'right') as part of the symmetric pair.
+    Convenience wrapper returning a scalar potential.
     """
     if side not in ('left', 'right'):
         raise ValueError(f"side must be 'left' or 'right', got '{side}'")
 
-    if u_min >= u_max:
-        raise ValueError(f"u_min must be strictly less than u_max: u_min={u_min}, u_max={u_max}")
-
-    # Physical conductance bounds for a 1-channel spin-degenerate normal lead
-    if target_gn <= 0.0 or target_gn >= 2.0:
-        raise ValueError(
-            f"Target G_N = {target_gn} cannot be bracketed in [{u_min}, {u_max}] (out of physical bounds)"
-        )
-
-    if mu_points is None:
-        mu_points = np.linspace(0.0, 2.0, 15)
-
-    def objective(u: float) -> float:
-        gns = [
-            calculate_gn_above_gap(
-                u_barrier=u,
-                side=side,
-                t=t,
-                mu=mu,
-                gamma=gamma,
-                Delta0=Delta0,
-                alpha=alpha,
-                Ln=Ln,
-                Lb=Lb,
-                Ls=Ls,
-                mu_leads=mu_leads,
-                energy=energy
-            )
-            for mu in mu_points
-        ]
-        return float(np.median(gns) - target_gn)
-
-    # Bracket validation
-    f_min = objective(u_min)
-    f_max = objective(u_max)
-
-    if f_min * f_max > 0:
-        raise ValueError(
-            f"Target G_N = {target_gn} cannot be bracketed in [{u_min}, {u_max}] (out of physical bounds): "
-            f"f({u_min}) = {f_min:+.4f}, f({u_max}) = {f_max:+.4f}"
-        )
-
-    root = brentq(objective, u_min, u_max, xtol=tol, maxiter=max_iter)
-    return float(root)
+    pair = calibrate_symmetric_pair(
+        target_gn=target_gn,
+        calibration_cfg=calibration_cfg,
+        geometry_cfg=geometry_cfg,
+        Vdisx=Vdisx,
+        t=t,
+        alpha=alpha,
+        mu_leads=mu_leads,
+        solver_type=solver_type
+    )
+    return pair[0] if side == 'left' else pair[1]
 
 
 def calibrate_wire_cutters(
-    target_gns: Union[float, List[float], np.ndarray],
+    calibration_cfg: DictConfig,
+    geometry_cfg: DictConfig,
+    Vdisx: np.ndarray,
     t: float,
-    gamma: float,
-    Delta0: float,
     alpha: float,
-    Ln: int = 0,
-    Lb: int = 3,
-    Ls: int = 300,
-    mu_leads: Optional[float] = None,
-    u_min: float = -3.0,
-    u_max: float = 6.0,
-    energy: float = 0.5,
-    mu_points: Optional[np.ndarray] = None,
-    tol: float = 1e-4
-) -> Dict[str, np.ndarray]:
+    mu_leads: float,
+) -> List[List[Any]]:
     """
-    Calibrates both left and right cutter potentials for a suite of target G_N values.
+    Calibrates symmetric barrier configurations for all target conductances.
 
-    Returns
-    -------
-    dict
-        {
-            'targets': np.ndarray of target G_N values,
-            'u_left': np.ndarray of calibrated U_c,L,
-            'u_right': np.ndarray of calibrated U_c,R
-        }
+    Parameters:
+    -----------
+    calibration_cfg : DictConfig
+        Configuration dictionary containing target_gns, u_min, u_max, energy, tol, etc.
+    geometry_cfg : DictConfig
+        Configuration dictionary containing Ls, Ln, Lb, gamma, Delta_0, etc.
+    Vdisx : np.ndarray
+        MANDATORY 1D spatial disorder profile of length geometry_cfg.Ls.
+    t : float
+        Hopping energy in meV.
+    alpha : float
+        Rashba spin-orbit coupling in meV.
+    mu_leads : float
+        Chemical potential in the normal leads in meV.
+    solver_type : str
+        Kwant solver type ('cpu' or 'gpu').
+
+    Returns:
+    --------
+    List of entries: [G_N, [UL, UR]]
+    Example:
+        [
+            [0.35, [3.120, 2.985]],
+            [0.49, [2.410, 2.350]],
+            [0.62, [1.820, 1.790]],
+            [0.76, [1.110, 1.090]],
+            [0.90, [0.110, 0.095]]
+        ]
     """
-    targets = np.atleast_1d(np.asarray(target_gns, dtype=float))
-    u_left = np.zeros(len(targets), dtype=float)
-    u_right = np.zeros(len(targets), dtype=float)
+    targets = np.atleast_1d(np.asarray(calibration_cfg.target_gns, dtype=float))
+    calibrated_table = []
 
-    for idx, tg in enumerate(targets):
-        u_left[idx] = calibrate_single_junction(
+    for tg in targets:
+        pair = calibrate_symmetric_pair(
             target_gn=tg,
-            side='left',
+            calibration_cfg=calibration_cfg,
+            geometry_cfg=geometry_cfg,
+            Vdisx=Vdisx,
             t=t,
-            gamma=gamma,
-            Delta0=Delta0,
             alpha=alpha,
-            Ln=Ln,
-            Lb=Lb,
-            Ls=Ls,
             mu_leads=mu_leads,
-            u_min=u_min,
-            u_max=u_max,
-            energy=energy,
-            mu_points=mu_points,
-            tol=tol
         )
-        u_right[idx] = calibrate_single_junction(
-            target_gn=tg,
-            side='right',
-            t=t,
-            gamma=gamma,
-            Delta0=Delta0,
-            alpha=alpha,
-            Ln=Ln,
-            Lb=Lb,
-            Ls=Ls,
-            mu_leads=mu_leads,
-            u_min=u_min,
-            u_max=u_max,
-            energy=energy,
-            mu_points=mu_points,
-            tol=tol
-        )
+        calibrated_table.append([tg, pair])
 
-    return {
-        'targets': targets,
-        'u_left': u_left,
-        'u_right': u_right
-    }
+    return calibrated_table

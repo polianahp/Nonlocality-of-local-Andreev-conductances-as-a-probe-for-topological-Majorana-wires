@@ -1,13 +1,16 @@
 # parameter_handler.py
 import numpy as np
 import itertools as itr
-from pydantic import BaseModel, Field, PositiveInt, PositiveFloat, model_validator
-from typing import List, Any, Optional, Tuple, Union, get_origin, get_args
+from typing import List, Any, Optional, Tuple, Union
+from pydantic import BaseModel, Field
 import argparse
 import os
 from pathlib import Path
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, DictConfig
 from src.config import PathConfigs
+import src.barrier_calibration as bc
+import src.helpers as hp 
+
 
 class ProtocolConfig(BaseModel):
     """
@@ -16,8 +19,6 @@ class ProtocolConfig(BaseModel):
 
     # if true, uses gpu thermal broadening prepare_sim_gpu
     GPU_broadening: bool = False
-
-
 
     # Hardware / Experimental Corrections
     phase_shift_left: float = 0.0
@@ -68,210 +69,102 @@ class ProtocolConfig(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
-class SimulationConfig(BaseModel):
+
+def _load_and_merge_defaults(node: Any, defaults_dir: Path) -> Any:
     """
-    Pure input configuration for the simulation.
-    All fields should correspond to what can be specified in YAML or CLI.
-    This model enforces type safety and bounds checking.
+    Recursively resolves defaults bottom-up so that:
+      1. Sub-section defaults override the defaults of the layer above.
+      2. Parameters explicitly specified in the main yaml config override all defaults.
     """
-    # Directory and File Management
-    dirname: str = "base_config"
-    fname: str = "Tdis.npz"
-    
-    # Geometry
-    Ls: PositiveInt = 300
-    Ln: int = 0
-    Lb: int = 3
-    Lb_pdi: int = 3
-    a0: PositiveFloat = 100.0
-    
-    # Disorder Parameters
-    lambda_dis: Optional[PositiveFloat] = None
-    realization_index: Optional[int] = None
-    is_real_space: bool = False
-    
-    # Physics Parameters
-    ms: PositiveFloat = 0.023
-    Delta_0: float = Field(0.3, ge=0)
-    gamma: float = Field(0.2, ge=0)
-    mu_leads: Optional[float] = None # If None, defaults to hopping 't'
-    barrier0: float = 2.0
-    mu_n: float = 0.0
-    V0: float = 1.2
-    qn: int = 20
-    
-    # Simulation Resolution
-    Upoints: PositiveInt = 15
-    num_engs: PositiveInt = 101
-    num_eigenvalues: PositiveInt = 12
-    eng_window_range: PositiveInt = 51
-    weight_threshold: float = Field(0.8, ge=0, le=1)
-    separation_threshold: float = Field(0.8, ge=0, le=1)
-    
-    # Sweep Ranges
-    mu_max: float = 4.5
-    mu_min: float = 0.0
-    mu_dist: PositiveFloat = 0.02
-    Nmu: Optional[PositiveInt] = None
-    
-    Vz_max: float = 1.3
-    Vz_min: float = 0.0
-    Vz_dist: PositiveFloat = 0.02
-    Nvz: Optional[PositiveInt] = None
+    if not isinstance(node, (dict, DictConfig)):
+        return node
 
-    @model_validator(mode='after')
-    def calculate_counts(self) -> 'SimulationConfig':
-        """
-        Calculates Nmu and Nvz from ranges/dist if not explicitly provided.
-        """
-        if self.Nmu is None:
-            mu_rng = self.mu_max - self.mu_min
-            self.Nmu = max(1, int(mu_rng / self.mu_dist))
-        
-        if self.Nvz is None:
-            Vz_rng = self.Vz_max - self.Vz_min
-            self.Nvz = max(1, int(Vz_rng / self.Vz_dist))
-            
-        return self
-    
-    # Execution Settings
-    acceleration_type: str = "parallel" # parallel, gpu, None
-    hamiltonian_mode: str = "legacy" # "legacy" or "exact"
-    conductance_flag: bool = True
-    spectra_flag: bool = True
-    localization_flag: bool = True
-    pdi_flag: bool = True
-    calc_pfaffian: bool = False
-    pfaffian_delta_N: int = 0
+    for key in list(node.keys()):
+        if key != "default":
+            node[key] = _load_and_merge_defaults(node[key], defaults_dir)
 
-    # Barrier Sweep Thermal Broadening
-    barrier_conductance_mode: str = "zero_temperature"
-    barrier_T_mK: float = Field(0.0, ge=0.0)
-    barrier_T_mK_list: Optional[List[float]] = None
-    barrier_quadrature_nodes: PositiveInt = 8
-    barrier_sweep_only: bool = False
+    if "default" in node and node["default"]:
+        default_file = defaults_dir / str(node["default"])
+        if not default_file.exists():
+            raise FileNotFoundError(f"Default config '{node['default']}' not found at: {default_file}")
 
-    # Barrier Calibration Settings
-    calibrate_barriers: bool = False
-    target_gns: Optional[List[float]] = None
-    tgp_barrier_arr: Optional[List[float]] = None
+        default_cfg = OmegaConf.load(default_file)
+        # Recurse on default_cfg in case it has its own nested defaults
+        default_cfg = _load_and_merge_defaults(default_cfg, defaults_dir)
 
-    # Dense Barrier U-Sweep Settings
-    barrier_u_min: Optional[float] = None
-    barrier_u_max: Optional[float] = None
-    barrier_u_points: Optional[PositiveInt] = None
-    multi_baseline_barriers: bool = False
-    barrier_sweep_indices: Optional[List[int]] = None
-    calc_barrier_sweeps: bool = True
-    calc_25_cutter_harmonics: bool = False
-    quadrature_nodes_25: PositiveInt = 51
+        # Merge: default_cfg is base; current node takes precedence
+        node = OmegaConf.merge(default_cfg, node)
 
-    # Parallel Execution & Point Overrides
-    workers: Optional[PositiveInt] = None
-    max_points: Optional[PositiveInt] = None
-
-    class Config:
-        arbitrary_types_allowed = True
-
-
-def _resolve_argparse_type(annotation):
-    origin = get_origin(annotation)
-    if origin is Union:
-        args = [a for a in get_args(annotation) if a is not type(None)]
-        if len(args) == 1:
-            return _resolve_argparse_type(args[0])
-    if hasattr(annotation, '__origin__') and hasattr(annotation, '__metadata__'):
-        return _resolve_argparse_type(annotation.__origin__)
-    if annotation in (int, float, str):
-        return annotation
-    return None
+    return node
 
 
 class ConfigManager:
     """
     Orchestrates configuration loading, merging CLI overrides,
-    validation, and artifact logging.
+    and artifact logging using OmegaConf DictConfigs.
     """
-    @staticmethod
-    def get_protocol_config(config_path: str) -> ProtocolConfig:
-        """
-        Loads a YAML configuration file into a ProtocolConfig object.
-        """
-        yaml_dict = {}
-        if config_path:
-            config_file_path = PathConfigs.ROOT / config_path
-            inputs_config_file_path = PathConfigs.ROOT / "Inputs" / config_path
-            
-            if config_file_path.exists():
-                yaml_dict = OmegaConf.to_container(OmegaConf.load(str(config_file_path)), resolve=True)
-            elif inputs_config_file_path.exists():
-                yaml_dict = OmegaConf.to_container(OmegaConf.load(str(inputs_config_file_path)), resolve=True)
-            elif os.path.exists(config_path):
-                yaml_dict = OmegaConf.to_container(OmegaConf.load(config_path), resolve=True)
-            else:
-                raise FileNotFoundError(f"Config file '{config_path}' not found. Cannot proceed with defaults when a config file is explicitly specified.")
-        
-        return ProtocolConfig(**yaml_dict)
 
     @staticmethod
-    def get_config(config_path: str = None, cli_args: Optional[List[str]] = None) -> SimulationConfig:
-        """
-        Parses CLI arguments, optionally loads a YAML base, 
-        merges them, and returns a validated SimulationConfig.
-        """
-        parser = argparse.ArgumentParser(description="Run parallel transport and PDI simulation.")
-        parser.add_argument("--config_path", "--config", dest="config_path", type=str, default=config_path, help="Path to a YAML config file.")
-        
-        # Dynamically add SimulationConfig fields to argparse for overrides
-        # Using model_fields to iterate over pydantic fields (v2)
-        for field_name, field in SimulationConfig.model_fields.items():
-            # For booleans, we use a slightly different pattern to allow --flag or --no-flag
-            if field.annotation == bool:
-                parser.add_argument(f"--{field_name}", action="store_true", dest=field_name, default=None)
-                parser.add_argument(f"--no-{field_name}", action="store_false", dest=field_name, default=None)
+    def initialize(config_file: str) -> DictConfig:
+        config_path = Path(PathConfigs.PARAMETERS / config_file)
+        if not config_path.exists():
+            alt_path = Path(config_file)
+            if alt_path.exists():
+                config_path = alt_path
             else:
-                arg_type = _resolve_argparse_type(field.annotation)
-                if arg_type is not None:
-                    parser.add_argument(f"--{field_name}", type=arg_type, default=None)
-                else:
-                    parser.add_argument(f"--{field_name}", default=None)
-        
-        args, _ = parser.parse_known_args(cli_args)
-        
-        # 1. Load YAML Base if provided
-        yaml_dict = {}
-        if args.config_path:
-            config_file_path = PathConfigs.ROOT / args.config_path
-            inputs_config_file_path = PathConfigs.ROOT / "Inputs" / args.config_path
-            
-            if config_file_path.exists():
-                yaml_dict = OmegaConf.to_container(OmegaConf.load(str(config_file_path)), resolve=True)
-            elif inputs_config_file_path.exists():
-                yaml_dict = OmegaConf.to_container(OmegaConf.load(str(inputs_config_file_path)), resolve=True)
-            elif os.path.exists(args.config_path):
-                yaml_dict = OmegaConf.to_container(OmegaConf.load(args.config_path), resolve=True)
-            else:
-                raise FileNotFoundError(f"Config file '{args.config_path}' not found. Cannot proceed with defaults when a config file is explicitly specified.")
+                for base in [PathConfigs.ROOT, PathConfigs.ROOT / "Inputs", PathConfigs.PARAMETERS]:
+                    candidate = base / config_file
+                    if candidate.exists():
+                        config_path = candidate
+                        break
+        if not config_path.exists():
+            raise FileNotFoundError(f"Configuration file not found: {config_file}")
 
-        # 2. Extract CLI Overrides (only those explicitly set by user)
-        cli_dict = {k: v for k, v in vars(args).items() if v is not None and k != "config_path"}
-        
-        # 3. Merge (CLI > YAML > Defaults)
-        merged_dict = {**yaml_dict, **cli_dict}
-        
-        # 4. Validate via Pydantic
-        return SimulationConfig(**merged_dict)
+        # 1. Load the raw user YAML
+        config = OmegaConf.load(config_path)
+
+        # 2. Recursively resolve and merge defaults from Inputs/Parameters/Defaults
+        defaults_dir = Path(PathConfigs.PARAMETERS / "Defaults")
+        return _load_and_merge_defaults(config, defaults_dir)
+
+
 
     @staticmethod
-    def log_artifact(config: SimulationConfig, output_dir: Path):
+    def get_config(config_path: str = None, cli_args: Optional[List[str]] = None) -> DictConfig:
+        """
+        Parses CLI arguments if needed, loads YAML base via ConfigManager.initialize,
+        merges CLI overrides, and returns a DictConfig.
+        """
+        if config_path is None:
+            parser = argparse.ArgumentParser(description="Input Config YAML file.")
+            parser.add_argument("--config_path", "--config", dest="config_path", type=str, default=None, help="Path to a YAML config file.")
+            known, _ = parser.parse_known_args(cli_args)
+            if not known.config_path:
+                raise ValueError("No configuration file specified via config_path or --config_path argument.")
+            config_path = known.config_path
+
+        cfg = ConfigManager.initialize(config_path)
+
+        # Merge any key=value CLI arguments if provided
+        if cli_args:
+            dotlist = [arg.lstrip("-") for arg in cli_args if "=" in arg]
+            if dotlist:
+                cli_conf = OmegaConf.from_dotlist(dotlist)
+                cfg = OmegaConf.merge(cfg, cli_conf)
+
+        return cfg
+
+    @staticmethod
+    def log_artifact(config: Any, output_dir: Path):
         """
         Dumps the fully resolved configuration to a YAML file in the output directory.
         """
         output_dir.mkdir(parents=True, exist_ok=True)
         artifact_file = output_dir / "resolved_params.yaml"
-        
-        # Convert to OmegaConf for serialization (using model_dump for v2)
-        conf = OmegaConf.create(config.model_dump())
+        if not isinstance(config, DictConfig):
+            conf = OmegaConf.create(config)
+        else:
+            conf = config
         OmegaConf.save(config=conf, f=artifact_file)
         print(f"Reproducibility Artifact logged to: {artifact_file}")
 
@@ -279,127 +172,163 @@ class ConfigManager:
 class SimulationState:
     """
     Holds the derived physical parameters and coordinate arrays.
-    Initialized from a SimulationConfig object.
+    Initialized from an OmegaConf DictConfig or dictionary.
     """
-    def __init__(self, config: SimulationConfig):
-        # 1. Physical Constants
-        hbar = 6.582119569e-16  # eV·s
-        m0   = 9.10938356e-31   # kg
-        e0   = 1.602176634e-19  # C
-        # hbar^2/m0 in eV A^2
-        eta_m = (hbar ** 2 * e0) * (1e20) / m0 
+    def __init__(self, config: Any):
+        # Fundamental Physical Constants (loaded from Defaults/physical_constants.yaml)
+        constants_file = PathConfigs.PARAMETERS / "Defaults" / "physical_constants.yaml"
+        if not constants_file.exists():
+            raise FileNotFoundError(f"Canonical physical constants file not found: {constants_file}")
+        constants = OmegaConf.load(constants_file)
+        
+        # Free-electron dispersion coefficient eta_m = (hbar^2 / m_0) in eV * Angstrom^2
+        eta_m = (constants.hbar**2 * constants.e0 * 1e20) / constants.m0 
+
+
+        geom = config.simulation.geometry
+        disorder = config.simulation.disorder
+        res = config.simulation.resolution
+        calib = config.simulation.barrier_calibration
+
 
         # 2. Derived Physical Parameters
-        self.t = 1000 * eta_m / (2 * config.a0**2 * config.ms)
+        a0 = geom.a0
+        ms = geom.ms
+        Delta_0 = geom.Delta_0
+        gamma = geom.gamma
+        Ls = geom.Ls
+        self.t = 1000 * eta_m / (2 * a0**2 * ms)
         print(f"Derived Hopping Parameter t: {self.t:.4f}")
-        self.alpha = 140.0 / config.a0
-        self.Delta = config.Delta_0 * config.gamma / (config.Delta_0 + config.gamma)
+        self.alpha = 140.0 / a0
+        self.Delta = Delta_0 * gamma / (Delta_0 + gamma)
         
         # Default mu_leads to 't' if not explicitly provided
-        self.mu_leads = config.mu_leads if config.mu_leads is not None else self.t
+        self.mu_leads = self.t
 
-        # 3. Sweep Arrays (Uses pre-calculated Nmu/Nvz from config validator)
-        self.mu_var = np.linspace(config.mu_min, config.mu_max, config.Nmu)
-        self.Vz_var = np.linspace(config.Vz_min, config.Vz_max, config.Nvz)
+        # 3. Sweep Arrays
+        mu_max = res.mu_max
+        mu_min = res.mu_min
+        mu_dist = res.mu_dist
+        Vz_max = res.Vz_max
+        Vz_min = res.Vz_min
+        Vz_dist = res.Vz_dist
+
+        Nmu = int(np.round((mu_max - mu_min) / mu_dist))
+        Nvz = int(np.round((Vz_max - Vz_min) / Vz_dist))
+
+        self.mu_var = np.linspace(mu_min, mu_max, Nmu)
+        self.Vz_var = np.linspace(Vz_min, Vz_max, Nvz)
         
-        # Product space for parallelization
-        # Format: [[index, mu, vz], ...]
+        # Product space for parallelization: [[index, mu, vz], ...]
         self.params_list = [
             [i, p[0], p[1]] 
             for i, p in enumerate(itr.product(self.mu_var, self.Vz_var))
         ]
-        
-        # Constant coordinate arrays
-        n_pts = getattr(config, 'barrier_u_points', None) or getattr(config, 'Upoints', None)
-        if (
-            n_pts is not None
-            and getattr(config, 'barrier_u_min', None) is not None
-            and getattr(config, 'barrier_u_max', None) is not None
-        ):
-            self.barrier_arr = np.linspace(config.barrier_u_min, config.barrier_u_max, int(n_pts))
-            self.asym_ratios = self.barrier_arr / config.barrier0
-        else:
-            # Asymmetry ratios: 41 points from -20 to 20, plus high-asymmetry endpoints -60 and +60 (43 points total)
-            self.asym_ratios = np.concatenate([[-60.0], np.linspace(-20.0, 20.0, 41), [60.0]])
-            self.barrier_arr = self.asym_ratios * config.barrier0
-        self.energies = np.linspace(-0.5, 0.5, config.num_engs)
-        
-        # TGP Stage 1 Cutter Barriers (Calibrated vs Hardcoded)
-        if getattr(config, 'calibrate_barriers', False):
-            import src.barrier_calibration as bc
-            targets = getattr(config, 'target_gns', None)
-            if targets is None:
-                targets = [0.35, 0.49, 0.62, 0.76, 0.90]
-            print(f"--- Running Cutter Barrier Calibration for targets: {targets} ---")
-            calib_res = bc.calibrate_wire_cutters(
-                target_gns=targets,
-                t=self.t,
-                gamma=config.gamma,
-                Delta0=config.Delta_0,
-                alpha=self.alpha,
-                Ln=config.Ln,
-                Lb=config.Lb,
-                Ls=config.Ls,
-                mu_leads=self.mu_leads
-            )
-            self.tgp_barrier_arr = np.array(calib_res['u_left'], dtype=float)
-            print(f"Calibrated TGP Barrier Array: {self.tgp_barrier_arr}")
-        elif getattr(config, 'tgp_barrier_arr', None) is not None:
-            self.tgp_barrier_arr = np.array(config.tgp_barrier_arr, dtype=float)
-        else:
-            self.tgp_barrier_arr = np.array([4.3548, 3.6774, 3.0000, 2.3710, 1.6935], dtype=float)
+
+        # 4. Disorder realization
+        disorder_path = PathConfigs.RUN_FILES / disorder.disorder_dirname
+        lambda_dis = disorder.lambda_dis
+        is_real_space = disorder.is_real_space
+
+        self.Vdisx = hp.initialize_vdis_from_data(
+            disorder_path, 
+            lambda_dis=lambda_dis, 
+            Ls=Ls, 
+            is_real_space=is_real_space
+        )
+
+        # 5. Coordinate arrays
+        self.energies = np.linspace(-0.5, 0.5, res.num_engs)
+
+        self.asym_points = res.asym_points
 
         # Mapping acceleration type to Kwant solver type
-        self.solver_type = 'gpu' if config.acceleration_type == 'gpu' else 'cpu'
+        self.acceleration_type = config.acceleration_type
+        self.solver_type = 'gpu' if self.acceleration_type == 'gpu' else 'cpu'
 
-    def get_static_params(self, Vdisx: np.ndarray, config: SimulationConfig) -> dict:
+        # Default barrier sweep coordinates for low-asymmetry reflection sweeps
+        self.barrier_arr = np.linspace(-5.0, 5.0, self.asym_points)
+        self.asym_ratios = self.barrier_arr / 2.0
+
+        # 6. Barrier calibration per disorder realization per Aghaee 2023 G_N targets
+        if calib.tgp_barrier_pairs is not None:
+            self.tgp_barrier_pairs = np.array(calib.tgp_barrier_pairs, dtype=float)
+            self.tgp_barrier_arr = self.tgp_barrier_pairs[:, 0]
+            self.target_gns = calib.target_gns
+            print(f"Loaded Pre-Calibrated Barrier Pairs [G_N, [UL, UR]]:\n{self.tgp_barrier_pairs}")
+        else:
+            self.target_gns = calib.target_gns
+            print(f"--- Running Simultaneous Cutter Barrier Calibration for targets: {self.target_gns} ---")
+            vdis_for_calib = self.Vdisx * float(disorder.V0) if not is_real_space else self.Vdisx
+            self.symmetric_barrier_configs = bc.calibrate_wire_cutters(
+                calibration_cfg=calib,
+                geometry_cfg=geom,
+                Vdisx=vdis_for_calib,
+                t=self.t,
+                alpha=self.alpha,
+                mu_leads=self.mu_leads,
+            )
+            self.tgp_barrier_pairs = np.array([entry[1] for entry in self.symmetric_barrier_configs])
+            self.tgp_barrier_arr = self.tgp_barrier_pairs[:, 0]
+            print(f"Calibrated Symmetric Barrier Pairs [G_N, [UL, UR]]:\n{self.symmetric_barrier_configs}")
+
+    def get_static_params(self, Vdisx: np.ndarray, config: Any) -> dict:
         """
-        Returns the dictionary expected by worker functions.
-        Vdisx must be passed in as it is loaded from an external file.
+        Extracts and returns the parameter dictionary expected by worker functions.
+        All fields are read directly from config, geometry, resolution, calculation,
+        and simulation state without silent fallback defaults (expert-coding Part B).
         """
+        geom = config.simulation.geometry
+        disorder = config.simulation.disorder
+        res = config.simulation.resolution
+        calc = config.calculation_includes
+
+        t_list = [float(x) for x in res.temperatures]
+
         return {
             't': self.t,
-            'mu_n': config.mu_n,
-            'Delta0': config.Delta_0,
+            'mu_n': geom.mu_n,
+            'Delta0': geom.Delta_0,
             'alpha': self.alpha,
-            'gamma': config.gamma,
-            'V0': config.V0,
-            'qn': config.qn,
-            'Ln': config.Ln,
-            'Lb': config.Lb,
-            'Ls': config.Ls,
+            'gamma': geom.gamma,
+            'V0': disorder.V0,
+            'qn': geom.qn,
+            'Ln': geom.Ln,
+            'Lb': geom.Lb,
+            'Ls': geom.Ls,
             'mu_leads': self.mu_leads,
-            'barrier0': config.barrier0,
+            'barrier0': geom.barrier0,
             'Vdisx': Vdisx,
             'energies': self.energies,
-            'asym_ratios': self.asym_ratios,
             'barrier_arr': self.barrier_arr,
+            'asym_ratios': self.asym_ratios,
             'mu_var': self.mu_var,
             'Vz_var': self.Vz_var,
-            'num_eigenvalues': config.num_eigenvalues,
-            'weight_threshold': config.weight_threshold,
-            'separation_threshold': config.separation_threshold,
-            'eng_window_range': config.eng_window_range,
-            'conductance_flag': config.conductance_flag,
-            'spectra_flag': config.spectra_flag,
-            'localization_flag': config.localization_flag,
+            'num_eigenvalues': res.num_eigenvalues,
+            'weight_threshold': res.weight_threshold,
+            'separation_threshold': res.separation_threshold,
+            'eng_window_range': res.eng_window_range,
+            'conductance_flag': calc.conductance_flag,
+            'spectra_flag': calc.spectra_flag,
+            'localization_flag': calc.localization_flag,
             'solver_type': self.solver_type,
-            'calc_pfaffian': config.calc_pfaffian,
-            'pfaffian_delta_N': config.pfaffian_delta_N,
-            'barrier_conductance_mode': config.barrier_conductance_mode,
-            'barrier_T_mK': config.barrier_T_mK,
-            'barrier_T_mK_list': config.barrier_T_mK_list,
-            'barrier_quadrature_nodes': config.barrier_quadrature_nodes,
-            'barrier_sweep_only': config.barrier_sweep_only,
-            'hamiltonian_mode': getattr(config, 'hamiltonian_mode', 'legacy'),
+            'calc_pfaffian': calc.calc_pfaffian,
+            'pfaffian_delta_N': calc.pfaffian_delta_N,
+            'barrier_conductance_mode': res.barrier_conductance_mode,
+            'barrier_T_mK': res.barrier_T_mK,
+            'barrier_T_mK_list': t_list,
+            'barrier_quadrature_nodes': res.barrier_quadrature_nodes,
+            'barrier_sweep_only': calc.barrier_sweep_only,
+            'hamiltonian_mode': config.hamiltonian_mode,
+            'tgp_barrier_pairs': self.tgp_barrier_pairs,
             'tgp_barrier_arr': self.tgp_barrier_arr,
-            'barrier_u_min': config.barrier_u_min,
-            'barrier_u_max': config.barrier_u_max,
-            'barrier_u_points': config.barrier_u_points,
-            'target_gns': config.target_gns,
-            'multi_baseline_barriers': config.multi_baseline_barriers,
-            'barrier_sweep_indices': config.barrier_sweep_indices,
-            'calc_barrier_sweeps': config.calc_barrier_sweeps,
-            'calc_25_cutter_harmonics': config.calc_25_cutter_harmonics,
-            'quadrature_nodes_25': config.quadrature_nodes_25
+            'barrier_u_min': res.barrier_u_min,
+            'barrier_u_max': res.barrier_u_max,
+            'barrier_u_points': res.barrier_u_points,
+            'target_gns': self.target_gns,
+            'multi_baseline_barriers': calc.multi_baseline_barriers,
+            'barrier_sweep_indices': calc.barrier_sweep_indices,
+            'calc_barrier_sweeps': calc.calc_barrier_sweeps,
+            'calc_25_cutter_harmonics': calc.calc_25_cutter_harmonics,
+            'quadrature_nodes_25': res.quadrature_nodes_25,
         }

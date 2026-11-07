@@ -51,6 +51,13 @@ class Protocol(BaseProtocol):
             "mean_subtract": False,
             "normalize_by_first_point": False,
         },
+        "fpe_conductance_space_corr": {
+            "enabled": False,
+            "baseline_gn": 0.55,
+            "corr_threshold": 0.80,
+            "lead": "R",
+            "mean_subtract": True,
+        },
         "fpe_lead_symmetry_balance": {
             "enabled": False,
             "s_max": 0.20,
@@ -126,13 +133,21 @@ class Protocol(BaseProtocol):
         current_mask = canonical["roi2_2d"].copy()
         steps["step_3_tgp_stage2_candidate"] = current_mask.copy()
 
-        # 2. Optional Condition: Low-Asymmetry Barrier Reflection Correlation
+        # 2. Optional Condition: Low-Asymmetry Barrier Reflection Correlation (voltage-space)
         corr_cfg = params.get("fpe_low_asym_corr", {})
         if corr_cfg.get("enabled", False):
             kwargs = {k: v for k, v in corr_cfg.items() if k != "enabled"}
             corr_mask = FPE.fpe_barrier_reflection_correlation(cache, **kwargs)
             current_mask = current_mask & corr_mask
             steps["step_4_fpe_low_asym_corr"] = current_mask.copy()
+
+        # 2b. Optional Condition: Conductance-Space Low-Asymmetry Barrier Correlation (25-Cutter Harmonics)
+        cond_corr_cfg = params.get("fpe_conductance_space_corr", {})
+        if cond_corr_cfg.get("enabled", False):
+            kwargs = {k: v for k, v in cond_corr_cfg.items() if k != "enabled"}
+            cond_corr_mask = FPE.fpe_conductance_space_barrier_correlation(cache, **kwargs)
+            current_mask = current_mask & cond_corr_mask
+            steps["step_4b_fpe_conductance_space_corr"] = current_mask.copy()
 
         # 3. Optional Condition: Lead Conductance Symmetry Balance Ratio
         sym_cfg = params.get("fpe_lead_symmetry_balance", {})

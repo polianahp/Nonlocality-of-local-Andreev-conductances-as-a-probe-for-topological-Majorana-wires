@@ -150,6 +150,7 @@ class RealizationFeatureCache:
         self._boundary_confinement: Optional[np.ndarray] = None
         self._mzm_separability: Optional[np.ndarray] = None
         self._barrier_data: Optional[Dict[str, np.ndarray]] = None
+        self._harmonics_25: Optional[Dict[str, np.ndarray]] = None
         self._stage1_raw: Optional[Dict[str, np.ndarray]] = None
         self._bias_grid: Optional[np.ndarray] = None
 
@@ -383,6 +384,77 @@ class RealizationFeatureCache:
             "idx_pinch_neg": idx_pinch_neg,
         }
         return self._barrier_data
+
+    @property
+    def has_harmonics_25_data(self) -> bool:
+        """Return True if Cutter_Harmonics_25 directory exists on disk."""
+        return (self.realization_dir / "Cutter_Harmonics_25").exists()
+
+    def get_harmonics_25_data(self) -> Dict[str, np.ndarray]:
+        """Load 25-cutter harmonics tensor grids (L_1w, R_1w, RL_2w, LR_2w, L_3w, R_3w).
+
+        Returns a dictionary with arrays of shape (N_mu, N_Vz, N_cutters, N_cutters)
+        and 'target_gns' array of shape (N_cutters,).
+        """
+        if self._harmonics_25 is not None:
+            return self._harmonics_25
+
+        t_int = int(round(self.temperature_mK))
+        harm_dir = self.realization_dir / "Cutter_Harmonics_25"
+        if not harm_dir.exists():
+            raise FileNotFoundError(f"Missing Cutter_Harmonics_25 directory in {self.realization_dir}")
+
+        suffix_candidates = [f"harmonics_25_{t_int}mK.npz"]
+        if t_int == 0:
+            suffix_candidates.append("harmonics_25_0mK.npz")
+        else:
+            suffix_candidates.extend(["harmonics_25_40mK.npz", "harmonics_25_30mK.npz", "harmonics_25_0mK.npz"])
+
+        harm_file = None
+        for cand in suffix_candidates:
+            p = harm_dir / cand
+            if p.exists():
+                harm_file = p
+                break
+
+        if harm_file is None:
+            any_harm = sorted(list(harm_dir.glob("harmonics_25_*.npz")))
+            if any_harm:
+                harm_file = any_harm[0]
+            else:
+                raise FileNotFoundError(f"No harmonics_25_*.npz found in {harm_dir}")
+
+        with np.load(harm_file) as data:
+            res_dict = {}
+            for k in data.files:
+                raw_arr = np.asarray(data[k], dtype=np.float64)
+                n_c1, n_c2 = raw_arr.shape[-2], raw_arr.shape[-1]
+                res_dict[k] = raw_arr.reshape(self.n_mu, self.n_vz, n_c1, n_c2)
+
+        target_gns = None
+        txt_path = self.realization_dir / "tgp_barriers.txt"
+        if txt_path.exists():
+            with open(txt_path, "r") as f:
+                for line in f:
+                    if "Target Conductances G_N" in line:
+                        try:
+                            import ast
+                            val_str = line.split(":", 1)[1].strip()
+                            target_gns = ast.literal_eval(val_str)
+                        except Exception:
+                            pass
+        if target_gns is None:
+            params_path = self.realization_dir / "all_params.npz"
+            if params_path.exists():
+                params = np.load(params_path, allow_pickle=True)
+                if "target_gns" in params:
+                    target_gns = params["target_gns"]
+        if target_gns is None:
+            target_gns = [0.35, 0.45, 0.55, 0.65, 0.75]
+        res_dict["target_gns"] = np.asarray(target_gns, dtype=np.float64)
+
+        self._harmonics_25 = res_dict
+        return self._harmonics_25
 
     def get_stage1_raw(self) -> Dict[str, np.ndarray]:
         """Load raw $T=0$ stage-1 cutter bias sweeps transposed to `(N_cutters, N_mu, N_Vz, N_bias)`."""
