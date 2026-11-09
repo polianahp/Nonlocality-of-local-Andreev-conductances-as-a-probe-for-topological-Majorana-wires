@@ -34,6 +34,11 @@ from src.parameter_handler import ConfigManager, SimulationState
 # WORKER FUNCTIONS (Must be defined at module level for pickling)
 # =============================================================================
 
+
+
+
+
+
 def worker_simulation_step(iter_data, config, state):
     """
     Worker function for the main transport/spectral loop (Loop 1).

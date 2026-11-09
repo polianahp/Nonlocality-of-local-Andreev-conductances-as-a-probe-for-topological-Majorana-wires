@@ -2752,7 +2752,7 @@ def make_dynamic_grid(k_half: int = None):
 
 
 
-def initialize_conductance_dataarray(target_temps, G_n_values, mu_set=None, Vz_set=None):
+def initialize_conductance_dataarray(target_temps, G_n_values, mu_set=None, Vz_set=None, baseline_Gn=None):
     """Initializes xarray.DataArray conductance barrier sweeps
 
     Dimensions:
@@ -2790,8 +2790,12 @@ def initialize_conductance_dataarray(target_temps, G_n_values, mu_set=None, Vz_s
         coords["zeeman_field"]       = Vz_set
         dims.append("chemical_potential")
         dims.append("zeeman_field")
-
-
+        
+    if baseline_Gn is not None:
+        shape += len(baseline_Gn)
+        coords["baseline_Gn"] = baseline_Gn
+        dims.append("baseline_Gn")
+        
 
     return xr.DataArray(
         data=np.zeros(shape, dtype=float),
