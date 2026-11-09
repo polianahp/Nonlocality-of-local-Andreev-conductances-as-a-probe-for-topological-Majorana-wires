@@ -2752,8 +2752,8 @@ def make_dynamic_grid(k_half: int = None):
 
 
 
-def initialize_conductance_dataarray(mu_set, Vz_set, target_temps, G_n_values):
-    """Initializes a 5D xarray.DataArray conductance barrier sweeps
+def initialize_conductance_dataarray(target_temps, G_n_values, mu_set=None, Vz_set=None):
+    """Initializes xarray.DataArray conductance barrier sweeps
 
     Dimensions:
 
@@ -2767,8 +2767,6 @@ def initialize_conductance_dataarray(mu_set, Vz_set, target_temps, G_n_values):
     leads = ["left", "right"]
 
     shape = (
-        len(mu_set),
-        len(Vz_set),
         len(target_temps),
         len(swept_barriers),
         len(G_n_values),
@@ -2777,8 +2775,6 @@ def initialize_conductance_dataarray(mu_set, Vz_set, target_temps, G_n_values):
     )
 
     coords = {
-        "chemical_potential": mu_set,
-        "zeeman_field": Vz_set,
         "temperature": target_temps,
         "swept_barrier": swept_barriers,
         "G_n": G_n_values,
@@ -2786,15 +2782,23 @@ def initialize_conductance_dataarray(mu_set, Vz_set, target_temps, G_n_values):
         "lead_col": leads,
     }
 
-    dims = ["chemical_potential","zeeman_field","temperature", 
-            "swept_barrier", "G_n", "lead_row", "lead_col"]
+    dims = ["temperature", "swept_barrier", "G_n", "lead_row", "lead_col"]
+
+    if mu_set is not None and Vz_set is not None: 
+        shape += (len(mu_set), len(Vz_set))
+        coords["chemical_potential"] = mu_set
+        coords["zeeman_field"]       = Vz_set
+        dims.append("chemical_potential")
+        dims.append("zeeman_field")
+
+
 
     return xr.DataArray(
         data=np.zeros(shape, dtype=float),
         coords=coords,
         dims=dims,
-        name="conductance",
-        attrs={"units": "2e^2/h", "temperature_units": "mK"},
+        name="barrier sweep conductance array",
+        attrs={"units": "e^2/h", "temperature_units": "mK"},
     )
 
 

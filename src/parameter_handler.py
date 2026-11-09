@@ -217,7 +217,6 @@ class SimulationState:
         self.alpha = 140.0 / a0
         self.Delta = Delta_0 * gamma / (Delta_0 + gamma)
         
-        # Default mu_leads to 't' if not explicitly provided
         self.mu_leads = self.t
 
         # 3. Sweep Arrays
@@ -260,13 +259,13 @@ class SimulationState:
         num = int(np.round((sweep_gnmax - sweep_gnmin)/sweep_gnres))
         
         Gn_sweep_points = np.round(np.linspace(sweep_gnmin, sweep_gnmax, num), decimals=2)
-        final_GNs = _merge_arrs(Gn_sweep_points, calib.symmetric_target_gns, tol = 0.01)
+        self.target_GNs = _merge_arrs(Gn_sweep_points, calib.symmetric_target_gns, tol = 0.01)
 
         if calib.calibrate_cutters:
             print(f"--- Running Simultaneous Cutter Barrier Calibration for targets: {calib.target_gns} ---")
             vdis_for_calib = self.Vdisx * float(disorder.V0) 
             self.calibrated_cutters = bc.calibrate_wire_cutters(
-                targets = final_GNs,
+                targets = self.target_GNs,
                 calibration_cfg=calib,
                 geometry_cfg=geom,
                 Vdisx=vdis_for_calib,

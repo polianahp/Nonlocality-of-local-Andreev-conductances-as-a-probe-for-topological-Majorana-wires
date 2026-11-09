@@ -25,8 +25,8 @@ simulation:
 
 calculation_includes:
   25_cutter_harmonics: True
-  conductance_flag: False
-  barrier_sweep: False
+  conductance_flag: True
+  barrier_sweep: True
   pfaffian: True
   spectra: True
   localization: True

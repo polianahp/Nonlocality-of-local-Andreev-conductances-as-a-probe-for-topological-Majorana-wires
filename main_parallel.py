@@ -42,71 +42,54 @@ def worker_simulation_step(iter_data, config, state):
     """
     i, mu, vz = iter_data
     
+    gm = config.simulation.geometry
+    incl = config.calculation_includes
     
-    
-    # Unpack static parameters
-    t = static_params['t']
-    mu_n = static_params['mu_n']
-    Delta0 = static_params['Delta0']
-    gamma = static_params['gamma']
-    alpha = static_params['alpha']
-    Ln = static_params['Ln']
-    Lb = static_params['Lb']
-    Ls = static_params['Ls']
-    mu_leads = static_params['mu_leads']
-    barrier0 = static_params['barrier0']
-    Vdisx = static_params['Vdisx']
-    V0 = static_params['V0']
-    energies = static_params['energies']
-    barrier_arr = static_params['barrier_arr']
+    t = state.t
+    mu_n = gm.mu_n
+    Delta0 = gm.Delta0
+    gamma = state.gamma
+    alpha = state.alpha
+    Ln = state.Ln
+    Lb = state.Lb
+    Ls = state.Ls
+    mu_leads = state.mu_leads
+    Vdisx = state.Vdisx
+    V0 = config.simulation.disorder.V0
     num_eigenvalues = static_params['num_eigenvalues']
-    eng_window_range = static_params['eng_window_range']
+        
+    Gmat = hp.initialize_conductance_dataarray(
+        target_temps=config.resolution.temperatures,
+        G_n_values=state.target_GNs
+    )
     
-    # Barrier Sweeps ---
-    points = len(barrier_arr)
-    
-    # Pre-allocate local arrays
-    b_right_cond_left = np.zeros(points)
-    b_right_cond_right = np.zeros(points)
-    b_right_GLR = np.zeros(points)
-    b_right_GRL = np.zeros(points)
-    b_left_cond_left = np.zeros(points)
-    b_left_cond_right = np.zeros(points)
-    
-    dIdVl, dIdVr, ldos = 0,0,0
-    dIdV_LR, dIdV_RL = 0,0
+
     Vdisx = Vdisx * V0
-    barrier_tot = barrier0 #+ mu
-    gamma_sq = 0
-    energy_0 = 0
-    M_profile = [0]
+    #gamma_sq = 0
+    #energy_0 = 0
+    #M_profile = [0]
     spectrum = None
     rho_M1 = np.zeros(Ls, dtype = complex)
     rho_M2 = np.zeros(rho_M1.shape, dtype = complex)
-    site_localization = 0
-    weight_localization = 1.0
+    
+    weight_localization = 0.0
     mzm_separation = 0
     topological_gap = 0.0
 
-    
-    barrier_sweep_only = static_params.get('barrier_sweep_only', False)
 
-    tgp_barrier_arr = static_params.get('tgp_barrier_arr')
-    if tgp_barrier_arr is None:
-        tgp_barrier_arr = np.array([4.3548, 3.6774, 3.0000, 2.3710, 1.6935])
-    else:
-        tgp_barrier_arr = np.array(tgp_barrier_arr, dtype=float)
+    if incl.spectra:
+        syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
+        evals, evecs = hp.solve_ham(syst_closed, k=num_eigenvalues)
+
+        spectrum = hp.sort_spectrum(evals, evecs)
+        idx_closest = np.argsort(np.abs(spectrum))[:4]
+        spectrum = np.sort(spectrum[idx_closest])
+
+
+    
 
     if not barrier_sweep_only:
         # BdG Eigenvalues (using renormalized legacy Hamiltonian)
-        syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
-        evals, evecs = hp.solve_ham(syst_closed, k=num_eigenvalues)
-        
-        if static_params['spectra_flag']:
-            spectrum = hp.sort_spectrum(evals, evecs)
-            if len(spectrum) >= 4:
-                idx_closest = np.argsort(np.abs(spectrum))[:4]
-                spectrum = np.sort(spectrum[idx_closest])
                 
         pos_evals = np.sort(evals[evals >= 0])
         if len(pos_evals) > 0:
@@ -146,13 +129,7 @@ def worker_simulation_step(iter_data, config, state):
     else:
         pass
 
-    t_list = static_params.get('barrier_T_mK_list')
-    if t_list and len(t_list) > 0:
-        target_temps = [float(t) for t in t_list]
-    elif static_params.get('barrier_conductance_mode') == 'finite_temperature' and static_params.get('barrier_T_mK', 0.0) > 0.0:
-        target_temps = [float(static_params['barrier_T_mK'])]
-    else:
-        target_temps = [0.0]
+
 
     q_nodes = {}
     for T_val in target_temps:
