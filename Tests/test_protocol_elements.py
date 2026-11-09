@@ -302,10 +302,23 @@ def test_run_protocol_specs_rebuilds_master_leaderboard(tmp_path: Path):
     assert "## Overall" in text and "$V_0 = 0.645$ meV" in text and "$V_0 = 0.872$ meV" in text
 
 
+def _get_complete_dense_u_realization():
+    base = REPO_ROOT / "Outputs" / "Data" / "Dense_U_Operating"
+    for r_name in ["Realization_0", "Realization_1", "Realization_2"]:
+        r_dir = base / r_name
+        harm_file = r_dir / "Cutter_Harmonics_25" / "harmonics_25_40mK.npz"
+        if harm_file.exists():
+            cache = RealizationFeatureCache(r_dir, temperature_mK=40.0)
+            raw = np.load(harm_file)["L_1w"]
+            if raw.size == cache.n_mu * cache.n_vz * 25:
+                return r_dir
+    return None
+
+
 def test_conductance_space_barrier_correlation():
-    realization_dir = REPO_ROOT / "Outputs" / "Data" / "Dense_U_Operating" / "Realization_2"
-    if not realization_dir.exists():
-        pytest.skip(f"Test realization {realization_dir} not present")
+    realization_dir = _get_complete_dense_u_realization()
+    if realization_dir is None:
+        pytest.skip("No complete test realization in Dense_U_Operating present")
 
     cache = RealizationFeatureCache(realization_dir, temperature_mK=40.0)
     assert cache.has_harmonics_25_data
@@ -330,9 +343,9 @@ def test_conductance_space_barrier_correlation():
 
 
 def test_msft_tgp_hybrids_with_conductance_space_corr():
-    realization_dir = REPO_ROOT / "Outputs" / "Data" / "Dense_U_Operating" / "Realization_2"
-    if not realization_dir.exists():
-        pytest.skip(f"Test realization {realization_dir} not present")
+    realization_dir = _get_complete_dense_u_realization()
+    if realization_dir is None:
+        pytest.skip("No complete test realization in Dense_U_Operating present")
 
     cache = RealizationFeatureCache(realization_dir, temperature_mK=40.0)
     from Protocols.MSFT_TGP_Hybrids.protocol import Protocol as MSFTHybridsProtocol

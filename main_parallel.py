@@ -34,7 +34,7 @@ from src.parameter_handler import ConfigManager, SimulationState
 # WORKER FUNCTIONS (Must be defined at module level for pickling)
 # =============================================================================
 
-def worker_simulation_step(iter_data, static_params):
+def worker_simulation_step(iter_data, config, state):
     """
     Worker function for the main transport/spectral loop (Loop 1).
     iter_data: tuple (index, vz_val)
@@ -61,7 +61,6 @@ def worker_simulation_step(iter_data, static_params):
     barrier_arr = static_params['barrier_arr']
     num_eigenvalues = static_params['num_eigenvalues']
     eng_window_range = static_params['eng_window_range']
-    solver_type = static_params.get('solver_type', 'cpu')
     
     # Barrier Sweeps ---
     points = len(barrier_arr)
@@ -101,7 +100,7 @@ def worker_simulation_step(iter_data, static_params):
     if not barrier_sweep_only:
         # BdG Eigenvalues (using renormalized legacy Hamiltonian)
         syst_closed = hp.build_system_closed(t, mu, gamma, Delta0, vz, alpha, Ls, Vdisx)
-        evals, evecs = hp.solve_ham(syst_closed, solver_type=solver_type, k=num_eigenvalues)
+        evals, evecs = hp.solve_ham(syst_closed, k=num_eigenvalues)
         
         if static_params['spectra_flag']:
             spectrum = hp.sort_spectrum(evals, evecs)
@@ -139,7 +138,7 @@ def worker_simulation_step(iter_data, static_params):
                                        alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
                                        barrier_l=b_l, barrier_r=b_r, Vdisx=Vdisx)
             
-            dL, dR, dLR, dRL, _ = hp.calc_dIdV(syst_tgp, tgp_energies, solver_type=solver_type)
+            dL, dR, dLR, dRL, _ = hp.calc_dIdV(syst_tgp, tgp_energies)
             tgp_stage1_dIdVl[idx, :] = dL
             tgp_stage1_dIdVr[idx, :] = dR
             tgp_stage1_dIdV_LR[idx, :] = dLR
@@ -213,9 +212,9 @@ def worker_simulation_step(iter_data, static_params):
                 for T_val in target_temps:
                     if T_val > 0.0:
                         qe, qw = q_nodes[T_val]
-                        base_dict[T_val]['Gmat'] = hp.calc_conductance_matrix_finite_T(syst_base, qe, qw, solver_type=solver_type)
+                        base_dict[T_val]['Gmat'] = hp.calc_conductance_matrix_finite_T(syst_base, qe, qw)
                     else:
-                        base_dict[T_val]['Gmat'] = hp.calc_conductance_matrix(syst_base, 0.0, solver_type=solver_type)
+                        base_dict[T_val]['Gmat'] = hp.calc_conductance_matrix(syst_base, 0.0)
 
                 for k in range(points):
                     barrier_var_tot = barrier_arr[k]
@@ -228,9 +227,9 @@ def worker_simulation_step(iter_data, static_params):
                     for T_val in target_temps:
                         if T_val > 0.0:
                             qe, qw = q_nodes[T_val]
-                            Gmat_UR = hp.calc_conductance_matrix_finite_T(syst_UR, qe, qw, solver_type=solver_type)
+                            Gmat_UR = hp.calc_conductance_matrix_finite_T(syst_UR, qe, qw)
                         else:
-                            Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0, solver_type=solver_type)
+                            Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0)
                         base_dict[T_val]['b_right_cond_left'][k] = Gmat_UR[0, 0]
                         base_dict[T_val]['b_right_cond_right'][k] = Gmat_UR[1, 1]
                         base_dict[T_val]['b_right_GRL'][k] = Gmat_UR[1, 0]
@@ -244,9 +243,9 @@ def worker_simulation_step(iter_data, static_params):
                     for T_val in target_temps:
                         if T_val > 0.0:
                             qe, qw = q_nodes[T_val]
-                            Gmat_UL = hp.calc_conductance_matrix_finite_T(syst_UL, qe, qw, solver_type=solver_type)
+                            Gmat_UL = hp.calc_conductance_matrix_finite_T(syst_UL, qe, qw)
                         else:
-                            Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0, solver_type=solver_type)
+                            Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0)
                         base_dict[T_val]['b_left_cond_left'][k] = Gmat_UL[0, 0]
                         base_dict[T_val]['b_left_cond_right'][k] = Gmat_UL[1, 1]
 
@@ -263,9 +262,9 @@ def worker_simulation_step(iter_data, static_params):
             for T_val in target_temps:
                 if T_val > 0.0:
                     qe, qw = q_nodes[T_val]
-                    b_data[T_val]['Gmat'] = hp.calc_conductance_matrix_finite_T(syst, qe, qw, solver_type=solver_type)
+                    b_data[T_val]['Gmat'] = hp.calc_conductance_matrix_finite_T(syst, qe, qw)
                 else:
-                    b_data[T_val]['Gmat'] = hp.calc_conductance_matrix(syst, 0.0, solver_type=solver_type)
+                    b_data[T_val]['Gmat'] = hp.calc_conductance_matrix(syst, 0.0)
 
             for k in range(points):
                 barrier_var_tot = barrier_arr[k] #+ mu
@@ -278,9 +277,9 @@ def worker_simulation_step(iter_data, static_params):
                 for T_val in target_temps:
                     if T_val > 0.0:
                         qe, qw = q_nodes[T_val]
-                        Gmat_UR = hp.calc_conductance_matrix_finite_T(syst_UR, qe, qw, solver_type=solver_type)
+                        Gmat_UR = hp.calc_conductance_matrix_finite_T(syst_UR, qe, qw)
                     else:
-                        Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0, solver_type=solver_type)
+                        Gmat_UR = hp.calc_conductance_matrix(syst_UR, eng=0.0)
                     b_data[T_val]['b_right_cond_left'][k] = Gmat_UR[0, 0]
                     b_data[T_val]['b_right_cond_right'][k] = Gmat_UR[1, 1]
                     b_data[T_val]['b_right_GRL'][k] = Gmat_UR[1, 0]
@@ -294,9 +293,9 @@ def worker_simulation_step(iter_data, static_params):
                 for T_val in target_temps:
                     if T_val > 0.0:
                         qe, qw = q_nodes[T_val]
-                        Gmat_UL = hp.calc_conductance_matrix_finite_T(syst_UL, qe, qw, solver_type=solver_type)
+                        Gmat_UL = hp.calc_conductance_matrix_finite_T(syst_UL, qe, qw)
                     else:
-                        Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0, solver_type=solver_type)
+                        Gmat_UL = hp.calc_conductance_matrix(syst_UL, eng=0.0)
                     b_data[T_val]['b_left_cond_left'][k] = Gmat_UL[0, 0]
                     b_data[T_val]['b_left_cond_right'][k] = Gmat_UL[1, 1]
 
@@ -330,7 +329,7 @@ def worker_simulation_step(iter_data, static_params):
 
                 # A. Zero Temperature (T = 0)
                 if 0.0 in target_temps:
-                    G0_zero = hp.calc_conductance_matrix(syst_pair, eng=0.0, solver_type=solver_type)
+                    G0_zero = hp.calc_conductance_matrix(syst_pair, eng=0.0)
                     harmonics_by_temp[0.0]['L_1w'][i_l, j_r] = G0_zero[0, 0]
                     harmonics_by_temp[0.0]['R_1w'][i_l, j_r] = G0_zero[1, 1]
                     harmonics_by_temp[0.0]['RL_2w'][i_l, j_r] = G0_zero[1, 0]
@@ -358,7 +357,7 @@ def worker_simulation_step(iter_data, static_params):
                     sum_R_3w = 0.0
 
                     for k_node, eng in enumerate(e_nodes):
-                        G_mat = hp.calc_conductance_matrix(syst_pair, eng=float(eng), solver_type=solver_type)
+                        G_mat = hp.calc_conductance_matrix(syst_pair, eng=float(eng))
                         g_ll = G_mat[0, 0]
                         g_rr = G_mat[1, 1]
                         g_rl = G_mat[1, 0]
@@ -431,22 +430,21 @@ def worker_simulation_step(iter_data, static_params):
     return results
 
 #TODO: refactor this name to "worker_pfaffian_step"
-def worker_pdi_step(iter_data, static_params):
+def worker_pdi_step(iter_data, state, config):
     """
     Worker function for the PDI calculation loop (Loop 2).
     """
     i, mu_pm, vz = iter_data
 
-    # Unpack necessary static params
-    ts = static_params['t']
-    alphas = static_params['alpha']
-    gamma = static_params['gamma']
-    Ls = static_params['Ls']
-    Vdisx = static_params['Vdisx']
-    V0 = static_params['V0']
-    qn = static_params['qn']
-    Delta0 = static_params['Delta0']
-    pfaffian_delta_N = static_params["pfaffian_delta_N"]
+    gm = config.simulaiton.gemoetry
+
+    ts = state.t
+    alphas = state.aplpha
+    gamma = gm.gamma
+    Ls = gm.Ls
+    Vdisx = state.Vdisx
+    V0 = config.simulation.disorder.V0
+    Delta0 = gm.Delta0
 
     # Apply Renormalization Factor Z to align with Kwant 
     #Z = Delta0 / (Delta0 + gamma)
@@ -475,7 +473,7 @@ def worker_pdi_step(iter_data, static_params):
             V0=V0, 
             gm=vz, 
             mu=mu_pm,
-            delta_N=pfaffian_delta_N
+            delta_N=0
         )
         result.append(pfaff_val)
         
@@ -486,19 +484,18 @@ def worker_pdi_step(iter_data, static_params):
 if __name__ == "__main__":
     t_start = time.perf_counter()
     
-    parser = argparse.ArgumentParser(description="Nanowire simulation driver.")
-    parser.add_argument("config_file", nargs="?", default=None, help="Path to config YAML file.")
-    parser.add_argument("--config_path", "--config", dest="config_path", type=str, default=None, help="Path to config YAML file.")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config_file", nargs="?", default=None, help="Path to config YAML file.")
     parser.add_argument("--workers", dest="workers", type=int, default=None, help="Number of workers.")
-    parser.add_argument("--max_points", dest="max_points", type=int, default=None, help="Max points to simulate.")
     cli_args, remaining = parser.parse_known_args()
 
-    config_path = cli_args.config_file or cli_args.config_path or "Inputs/Parameters/fixing_code.yaml"
-    config = ConfigManager.get_config(config_path=config_path, cli_args=remaining or None)
-    if cli_args.workers is not None:
-        config.workers = cli_args.workers
-    if cli_args.max_points is not None:
-        config.max_points = cli_args.max_points
+    config_path = PathConfigs.PARAMETERS/cli_args.config_file 
+    if config_path is None:
+        fname = "fixing_code.yaml"
+        config_path = PathConfigs.PARAMETERS/fname
+
+    config = ConfigManager.initialize(config_path, cli_args = cli_args)
+    config.config_path = config_path 
 
     state = SimulationState(config)
     
@@ -507,46 +504,9 @@ if __name__ == "__main__":
     else:
         dirname = getattr(config, 'dirname', 'default_run')
 
-    if hasattr(config, 'simulation') and hasattr(config.simulation, 'geometry'):
-        geom = config.simulation.geometry
-        disorder_cfg = config.simulation.disorder
-        res_cfg = config.simulation.resolution
-        calc_cfg = getattr(config, 'calculation_includes', None)
-        disorder_file = getattr(disorder_cfg, 'disorder_dirname', getattr(disorder_cfg, 'fname', 'Tdis.npz'))
-        Lb = geom.Lb
-        Lb_pdi = getattr(geom, 'Lb_pdi', geom.Lb)
-        Ls = geom.Ls
-        Ln = geom.Ln
-        t_list = getattr(res_cfg, 'temperatures', getattr(res_cfg, 'barrier_T_mK_list', None))
-        target_temps = [float(t) for t in t_list] if t_list else [0.0]
-        quadrature_nodes_25 = getattr(res_cfg, 'quadrature_nodes_25', 51)
-        barrier_sweep_only = getattr(calc_cfg, 'barrier_sweep_only', False) if calc_cfg else False
-        pdi_flag = getattr(calc_cfg, 'pdi_flag', False) if calc_cfg else getattr(config, 'pdi_flag', False)
-        calc_25_harmonics = getattr(calc_cfg, 'calc_25_cutter_harmonics', False) if calc_cfg else getattr(config, 'calc_25_cutter_harmonics', False)
-    else:
-        disorder_file = getattr(config, 'fname', 'Tdis.npz')
-        Lb = config.Lb
-        Lb_pdi = getattr(config, 'Lb_pdi', config.Lb)
-        Ls = config.Ls
-        Ln = config.Ln
-        t_list = getattr(config, 'barrier_T_mK_list', None)
-        target_temps = [float(t) for t in t_list] if t_list else [0.0]
-        quadrature_nodes_25 = getattr(config, 'quadrature_nodes_25', 51)
-        barrier_sweep_only = getattr(config, 'barrier_sweep_only', False)
-        pdi_flag = getattr(config, 'pdi_flag', False)
-        calc_25_harmonics = getattr(config, 'calc_25_cutter_harmonics', False)
     
     print(f"--- Starting Simulation ---")
-    print(f"Output Directory: {dirname}")
-    print(f"Hamiltonian Mode: legacy (renormalized)")
-    print(f"Hopping: {state.t:.4f}, Spin-Orbit: {state.alpha:.4f}, Delta: {state.Delta:.4f}")
-    print(f"Disorder File: {disorder_file}")
-    print(f"Barrier Length (Lb): {Lb}")
-    print(f"PDI Barrier Length (Lb_pdi): {Lb_pdi}")
-    print(f"Acceleration Mode: {config.acceleration_type}")
-    print(f"Barrier Calibration: {hasattr(state, 'symmetric_barrier_configs')}")
-    print(f"TGP Barrier Array: {state.tgp_barrier_arr}")
-    print(f"--------------------------------\n")
+
     
     # Artifact Log
     #TODO: make sure this logs the exact sim state as well
@@ -559,24 +519,21 @@ if __name__ == "__main__":
     static_params = state.get_static_params(state.Vdisx, config)
     
     params_list = state.params_list
-    max_pts = config.get('max_points', None) if hasattr(config, 'get') else getattr(config, 'max_points', None)
-    if max_pts is not None:
-        params_list = params_list[:max_pts]
     mu_var = state.mu_var
     Vz_var = state.Vz_var
-    barrier_arr = state.barrier_arr
+    calibrated_barriers = state.calibrated_barriers
     energies = state.energies
     
     print("conductance_flag:", f"{static_params['conductance_flag']}")
     print("spectra_flag:", f"{static_params['spectra_flag']}")
 
     # Pre-allocate main arrays
-    lenw = Ls + 2*(Lb + Ln)
-    num_orbitals = lenw * 4
-    print(f"LEN: {num_orbitals}")
-    #ldos_arr = np.zeros(shape = (len(params_list), len(energies), num_orbitals)) 
-    
+    gm = config.simulation.geometry
+    rs = config.simulation.resolution
+    incl = config.calculation_includes
 
+    lenw = gm.Ls + 2*(gm.Lb + gm.Ln)
+    num_orbitals = lenw * 4
 
     dIdVs_left_arr = np.zeros(shape = (len(params_list), len(energies)))
     lengrid = len(hp.make_dynamic_grid())
@@ -589,18 +546,26 @@ if __name__ == "__main__":
     dIdVs_LR_arr = np.zeros(shape = (len(params_list), len(energies)))
     dIdVs_RL_arr = np.zeros(shape = (len(params_list), len(energies)))
 
-    num_barrier_points = len(barrier_arr)
-    conductance_data_by_temp = {}
-    for T_val in target_temps:
-        conductance_data_by_temp[T_val] = {
-            'Conductance_matrix': np.zeros((len(params_list), 2, 2)),
-            'barrier_right_conductance_left_arr': np.zeros((len(params_list), num_barrier_points)),
-            'barrier_right_conductance_right_arr': np.zeros((len(params_list), num_barrier_points)),
-            'barrier_right_GLR_arr': np.zeros((len(params_list), num_barrier_points)),
-            'barrier_right_GRL_arr': np.zeros((len(params_list), num_barrier_points)),
-            'barrier_left_conductance_left_arr': np.zeros((len(params_list), num_barrier_points)),
-            'barrier_left_conductance_right_arr': np.zeros((len(params_list), num_barrier_points)),
-        }
+    #num_barrier_points = len(state.calibrated_cutters.G_n)
+    #conductance_data_by_temp = {}
+    #for T_val in target_temps:
+    #    conductance_data_by_temp[T_val] = {
+    #        'Conductance_matrix': np.zeros((len(params_list), 2, 2)),
+    #        'barrier_right_conductance_left_arr': np.zeros((len(params_list), num_barrier_points)),
+    #        'barrier_right_conductance_right_arr': np.zeros((len(params_list), num_barrier_points)),
+    #        'barrier_right_GLR_arr': np.zeros((len(params_list), num_barrier_points)),
+    #        'barrier_right_GRL_arr': np.zeros((len(params_list), num_barrier_points)),
+    #        'barrier_left_conductance_left_arr': np.zeros((len(params_list), num_barrier_points)),
+    #        'barrier_left_conductance_right_arr': np.zeros((len(params_list), num_barrier_points)),
+    #    }
+
+    Gmat_array = hp.initialize_conductance_dataarray(
+        mu_set= list(set(state.mu_var)),
+        Vz_set= list(set(state.Vz_var)),
+        target_temps = rs.temperatures,
+        G_n_values = state.calibrated_cutters.G_n
+
+    )
 
     spectrum_arr = np.zeros(shape=(len(params_list), 4))
 
@@ -608,39 +573,33 @@ if __name__ == "__main__":
     mzm_separation_arr = np.zeros(len(params_list))
     gamma_sq_arr = np.zeros_like(params_list, dtype=complex)
     mp_eng_arr = np.zeros_like(params_list)
-    lenw = Ls #+ 2*(Lb + Ln)
+    lenw = gm.Ls #+ 2*(Lb + Ln)
     mp_arr = np.zeros(shape= (len(params_list), lenw))
     topological_gap_arr = np.zeros(shape=(len(params_list)))
     
     results = []
     de_quad = {}
-    if calc_25_harmonics:
-        print(f"--- Precomputing Double-Exponential Quadrature ({quadrature_nodes_25} nodes) ---")
-        for T_val in target_temps:
+    if incl.calc_25_harmonics:
+        print(f"--- Precomputing Quadrature ({rs.quadrature_nodes_25} nodes) ---")
+        for T_val in rs.temperatures:
             if T_val > 0.0:
                 de_quad[T_val] = lc.get_double_exponential_quadrature(
-                    T_mK=T_val, n_nodes=quadrature_nodes_25
+                    T_mK=T_val, n_nodes=rs.quadrature_nodes_25
                 )
                 print(f"  T = {T_val:4.1f} mK: DE ({de_quad[T_val]['n_nodes']} nodes)")
             else:
                 de_quad[0.0] = None
     static_params['de_quad'] = de_quad
 
-    if config.acceleration_type == 'gpu':
-        print("Using GPU acceleration (Serial Sweep).")
-        results = [worker_simulation_step(pms, static_params) for pms in tqdm(params_list, desc="mu/Vz Sweep")]
-        
-    elif config.acceleration_type == 'parallel':
-        num_workers = config.get('workers', None) if (hasattr(config, 'get') and config.get('workers', None) is not None) else max(1, mp.cpu_count() - 1)
-        print(f"Starting Parallel Execution with {num_workers} workers.")
-        
+
+    if config.acceleration_type == 'parallel':
+        num_workers = hp.get_workers(config.num_workers)
         with mp.Pool(processes=num_workers) as pool:
             func_sim = partial(worker_simulation_step, static_params=static_params)
             results = list(tqdm(pool.imap(func_sim, params_list, chunksize=1), total=len(params_list), desc="mu/Vz Sweep"))
-    else: # None
+    else:
         print("Using Serial Execution (CPU).")
-        for pms in tqdm(params_list, desc="mu/Vz Sweep"):
-            results.append(worker_simulation_step(pms, static_params))
+        results = [worker_simulation_step(pms, static_params) for pms in tqdm(params_list, desc="mu/Vz Sweep")]
 
     if barrier_sweep_only:
         for res in results:
@@ -714,9 +673,7 @@ if __name__ == "__main__":
         print("\nStarting PDI Calculation Loop.")
         pdi_results = []
         if config.acceleration_type == 'gpu':
-            print("Using GPU acceleration (Serial Sweep).")
-            pdi_results = [worker_pdi_step(pms, static_params) for pms in tqdm(params_list, desc="PDI Sweep")]
-
+            raise ValueError("GPU acceleration has been deprecated. Please set acceleration_type: 'parallel' or 'serial'.")
         elif config.acceleration_type == 'parallel':
             num_workers = config.get('workers', None) if (hasattr(config, 'get') and config.get('workers', None) is not None) else max(1, mp.cpu_count() - 1)
             print(f"Starting Parallel Execution with {num_workers} workers.")
@@ -724,10 +681,9 @@ if __name__ == "__main__":
             with mp.Pool(processes=num_workers) as pool:
                 func_pdi = partial(worker_pdi_step, static_params=static_params)
                 pdi_results = list(tqdm(pool.imap(func_pdi, params_list, chunksize=1), total=len(params_list), desc="PDI Sweep"))
-        else: # None
+        else:
             print("Using Serial Execution (CPU).")
-            for pms in tqdm(params_list, desc="PDI Sweep"):
-                pdi_results.append(worker_pdi_step(pms, static_params))
+            pdi_results = [worker_pdi_step(pms, static_params) for pms in tqdm(params_list, desc="PDI Sweep")]
 
         pdi_data = np.array(pdi_results)
 

@@ -1,0 +1,24 @@
+
+# 25-Cutter Harmonics (1w, 2w, 3w via 51-node Double-Exponential Quadrature)
+quadrature_nodes_25: 51
+barrier_quadrature_nodes: 8
+temperatures: [0.0, 40.0] #will do thermal_broadening for all temperatures in list
+
+#generate a set of target conductances based on asymmetry ratio from baseline G_N
+asym_points: 20
+asym_min: -5.0
+asym_max: 5.0
+
+mu_max: 4.5
+mu_min: 0.0
+mu_dist: 0.02
+
+Vz_max: 1.4
+Vz_min: 0.0
+Vz_dist: 0.02
+
+num_engs: 51
+num_eigenvalues: 12
+eng_window_range: 51
+weight_threshold: 0.8
+separation_threshold: 0.65

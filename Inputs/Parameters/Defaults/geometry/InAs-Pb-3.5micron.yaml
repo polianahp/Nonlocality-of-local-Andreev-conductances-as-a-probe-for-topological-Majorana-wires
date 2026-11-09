@@ -18,5 +18,3 @@ gamma: 0.8
 
 # Normal and junction chemical potentials
 mu_n: 0.0
-barrier0: 2.0
-qn: 20

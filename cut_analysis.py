@@ -31,7 +31,7 @@ import src.helpers as hp
 from src.parameter_handler import ConfigManager
 from scipy.constants import physical_constants
 from scipy.ndimage import convolve1d
-from src.gpu_broadening import _temp_kernel
+from src.cpu_broadening import _temp_kernel
 
 # ==========================================
 # USER CONFIGURATION
@@ -382,7 +382,7 @@ def _eval_cut_point_worker(args):
     """
     idx, mu_val, vz_val, t_val, gamma, Delta0, alpha, Ls, Vdisx, kvals = args
     scl = hp.build_system_closed(t_val, mu_val, gamma, Delta0, vz_val, alpha, Ls, Vdisx, a=1)
-    evals, evecs = hp.solve_ham(scl, k=kvals, solver_type='cpu')
+    evals, evecs = hp.solve_ham(scl, k=kvals)
     sorted_evals = np.sort(evals)
     abs_idx = np.argsort(np.abs(evals))[:2]
     try:
@@ -445,7 +445,7 @@ def _process_deep_dive_point_worker(args):
 
     # B. Majorana Wave Functions (Sparse Shift-Invert solve_ham k=2)
     scl = hp.build_system_closed(t_val, mu_val, gamma, Delta0, vz_val, alpha, Ls, Vdisx, a=1)
-    evals_sub, evecs_sub = hp.solve_ham(scl, k=2, solver_type='cpu')
+    evals_sub, evecs_sub = hp.solve_ham(scl, k=2)
     rho_M1, rho_M2, _ = hp.get_psiM_density(evals_sub, evecs_sub)
 
     fig, ax = plt.subplots(figsize=(8.2, 2.8))
@@ -1649,9 +1649,9 @@ def process_data_dir(data_dir):
     if not TPREP_PATH.exists():
         logger.info(f"tprep.nc not found in {data_dir}. Generating it now...")
         from src.tgp_adapter import TGPAdapter
-        from src.gpu_broadening import prepare_sim_gpu
+        from src.cpu_broadening import prepare_sim_cpu
         data = TGPAdapter(data_dir).to_xarray()
-        tprep = prepare_sim_gpu(data, p.T_mK_stage1)
+        tprep = prepare_sim_cpu(data, p.T_mK_stage1)
         
         tmp_path = TPREP_PATH.with_suffix('.nc.tmp')
         tprep.to_netcdf(tmp_path)
@@ -2339,11 +2339,6 @@ def process_data_dir(data_dir):
     logger.info("Done!")
 
     # Explicitly free memory for sequential processing
-    try:
-        import cupy
-        cupy.get_default_memory_pool().free_all_blocks()
-    except ImportError:
-        pass
     gc.collect()
 
 def main():

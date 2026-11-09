@@ -12,13 +12,26 @@ import src.barrier_calibration as bc
 import src.helpers as hp 
 
 
+def _merge_arrs(A, B, tol):
+    # merges A and B where any elements within tol are replaced with the element of B
+    C = []
+    A = list(A)
+    B = list(B)
+    for a in A:
+        any_close = np.where(np.isclose(a, B, atol=tol))[0]
+        if len(any_close != 0):
+            C.append(B[any_close[0]])
+        else:
+            C.append(a)
+    D = np.append(C, B)
+    return np.sort(np.asarray(list(set(D))))
+
+
+
 class ProtocolConfig(BaseModel):
     """
     Configuration for post-processing using the Azure Quantum TGP pipeline.
     """
-
-    # if true, uses gpu thermal broadening prepare_sim_gpu
-    GPU_broadening: bool = False
 
     # Hardware / Experimental Corrections
     phase_shift_left: float = 0.0
@@ -105,7 +118,7 @@ class ConfigManager:
     """
 
     @staticmethod
-    def initialize(config_file: str) -> DictConfig:
+    def initialize(config_file: str, cli_args = None) -> DictConfig:
         config_path = Path(PathConfigs.PARAMETERS / config_file)
         if not config_path.exists():
             alt_path = Path(config_file)
@@ -126,7 +139,6 @@ class ConfigManager:
         # 2. Recursively resolve and merge defaults from Inputs/Parameters/Defaults
         defaults_dir = Path(PathConfigs.PARAMETERS / "Defaults")
         return _load_and_merge_defaults(config, defaults_dir)
-
 
 
     @staticmethod
@@ -155,18 +167,21 @@ class ConfigManager:
         return cfg
 
     @staticmethod
-    def log_artifact(config: Any, output_dir: Path):
+    def log_artifact(config: Any, state:Any, output_dir: Path):
         """
         Dumps the fully resolved configuration to a YAML file in the output directory.
         """
         output_dir.mkdir(parents=True, exist_ok=True)
         artifact_file = output_dir / "resolved_params.yaml"
+        state_file = output_dir / "state.npz"
         if not isinstance(config, DictConfig):
             conf = OmegaConf.create(config)
         else:
             conf = config
         OmegaConf.save(config=conf, f=artifact_file)
-        print(f"Reproducibility Artifact logged to: {artifact_file}")
+        np.savez(state_file, **state.__dict__())
+        print(f"Params Artifact logged to: {artifact_file}")
+        print(f"Derived State Artifact logged to: {state_file}")
 
 
 class SimulationState:
@@ -216,17 +231,17 @@ class SimulationState:
         Nmu = int(np.round((mu_max - mu_min) / mu_dist))
         Nvz = int(np.round((Vz_max - Vz_min) / Vz_dist))
 
-        self.mu_var = np.linspace(mu_min, mu_max, Nmu)
-        self.Vz_var = np.linspace(Vz_min, Vz_max, Nvz)
+        self.mu_var = np.round(np.asarray([mu_min + n*mu_dist for n in range(Nmu)]), decimals=2)
+        self.Vz_var = np.round(np.asarray([Vz_min + n*Vz_dist for n in range(Nvz)]), decimals=2)
         
         # Product space for parallelization: [[index, mu, vz], ...]
-        self.params_list = [
+        self.params_list = np.asarray([
             [i, p[0], p[1]] 
             for i, p in enumerate(itr.product(self.mu_var, self.Vz_var))
-        ]
+        ])
 
         # 4. Disorder realization
-        disorder_path = PathConfigs.RUN_FILES / disorder.disorder_dirname
+        disorder_path = PathConfigs.RUN_FILES / disorder.disorder_fpath
         lambda_dis = disorder.lambda_dis
         is_real_space = disorder.is_real_space
 
@@ -237,30 +252,21 @@ class SimulationState:
             is_real_space=is_real_space
         )
 
-        # 5. Coordinate arrays
         self.energies = np.linspace(-0.5, 0.5, res.num_engs)
 
-        self.asym_points = res.asym_points
+        sweep_gnmin=calib.sweep_gnmin
+        sweep_gnmax=calib.sweep_gnmax
+        sweep_gnres=calib.sweep_gnres
+        num = int(np.round((sweep_gnmax - sweep_gnmin)/sweep_gnres))
+        
+        Gn_sweep_points = np.round(np.linspace(sweep_gnmin, sweep_gnmax, num), decimals=2)
+        final_GNs = _merge_arrs(Gn_sweep_points, calib.symmetric_target_gns, tol = 0.01)
 
-        # Mapping acceleration type to Kwant solver type
-        self.acceleration_type = config.acceleration_type
-        self.solver_type = 'gpu' if self.acceleration_type == 'gpu' else 'cpu'
-
-        # Default barrier sweep coordinates for low-asymmetry reflection sweeps
-        self.barrier_arr = np.linspace(-5.0, 5.0, self.asym_points)
-        self.asym_ratios = self.barrier_arr / 2.0
-
-        # 6. Barrier calibration per disorder realization per Aghaee 2023 G_N targets
-        if calib.tgp_barrier_pairs is not None:
-            self.tgp_barrier_pairs = np.array(calib.tgp_barrier_pairs, dtype=float)
-            self.tgp_barrier_arr = self.tgp_barrier_pairs[:, 0]
-            self.target_gns = calib.target_gns
-            print(f"Loaded Pre-Calibrated Barrier Pairs [G_N, [UL, UR]]:\n{self.tgp_barrier_pairs}")
-        else:
-            self.target_gns = calib.target_gns
-            print(f"--- Running Simultaneous Cutter Barrier Calibration for targets: {self.target_gns} ---")
-            vdis_for_calib = self.Vdisx * float(disorder.V0) if not is_real_space else self.Vdisx
-            self.symmetric_barrier_configs = bc.calibrate_wire_cutters(
+        if calib.calibrate_cutters:
+            print(f"--- Running Simultaneous Cutter Barrier Calibration for targets: {calib.target_gns} ---")
+            vdis_for_calib = self.Vdisx * float(disorder.V0) 
+            self.calibrated_cutters = bc.calibrate_wire_cutters(
+                targets = final_GNs,
                 calibration_cfg=calib,
                 geometry_cfg=geom,
                 Vdisx=vdis_for_calib,
@@ -268,9 +274,10 @@ class SimulationState:
                 alpha=self.alpha,
                 mu_leads=self.mu_leads,
             )
-            self.tgp_barrier_pairs = np.array([entry[1] for entry in self.symmetric_barrier_configs])
-            self.tgp_barrier_arr = self.tgp_barrier_pairs[:, 0]
-            print(f"Calibrated Symmetric Barrier Pairs [G_N, [UL, UR]]:\n{self.symmetric_barrier_configs}")
+            print(f"Calibrated Symmetric Cutter Pairs [G_N, [UL, UR]]:\n{self.calibrated_barriers}")
+        else:
+            self.calibrated_cutters = None
+
 
     def get_static_params(self, Vdisx: np.ndarray, config: Any) -> dict:
         """
@@ -284,6 +291,8 @@ class SimulationState:
         calc = config.calculation_includes
 
         t_list = [float(x) for x in res.temperatures]
+        is_finite_temp = any(t > 0.0 for t in t_list)
+        cond_mode = "finite_temperature" if is_finite_temp else "zero_temperature"
 
         return {
             't': self.t,
@@ -300,7 +309,7 @@ class SimulationState:
             'barrier0': geom.barrier0,
             'Vdisx': Vdisx,
             'energies': self.energies,
-            'barrier_arr': self.barrier_arr,
+            'calibrated_barriers': self.calibrated_barriers,
             'asym_ratios': self.asym_ratios,
             'mu_var': self.mu_var,
             'Vz_var': self.Vz_var,
@@ -311,20 +320,18 @@ class SimulationState:
             'conductance_flag': calc.conductance_flag,
             'spectra_flag': calc.spectra_flag,
             'localization_flag': calc.localization_flag,
-            'solver_type': self.solver_type,
             'calc_pfaffian': calc.calc_pfaffian,
             'pfaffian_delta_N': calc.pfaffian_delta_N,
-            'barrier_conductance_mode': res.barrier_conductance_mode,
-            'barrier_T_mK': res.barrier_T_mK,
+            'barrier_conductance_mode': cond_mode,
+            'temperatures': t_list[0] if t_list else 0.0,
             'barrier_T_mK_list': t_list,
             'barrier_quadrature_nodes': res.barrier_quadrature_nodes,
             'barrier_sweep_only': calc.barrier_sweep_only,
             'hamiltonian_mode': config.hamiltonian_mode,
             'tgp_barrier_pairs': self.tgp_barrier_pairs,
-            'tgp_barrier_arr': self.tgp_barrier_arr,
-            'barrier_u_min': res.barrier_u_min,
-            'barrier_u_max': res.barrier_u_max,
-            'barrier_u_points': res.barrier_u_points,
+            'asym_min': res.asym_min,
+            'asym_max': res.asym_max,
+            'asym_points': res.asym_points,
             'target_gns': self.target_gns,
             'multi_baseline_barriers': calc.multi_baseline_barriers,
             'barrier_sweep_indices': calc.barrier_sweep_indices,

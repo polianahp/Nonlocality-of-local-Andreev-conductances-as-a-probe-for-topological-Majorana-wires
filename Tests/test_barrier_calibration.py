@@ -91,7 +91,7 @@ def test_monotonicity_and_bracket():
 
 def test_target_conductance_inversion():
     """
-    Test simultaneous calibration for the standard targets:
+    Test calibration for the standard targets:
     G_N in {0.35, 0.62, 0.90} e^2/h.
     Assert |G_N(U_c) - G_target| < 0.005 e^2/h for both cutters,
     and verify left/right spatial symmetry on a clean wire.
@@ -222,7 +222,7 @@ def test_topological_quantization_zero_bias():
     V_z_topo = 0.6
     Vdisx_fast = np.zeros(geom_cfg_fast.Ls)
     
-    u_c = bc.calibrate_single_junction(
+    u_c = bc.calibrate_single_barrier(
         target_gn=0.5, side='left',
         calibration_cfg=calib_cfg, geometry_cfg=geom_cfg_fast,
         Vdisx=Vdisx_fast, t=t, alpha=alpha, mu_leads=mu_leads
@@ -244,9 +244,9 @@ def test_topological_quantization_zero_bias():
     )
 
 
-def test_fail_loud_unreachable_target_and_invalid_inputs():
+def test_error_handling():
     """
-    Test fail-loud error handling:
+    Test error handling:
     1. Unreachable targets (e.g. G_N = 2.5 or -0.5 e^2/h) raise ValueError.
     2. Inverted brackets (u_min >= u_max) raise ValueError.
     3. Invalid side parameter raises ValueError.
@@ -280,7 +280,7 @@ def test_fail_loud_unreachable_target_and_invalid_inputs():
 
     # 3. Invalid side
     with pytest.raises(ValueError, match="side must be 'left' or 'right'"):
-        bc.calibrate_single_junction(
+        bc.calibrate_single_barrier(
             target_gn=0.5, side='center',
             calibration_cfg=calib_cfg, geometry_cfg=geom_cfg,
             Vdisx=Vdisx, t=t, alpha=alpha, mu_leads=mu_leads
@@ -294,6 +294,63 @@ def test_fail_loud_unreachable_target_and_invalid_inputs():
             calibration_cfg=calib_cfg, geometry_cfg=geom_cfg,
             Vdisx=wrong_vdis, t=t, alpha=alpha, mu_leads=mu_leads
         )
+
+
+def test_exact_vs_renormalized_conductance_agreement_disordered():
+    """
+    Verifies that for a disordered nanowire (Vdisx != 0):
+    1. calibrate_single_barrier tunes UL and UR independently to match target G_N with custom mu_points.
+    2. At above-gap bias (E = 0.5 meV), both calibrated barriers yield G_N near target.
+    3. At zero bias (E = 0.0), the exact frequency-dependent Hamiltonian (build_system_exact)
+       and the low-energy renormalized Hamiltonian (build_system) yield identical conductance matrices.
+    """
+    calib_cfg, geom_cfg = get_default_test_configs()
+    # Fast 50-site wire for quick unit test execution
+    geom_cfg_fast = OmegaConf.create(dict(geom_cfg))
+    geom_cfg_fast.Ls = 50
+    t = 16.565
+    alpha = 1.4
+    mu_leads = t
+    mu = 2.0
+
+    # Generate reproducible non-zero spatial disorder
+    np.random.seed(42)
+    vdis = np.random.uniform(-0.5, 0.5, size=geom_cfg_fast.Ls)
+
+    # 1. Calibrate on single mu point
+    ul = bc.calibrate_single_barrier(
+        target_gn=0.5, side="left", calibration_cfg=calib_cfg, geometry_cfg=geom_cfg_fast,
+        Vdisx=vdis, t=t, alpha=alpha, mu_leads=mu_leads, mu_points=[mu]
+    )
+    ur = bc.calibrate_single_barrier(
+        target_gn=0.5, side="right", calibration_cfg=calib_cfg, geometry_cfg=geom_cfg_fast,
+        Vdisx=vdis, t=t, alpha=alpha, mu_leads=mu_leads, mu_points=[mu]
+    )
+
+    # 2. Above-gap transmission check at E=0.5 meV
+    syst_exact = hp.build_system_exact(
+        t=t, mu=mu, gamma=geom_cfg_fast.gamma, Delta0=geom_cfg_fast.Delta_0, V_z=0.0,
+        alpha=alpha, Ls=geom_cfg_fast.Ls, Vdisx=vdis, barrier_l=ul, barrier_r=ur,
+        Ln=geom_cfg_fast.Ln, Lb=geom_cfg_fast.Lb, mu_leads=mu_leads
+    )
+    G_above_gap = hp.calc_conductance_matrix_exact(syst_exact, E=0.5)
+    assert abs(G_above_gap[0, 0] - 0.5) < 0.05, f"Left above-gap conductance {G_above_gap[0, 0]} diverges from 0.5"
+    assert abs(G_above_gap[1, 1] - 0.5) < 0.05, f"Right above-gap conductance {G_above_gap[1, 1]} diverges from 0.5"
+
+    # 3. Exact vs Low-Energy Renormalized Zero-Bias Conductance Agreement
+    G_exact_0 = hp.calc_conductance_matrix_exact(syst_exact, E=0.0)
+
+    syst_low = hp.build_system(
+        t=t, mu=mu, gamma=geom_cfg_fast.gamma, Delta0=geom_cfg_fast.Delta_0, V_z=0.0,
+        alpha=alpha, Ls=geom_cfg_fast.Ls, Vdisx=vdis, barrier_l=ul, barrier_r=ur,
+        Ln=geom_cfg_fast.Ln, Lb=geom_cfg_fast.Lb, mu_leads=mu_leads
+    )
+    G_low_0 = hp.calc_conductance_matrix(syst_low, eng=0.0)
+
+    np.testing.assert_allclose(
+        G_low_0, G_exact_0, atol=1e-5,
+        err_msg="Low-energy renormalized and exact zero-bias conductances diverge!"
+    )
 
 
 if __name__ == "__main__":

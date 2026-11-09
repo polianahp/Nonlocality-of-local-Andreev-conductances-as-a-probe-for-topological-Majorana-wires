@@ -1,68 +1,37 @@
 
 
 acceleration_type: "parallel"
+num_workers: -1
 hamiltonian_mode: "legacy"
-
 outputs:
   dirname: "Dense_U_Operating/Realization_2"
 
 simulation:
-  default: "simulation/sim_default.yaml"
 
   disorder:
     is_real_space: False #if not real space, data array at disorder_dirname is a set of fourier components
-    disorder_dirname: Fourier_Component_Disorders/fourier_disorder_2.npy
+    disorder_fpath: Fourier_Component_Disorders/fourier_disorder_2.npy
     lambda_dis: 4.5
     V0: 1.2
     
   geometry:
-    default: "InAs-3micron.yaml"
-
+    default: "geometry/InAs-3micron.yaml"
   
   barrier_calibration:
-    default: "barrier_calibration.yaml"
-
-
+    default: "barrier_calibration/barrier_calibration.yaml"
 
   resolution:
-  # 25-Cutter Harmonics (1w, 2w, 3w via 51-node Double-Exponential Quadrature)
-    quadrature_nodes_25: 51
-    barrier_quadrature_nodes: 8
-    temperatures: [0.0, 40.0] #will do thermal_broadening for all temperatures in list
-
-    asym_points: 20
-    barrier_conductance_mode: "finite_temperature"
-    barrier_T_mK: 0.0
-    barrier_u_min: -5.0
-    barrier_u_max: 5.0
-    barrier_u_points: 20
-
-    mu_max: 4.5
-    mu_min: 0.0
-    mu_dist: 0.02
-
-    Vz_max: 1.4
-    Vz_min: 0.0
-    Vz_dist: 0.02
-
-    num_engs: 51
-    num_eigenvalues: 12
-    eng_window_range: 51
-    weight_threshold: 0.8
-    separation_threshold: 0.65
+    default: "resolution/resolution_test.yaml"
 
 calculation_includes:
-  calc_25_cutter_harmonics: True
+  25_cutter_harmonics: True
   conductance_flag: False
-  spectra_flag: True
-  localization_flag: True
+  barrier_sweep: False
+  pfaffian: True
+  spectra: True
+  localization: True
   pdi_flag: True
-  calc_pfaffian: True
-  pfaffian_delta_N: 0
-  calc_barrier_sweeps: False
-  barrier_sweep_only: False
-  multi_baseline_barriers: False
-  barrier_sweep_indices: null
+
 
 protocol:
   default: "protocol/protocol_default.yaml"

@@ -9,5 +9,3 @@ ms: 0.023
 Delta_0: 0.3
 gamma: 0.2
 mu_n: 0.0
-barrier0: 2.0
-qn: 20

@@ -229,8 +229,7 @@ def get_tanh_legendre_quadrature(
 def compute_harmonics_single_system(
     syst: Any,
     quad: Dict[str, Any],
-    hamiltonian_mode: str = 'exact',
-    solver_type: str = 'cpu'
+    hamiltonian_mode: str = 'exact'
 ) -> Dict[str, Any]:
     """
     Computes 1w, 2w, and 3w lock-in harmonics for a pre-built Kwant system
@@ -244,8 +243,6 @@ def compute_harmonics_single_system(
         Quadrature dictionary returned by get_tanh_legendre_quadrature.
     hamiltonian_mode : str, default 'exact'
         'exact' (energy-dependent self-energy) or 'legacy' (static model).
-    solver_type : str, default 'cpu'
-        'cpu' or 'gpu'.
 
     Returns
     -------
@@ -273,9 +270,9 @@ def compute_harmonics_single_system(
     for k in range(n_nodes):
         E_val = float(energies[k])
         if is_exact:
-            G_mat = hp.calc_conductance_matrix_exact(syst, E=E_val, solver_type=solver_type)
+            G_mat = hp.calc_conductance_matrix_exact(syst, E=E_val)
         else:
-            G_mat = hp.calc_conductance_matrix(syst, eng=E_val, solver_type=solver_type)
+            G_mat = hp.calc_conductance_matrix(syst, eng=E_val)
         G_matrices[k] = G_mat
 
     g_ll = G_matrices[:, 0, 0]
@@ -311,7 +308,7 @@ def _worker_eval_cutter_pair(task_args: Tuple) -> Tuple[int, int, Dict[str, Any]
     (
         i, j, u_l, u_r,
         system_params, Vdisx,
-        quad, hamiltonian_mode, solver_type
+        quad, hamiltonian_mode
     ) = task_args
 
     p = system_params
@@ -359,8 +356,7 @@ def _worker_eval_cutter_pair(task_args: Tuple) -> Tuple[int, int, Dict[str, Any]
     harmonics = compute_harmonics_single_system(
         syst=syst,
         quad=quad,
-        hamiltonian_mode=hamiltonian_mode,
-        solver_type=solver_type
+        hamiltonian_mode=hamiltonian_mode
     )
     # Do not pass full G_matrices back across processes to save IPC bandwidth
     harmonics_summary = {
@@ -382,7 +378,6 @@ def compute_25_cutter_curvatures_legendre(
     T_mK: float = 30.0,
     n_nodes: int = 16,
     hamiltonian_mode: str = 'exact',
-    solver_type: str = 'cpu',
     n_jobs: int = 1,
     quadrature_method: str = 'legendre'
 ) -> Dict[str, Any]:
@@ -409,8 +404,6 @@ def compute_25_cutter_curvatures_legendre(
         For method='double_exponential': 75 nodes (~1e-11) or 115 nodes (~1e-15 machine precision).
     hamiltonian_mode : str, default 'exact'
         'exact' or 'legacy'.
-    solver_type : str, default 'cpu'
-        'cpu' or 'gpu'.
     n_jobs : int, default 1
         Number of parallel worker processes. If n_jobs > 1 or -1, utilizes multiprocessing.
     quadrature_method : str, default 'legendre'
@@ -464,7 +457,7 @@ def compute_25_cutter_curvatures_legendre(
             tasks.append((
                 i, j, u_left[i], u_right[j],
                 system_params, Vdisx,
-                quad, hamiltonian_mode, solver_type
+                quad, hamiltonian_mode
             ))
 
     # Determine concurrency
@@ -532,7 +525,6 @@ def calibrate_and_compute_25_cutter_curvatures(
     T_mK: float = 30.0,
     n_nodes: int = 16,
     hamiltonian_mode: str = 'exact',
-    solver_type: str = 'cpu',
     n_jobs: int = 1,
     calib_tol: float = 1e-4,
     quadrature_method: str = 'legendre'
@@ -560,8 +552,6 @@ def calibrate_and_compute_25_cutter_curvatures(
         Number of quadrature points (e.g. 16 for Legendre, 75-115 for Double-Exponential).
     hamiltonian_mode : str, default 'exact'
         'exact' or 'legacy'.
-    solver_type : str, default 'cpu'
-        'cpu' or 'gpu'.
     n_jobs : int, default 1
         Number of parallel worker processes.
     calib_tol : float, default 1e-4
@@ -607,7 +597,6 @@ def calibrate_and_compute_25_cutter_curvatures(
         T_mK=T_mK,
         n_nodes=n_nodes,
         hamiltonian_mode=hamiltonian_mode,
-        solver_type=solver_type,
         n_jobs=n_jobs,
         quadrature_method=quadrature_method
     )

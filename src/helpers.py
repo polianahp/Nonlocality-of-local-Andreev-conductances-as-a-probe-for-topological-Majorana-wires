@@ -9,15 +9,8 @@ from pathlib import Path
 import scipy.sparse.linalg as sla
 from scipy.signal import find_peaks
 from src.pfaffian_invariant import PfaffianSimulator
-
-try:
-    import cupy as cp
-    import cupyx.scipy.sparse as cps
-    from cupyx.scipy.sparse.linalg import splu as cp_splu
-    GPU_AVAILABLE = True
-except ImportError:
-    GPU_AVAILABLE = False
-
+import xarray as xr
+import multiprocessing as mp
 
 #pauli matrices
 sigma_0 = tinyarray.array([[1, 0], [0, 1]])
@@ -52,43 +45,9 @@ def np_load_wrapped(filename, subdirectory):
     
 ######## Calculation Helpers ########
 
-if GPU_AVAILABLE:
-    class GPUSolver(kwant.solvers.common.SparseSolver):
-        """Kwant solver using CuPy for GPU acceleration."""
-        lhsformat = 'csc'
-        rhsformat = 'csc'
 
-        def _factorized(self, A):
-            # Kwant passes A as a scipy.sparse.coo_matrix
-            A_gpu = cps.csc_matrix(A)
-            return cp_splu(A_gpu)
-
-        def _solve_linear_sys(self, factorized_a, b, kept_vars):
-            # Ensure b is a dense numpy array with numeric dtype
-            if hasattr(b, 'toarray'):
-                b = b.toarray()
-            b = np.ascontiguousarray(b, dtype=np.complex128)
-            b_gpu = cp.asarray(b)
-            x_gpu = factorized_a.solve(b_gpu)
-            # Return result as numpy array for Kwant compatibility
-            return cp.asnumpy(x_gpu[kept_vars])
-
-    gpu_solver = GPUSolver()
-
-def get_gpu_smatrix(syst, energy=0.0, args=(), params=None):
-    if not GPU_AVAILABLE:
-        raise RuntimeError("CuPy not installed. Cannot use GPU solver.")
-    return gpu_solver.smatrix(syst, energy, args=args, params=params)
-
-
-
-
-
-def calc_conductance(syst, energy = 0.0, return_smatrix = False, solver_type='cpu'):
-    if solver_type == 'gpu':
-        smatrix = get_gpu_smatrix(syst, energy)
-    else:
-        smatrix = kwant.smatrix(syst, energy)
+def calc_conductance(syst, energy = 0.0, return_smatrix = False):
+    smatrix = kwant.smatrix(syst, energy)
     
     R = 0
     A = 0
@@ -112,12 +71,9 @@ def calc_conductance(syst, energy = 0.0, return_smatrix = False, solver_type='cp
         return cleft, cright
     
     
-def calc_conductance_matrix(syst, eng, solver_type='cpu'):
+def calc_conductance_matrix(syst, eng):
     G_matrix = np.zeros(shape=(2, 2))
-    if solver_type == 'gpu':
-        smatrix = get_gpu_smatrix(syst, eng)
-    else:
-        smatrix = kwant.smatrix(syst, eng)
+    smatrix = kwant.smatrix(syst, eng)
     Rl = 0
     Al = 0
     Rr = 0
@@ -215,8 +171,7 @@ def get_thermal_quadrature_nodes(
 def calc_conductance_matrix_finite_T(
     syst, 
     energies: np.ndarray, 
-    weights: np.ndarray, 
-    solver_type: str = 'cpu'
+    weights: np.ndarray
 ) -> np.ndarray:
     """
     Computes thermally averaged 2x2 conductance matrix G(V, T) using precomputed
@@ -224,7 +179,7 @@ def calc_conductance_matrix_finite_T(
     """
     G_total = np.zeros((2, 2))
     for eng, wt in zip(energies, weights):
-        G_mat = calc_conductance_matrix(syst, eng=eng, solver_type=solver_type)
+        G_mat = calc_conductance_matrix(syst, eng=eng)
         G_total += wt * G_mat
     return G_total
 
@@ -294,7 +249,7 @@ def calculate_local_mp(evals, evecs):
     return M_profile, energy_0
 
 
-def calc_dIdV(syst, energies, solver_type='cpu', calc_ldos: bool = False, show_progress: bool = True):
+def calc_dIdV(syst, energies, calc_ldos: bool = False, show_progress: bool = True):
     num_engs = len(energies)
     
     num_orbitals = syst.graph.num_nodes * 4 if calc_ldos else 0
@@ -306,7 +261,7 @@ def calc_dIdV(syst, energies, solver_type='cpu', calc_ldos: bool = False, show_p
     
     it = tqdm(enumerate(energies), total=num_engs, desc="Calculating dI/dV") if show_progress else enumerate(energies)
     for k, eng in it:
-        Gmat = calc_conductance_matrix(syst, eng, solver_type=solver_type)
+        Gmat = calc_conductance_matrix(syst, eng)
         dIdV_left[k] = Gmat[0, 0]
         dIdV_right[k] = Gmat[1, 1]
         dIdV_RL[k] = Gmat[1, 0]  # Current at Right due to Left
@@ -735,40 +690,20 @@ def calc_mzm_boundary_confinement(rho_left, rho_right, Ls, pct_thresh=80.0):
 
 
 
-def solve_ham(syst, k, solver_type='cpu'):
+def solve_ham(syst, k):
     """
     Diagonalizes the Hamiltonian of the system.
     Returns k eigenvalues and eigenvectors closest to zero.
     """
     ham = syst.hamiltonian_submatrix(sparse=True)
-    if solver_type == 'gpu':
-        if cp is None:
-            raise ImportError("CuPy is not installed or no GPU is available.")
-
-        try:
-            # Try GPU sparse solver if cupyx is fully available
-            from cupyx.scipy.sparse.linalg import eigsh as cp_eigsh
-            evals_gpu, evecs_gpu = cp_eigsh(cps.csr_matrix(ham), k=k, sigma=0, which='LM')
-            evals = cp.asnumpy(evals_gpu)
-            evecs = cp.asnumpy(evecs_gpu)
-        except (ImportError, AttributeError, Exception):
-            # Fallback to dense diagonalization on GPU (cp.linalg.eigh does not take k)
-            ham_gpu = cp.asarray(ham.toarray())
-            evals_all, evecs_all = cp.linalg.eigh(ham_gpu)
-            # cp.linalg.eigh returns all eigenvalues sorted. 
-            # We want the k eigenvalues closest to 0 (since sigma=0 in eigsh).
-            idx = cp.argsort(cp.abs(evals_all))[:k]
-            evals = cp.asnumpy(evals_all[idx])
-            evecs = cp.asnumpy(evecs_all[:, idx])
-    else:
-        try:
-            evals, evecs = sla.eigsh(ham, k=k, sigma=0, which='LM')
-        except Exception:
-            # Fallback to dense diagonalization on CPU (np.linalg.eigh does not take k)
-            evals_all, evecs_all = np.linalg.eigh(ham.toarray())
-            idx = np.argsort(np.abs(evals_all))[:k]
-            evals = evals_all[idx]
-            evecs = evecs_all[:, idx]
+    try:
+        evals, evecs = sla.eigsh(ham, k=k, sigma=0, which='LM')
+    except Exception:
+        # Fallback to dense diagonalization on CPU (np.linalg.eigh does not take k)
+        evals_all, evecs_all = np.linalg.eigh(ham.toarray())
+        idx = np.argsort(np.abs(evals_all))[:k]
+        evals = evals_all[idx]
+        evecs = evecs_all[:, idx]
 
     return evals, evecs
 
@@ -871,7 +806,7 @@ def get_psiM_density(evals, evecs):
 
 ######### The following function builds the system ########
 
-def build_system(t, mu, mu_n, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l, barrier_r, Vdisx = None, a = 1):
+def build_system(t, mu, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l, barrier_r, Vdisx = None, a = 1):
     syst = kwant.Builder()
     lat = kwant.lattice.square(a, norbs=4)
 
@@ -1017,15 +952,14 @@ def build_system_exact(
     V_z: float,
     alpha: float,
     Ls: int,
+    Ln: int,
+    Lb: int,
+    barrier_l: float,
+    barrier_r: float,
     Vdisx: Optional[np.ndarray] = None,
     a: float = 1,
     closed: bool = False,
-    mu_n: float = 0.0,
-    Ln: int = 0,
-    Lb: int = 3,
     mu_leads: Optional[float] = None,
-    barrier_l: float = 0.0,
-    barrier_r: float = 0.0,
     eta: float = 0.0
 ):
     """
@@ -2814,3 +2748,63 @@ def make_dynamic_grid(k_half: int = None):
         return newgd[mid - k_half : mid + k_half + 1]
 
     return newgd
+
+
+
+
+def initialize_conductance_dataarray(mu_set, Vz_set, target_temps, G_n_values):
+    """Initializes a 5D xarray.DataArray conductance barrier sweeps
+
+    Dimensions:
+
+        - temperature: Temperature in mK
+        - swept_barrier: Active barrier being swept ('left' or 'right')
+        - G_n: Barrier sweep coordinate values
+        - lead_row: Output/measured contact ('left' or 'right')
+        - lead_col: Input/voltage contact ('left' or 'right')
+    """
+    swept_barriers = ["left", "right"]
+    leads = ["left", "right"]
+
+    shape = (
+        len(mu_set),
+        len(Vz_set),
+        len(target_temps),
+        len(swept_barriers),
+        len(G_n_values),
+        len(leads),
+        len(leads),
+    )
+
+    coords = {
+        "chemical_potential": mu_set,
+        "zeeman_field": Vz_set,
+        "temperature": target_temps,
+        "swept_barrier": swept_barriers,
+        "G_n": G_n_values,
+        "lead_row": leads,
+        "lead_col": leads,
+    }
+
+    dims = ["chemical_potential","zeeman_field","temperature", 
+            "swept_barrier", "G_n", "lead_row", "lead_col"]
+
+    return xr.DataArray(
+        data=np.zeros(shape, dtype=float),
+        coords=coords,
+        dims=dims,
+        name="conductance",
+        attrs={"units": "2e^2/h", "temperature_units": "mK"},
+    )
+
+
+def get_workers(n):
+    max = mp.cpu_count()
+    if type(n) == str:
+        if n.lower() =='max':
+            return max
+    elif type(n) == int:
+        if n > 0:
+            return n
+        elif n < 0:
+            return max + n

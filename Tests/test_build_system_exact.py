@@ -771,8 +771,8 @@ def test_input_validation():
     with pytest.raises(ValueError, match="Delta0"):
         hp.sturm_count_exact(closed_syst, 0.5, Delta0=Delta0)
 
-    # calc_conductance_matrix_exact with solver_type='gpu'
-    with pytest.raises(NotImplementedError):
+    # calc_conductance_matrix_exact does not accept deprecated solver_type='gpu'
+    with pytest.raises((NotImplementedError, TypeError)):
         hp.calc_conductance_matrix_exact(open_syst, 0.05, solver_type='gpu')
 
 

@@ -96,14 +96,22 @@ class TGPAdapter:
         
         n_cutters = ds.sizes.get("cutter_pair_index", 5)
         
+        pairs_path = self.data_dir / "tgp_barrier_pairs.npy"
         barrier_path = self.data_dir / "tgp_barrier_arr.npy"
-        if barrier_path.exists():
+        if pairs_path.exists():
+            v_pairs = np.load(pairs_path).astype(float)
+            v_left = v_pairs[:, 0]
+            v_right = v_pairs[:, 1]
+        elif barrier_path.exists():
             v_cutters = np.load(barrier_path).astype(float)
+            v_left = v_cutters
+            v_right = v_cutters
         else:
-            v_cutters = np.zeros(n_cutters)
+            v_left = np.zeros(n_cutters)
+            v_right = np.zeros(n_cutters)
             
-        ds.coords["V_leftcutter"] = (["cutter_pair_index"], v_cutters)
-        ds.coords["V_rightcutter"] = (["cutter_pair_index"], v_cutters)
+        ds.coords["V_leftcutter"] = (["cutter_pair_index"], v_left)
+        ds.coords["V_rightcutter"] = (["cutter_pair_index"], v_right)
 
         
         ds.to_netcdf(filename, engine="h5netcdf")

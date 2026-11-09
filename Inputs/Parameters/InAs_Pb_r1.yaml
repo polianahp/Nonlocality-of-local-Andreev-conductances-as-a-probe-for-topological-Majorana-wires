@@ -33,6 +33,8 @@ simulation:
     temperatures: [0.0, 40.0]
 
     asym_points: 20
+    asym_min: -5.0
+    asym_max: 15.0
     barrier_conductance_mode: "finite_temperature"
     barrier_T_mK: 0.0
     barrier_u_min: -5.0

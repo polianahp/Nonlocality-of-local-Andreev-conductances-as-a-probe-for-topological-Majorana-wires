@@ -15,7 +15,7 @@ from scipy.constants import physical_constants
 import scipy.stats
 from tqdm.auto import tqdm
 import xarray as xr
-from src.gpu_broadening import prepare_sim_gpu
+from src.cpu_broadening import prepare_sim_cpu
 from src.parameter_handler import ConfigManager
 import tgp
 
@@ -61,12 +61,8 @@ def analyze_1(fn, T_mK, *, return_ds: bool = False, params=None):
     
     # Only run the thermal broadening if it hasn't been done yet
     if "T_mK" not in ds.attrs or ds.attrs.get("T_mK") != T_mK:
-        if getattr(params, "GPU_broadening", False):
-            print("Running Prepare Sim GPU...")
-            ds = prepare_sim_gpu(ds, T_mK=T_mK)
-        else:
-            print("Running Prepare Sim CPU...")
-            ds = tgp.prepare.prepare_sim(ds, T_mK=T_mK)
+        print("Running Prepare Sim CPU (chunked)...")
+        ds = prepare_sim_cpu(ds, T_mK=T_mK)
         
     r = dict(ds.attrs)
     try:
@@ -196,12 +192,8 @@ def analyze_2(
         ds = ds_or_fname
 
     if "T_mK" not in ds.attrs or ds.attrs.get("T_mK") != T_mK:
-        if getattr(params, "GPU_broadening", False):
-            print("Running Prepare Sim GPU...")
-            ds = prepare_sim_gpu(ds, T_mK=T_mK)
-        else:
-            print("Running Prepare Sim CPU...")
-            ds = tgp.prepare.prepare_sim(ds, T_mK=T_mK)
+        print("Running Prepare Sim CPU (chunked)...")
+        ds = prepare_sim_cpu(ds, T_mK=T_mK)
     if B_max is not None:
         sel = ds.B <= B_max
         if sel.sum() <= 1:

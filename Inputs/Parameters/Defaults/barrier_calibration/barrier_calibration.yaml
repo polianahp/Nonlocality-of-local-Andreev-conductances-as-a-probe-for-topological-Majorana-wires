@@ -6,11 +6,19 @@
 
 # Target normal-state differential conductances G_N in units of e^2/h for the 5 cutter gates
 # Each target defines a symmetric operating configuration [G_N, [UL, UR]]
-target_gns: [0.25, 0.35, 0.45, 0.55, 0.65]
 
-# Optional pre-calibrated [[UL, UR], ...] pairs, one per target_gns entry.
-# null -> run the calibration; a list -> use it and skip calibration.
-tgp_barrier_pairs: null
+
+#mainly for testing. determines if SimulationState will do calibration. 
+calibrate_cutters: False
+
+#barriers use for 3w measurement with symmetric barriers. 
+#These will override G_ns in the calibration sweep array that are within +- 0.01 e^2/h
+symmetric_target_gns: [0.25, 0.35, 0.45, 0.55, 0.65, 0.95]
+
+#calibration range for barrier sweep
+sweep_gnmin: 0.01
+sweep_gnmax: 0.85
+sweep_gnres: 0.042
 
 
 # Above-gap bias energy in meV (E > Delta_0) where Andreev reflection is suppressed
@@ -28,3 +36,8 @@ max_iter: 50
 n_mu_points: 15
 mu_min: 0.0
 mu_max: 2.0
+
+# Numerical bracket limits for cutter potential root finding in meV
+# u_min=-5.0 bounds the search to the physical monotonic regime before quantum well turnaround
+u_min: -5.0
+u_max: 6.0
