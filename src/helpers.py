@@ -806,7 +806,7 @@ def get_psiM_density(evals, evecs):
 
 ######### The following function builds the system ########
 
-def build_system(t, mu, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l, barrier_r, Vdisx = None, a = 1):
+def build_system(t, mu, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier_l, barrier_r, Vdisx = None, a = 1, mu_n = 0.0, **kwargs):
     syst = kwant.Builder()
     lat = kwant.lattice.square(a, norbs=4)
 
@@ -952,15 +952,17 @@ def build_system_exact(
     V_z: float,
     alpha: float,
     Ls: int,
-    Ln: int,
-    Lb: int,
-    barrier_l: float,
-    barrier_r: float,
+    Lb: int = 0,
+    barrier_l: float = 0.0,
+    barrier_r: float = 0.0,
+    Ln: int = 0,
+    mu_n: float = 0.0,
     Vdisx: Optional[np.ndarray] = None,
     a: float = 1,
     closed: bool = False,
     mu_leads: Optional[float] = None,
-    eta: float = 0.0
+    eta: float = 0.0,
+    **kwargs
 ):
     """
     Constructs an exact Kwant system with energy-dependent parent-Al self-energy.
@@ -2752,58 +2754,67 @@ def make_dynamic_grid(k_half: int = None):
 
 
 
-def initialize_conductance_dataarray(target_temps, G_n_values, mu_set=None, Vz_set=None, baseline_Gn=None):
+def initialize_conductance_dataarray(
+    target_temps, 
+    G_n_values, 
+    baseline_Gn=None,
+    mu_set=None, 
+    Vz_set=None, 
+    U_swept=None,
+    U_stationary=None
+):
     """Initializes xarray.DataArray conductance barrier sweeps
 
     Dimensions:
-
         - temperature: Temperature in mK
+        - baseline_Gn: Baseline conductance for stationary barrier (if provided)
         - swept_barrier: Active barrier being swept ('left' or 'right')
         - G_n: Barrier sweep coordinate values
         - lead_row: Output/measured contact ('left' or 'right')
         - lead_col: Input/voltage contact ('left' or 'right')
+        - chemical_potential: Chemical potential in meV (if provided)
+        - zeeman_field: Zeeman field in meV (if provided)
     """
     swept_barriers = ["left", "right"]
     leads = ["left", "right"]
 
-    shape = (
-        len(target_temps),
-        len(swept_barriers),
-        len(G_n_values),
-        len(leads),
-        len(leads),
-    )
-
+    dims = ["temperature"]
+    shape = [len(target_temps)]
     coords = {
-        "temperature": target_temps,
-        "swept_barrier": swept_barriers,
-        "G_n": G_n_values,
-        "lead_row": leads,
-        "lead_col": leads,
+        "temperature": np.asarray(target_temps, dtype=float),
     }
 
-    dims = ["temperature", "swept_barrier", "G_n", "lead_row", "lead_col"]
+    if baseline_Gn is not None:
+        dims.append("baseline_Gn")
+        shape.append(len(baseline_Gn))
+        coords["baseline_Gn"] = np.asarray(baseline_Gn, dtype=float)
+
+    dims.extend(["swept_barrier", "G_n", "lead_row", "lead_col"])
+    shape.extend([len(swept_barriers), len(G_n_values), len(leads), len(leads)])
+    coords["swept_barrier"] = swept_barriers
+    coords["G_n"] = np.asarray(G_n_values, dtype=float)
+    coords["lead_row"] = leads
+    coords["lead_col"] = leads
 
     if mu_set is not None and Vz_set is not None: 
-        shape += (len(mu_set), len(Vz_set))
-        coords["chemical_potential"] = mu_set
-        coords["zeeman_field"]       = Vz_set
-        dims.append("chemical_potential")
-        dims.append("zeeman_field")
-        
-    if baseline_Gn is not None:
-        shape += len(baseline_Gn)
-        coords["baseline_Gn"] = baseline_Gn
-        dims.append("baseline_Gn")
-        
+        dims.extend(["chemical_potential", "zeeman_field"])
+        shape.extend([len(mu_set), len(Vz_set)])
+        coords["chemical_potential"] = np.asarray(mu_set, dtype=float)
+        coords["zeeman_field"]       = np.asarray(Vz_set, dtype=float)
+
+    if U_swept is not None:
+        coords["U_swept"] = (["swept_barrier", "G_n"], U_swept)
+    if U_stationary is not None and baseline_Gn is not None:
+        coords["U_stationary"] = (["swept_barrier", "baseline_Gn"], U_stationary)
 
     return xr.DataArray(
-        data=np.zeros(shape, dtype=float),
+        data=np.zeros(tuple(shape), dtype=float),
         coords=coords,
         dims=dims,
-        name="barrier sweep conductance array",
+        name="conductance",
         attrs={"units": "e^2/h", "temperature_units": "mK"},
     )
+
 
 
 def get_workers(n):
@@ -2816,3 +2827,68 @@ def get_workers(n):
             return n
         elif n < 0:
             return max + n
+
+
+def export_legacy_npy_files(output_dir: Path) -> None:
+    """
+    Extracts legacy flat .npy files from saved NetCDF datasets (.nc)
+    for backward compatibility when config.calculation_includes.save_old_data_format is True.
+    """
+    output_dir = Path(output_dir)
+    
+    # 1. Spectra and Topology
+    spectra_path = output_dir / "spectra_and_topology.nc"
+    if spectra_path.exists():
+        ds_spec = xr.open_dataset(spectra_path, engine="h5netcdf")
+        if "energy_0" in ds_spec:
+            np.save(output_dir / "energy_0.npy", ds_spec["energy_0"].values.ravel())
+        if "topological_gap" in ds_spec:
+            np.save(output_dir / "topological_gap.npy", ds_spec["topological_gap"].values.ravel())
+        if "spectrum" in ds_spec:
+            np.save(output_dir / "spectrum_arr.npy", ds_spec["spectrum"].values.reshape(-1, 4))
+        if "weight_localization" in ds_spec:
+            np.save(output_dir / "weight_localization_arr.npy", ds_spec["weight_localization"].values.ravel())
+        if "mzm_separation" in ds_spec:
+            np.save(output_dir / "mzm_separation_arr.npy", ds_spec["mzm_separation"].values.ravel())
+        if "pfaffian_invariant" in ds_spec:
+            mus = ds_spec["chemical_potential"].values
+            vzs = ds_spec["zeeman_field"].values
+            pfaff = ds_spec["pfaffian_invariant"].values
+            pdi_rows = []
+            for mu_val in mus:
+                for vz_val in vzs:
+                    pf_val = pfaff[np.where(mus == mu_val)[0][0], np.where(vzs == vz_val)[0][0]]
+                    pdi_rows.append([mu_val, vz_val, 0, pf_val])
+            np.save(output_dir / "pdi_data.npy", np.array(pdi_rows))
+        ds_spec.close()
+
+    # 2. Real-space Disorder
+    vdis_path = output_dir / "vdisx.nc"
+    if vdis_path.exists():
+        ds_vdis = xr.open_dataset(vdis_path, engine="h5netcdf")
+        if "Vdisx_normalized" in ds_vdis:
+            np.save(output_dir / "Vdisx.npy", ds_vdis["Vdisx_normalized"].values)
+        ds_vdis.close()
+
+    # 3. TGP Stage 1
+    tgp1_path = output_dir / "tgp_stage1.nc"
+    if tgp1_path.exists():
+        ds_s1 = xr.open_dataset(tgp1_path, engine="h5netcdf")
+        if "V_leftcutter" in ds_s1 and "V_rightcutter" in ds_s1:
+            pairs = np.column_stack([ds_s1["V_leftcutter"].values, ds_s1["V_rightcutter"].values])
+            np.save(output_dir / "tgp_barrier_pairs.npy", pairs)
+            np.save(output_dir / "tgp_barrier_arr.npy", ds_s1["V_leftcutter"].values)
+        ds_s1.close()
+
+    # 4. Conductance Sweeps
+    cond_path = output_dir / "conductance_sweeps.nc"
+    if cond_path.exists():
+        ds_cond = xr.open_dataset(cond_path, engine="h5netcdf")
+        if "Gmat" in ds_cond:
+            gmat = ds_cond["Gmat"]
+            t_first = gmat.temperature.values[0]
+            b_first = gmat.baseline_Gn.values[0]
+            gn_first = gmat.G_n.values[0]
+            gmat_slice = gmat.sel(temperature=t_first, baseline_Gn=b_first, swept_barrier="right", G_n=gn_first).values
+            np.save(output_dir / "conductance_matrix.npy", gmat_slice)
+        ds_cond.close()

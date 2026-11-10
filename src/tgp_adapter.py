@@ -10,6 +10,28 @@ class TGPAdapter:
             raise FileNotFoundError(f"Data directory not found: {self.data_dir}")
 
     def to_xarray(self) -> xr.Dataset:
+        # Check if new modular tgp_stage2.nc is present
+        stage2_nc = self.data_dir / "tgp_stage2.nc"
+        if stage2_nc.exists():
+            ds = xr.open_dataset(stage2_nc, engine="h5netcdf")
+            ds = ds.rename({"chemical_potential": "V", "zeeman_field": "B"})
+            if "temperature" in ds.dims:
+                ds = ds.isel(temperature=0, drop=True)
+            
+            disorder_seed = 0
+            import re
+            m = re.search(r"disorder_realization_(\d+)", self.data_dir.name)
+            if m:
+                disorder_seed = int(m.group(1))
+
+            ds.attrs.update(dict(
+                sample_name="simulated_1D_nanowire",
+                surface_charge=0.0,
+                disorder_seed=disorder_seed,
+                geometry_seed=0,
+            ))
+            return ds
+
         params_path = self.data_dir / "all_params.npz"
         if not params_path.exists():
             raise FileNotFoundError(f"Missing parameter file: {params_path}")

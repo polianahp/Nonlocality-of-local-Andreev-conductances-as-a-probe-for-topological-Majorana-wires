@@ -24,13 +24,14 @@ simulation:
     default: "resolution/resolution_test.yaml"
 
 calculation_includes:
-  25_cutter_harmonics: True
-  conductance_flag: True
-  barrier_sweep: True
-  pfaffian: True
   spectra: True
   localization: True
-  pdi_flag: True
+  barrier_sweep: True
+  tgp_stage1: True
+  tgp_stage2: False
+  stage2_fullgrid: False
+  pfaffian: True
+  save_old_data_format: False
 
 
 protocol:

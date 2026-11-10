@@ -1,0 +1,49 @@
+# =============================================================================
+# Canonical Azure Quantum TGP Simulation Parameters
+# Replicating exact values from azure-quantum-tgp on GitHub:
+# - tgp/two.py & notebooks/yield_analysis.py
+# - data/simulated/yield/stage1 & stage2
+# =============================================================================
+
+# --- Stage 0: Electronic Temperatures ---
+T_mK_stage1: 30.0          # Stage 1 electronic temperature (mK)
+T_mK_stage2: 40.0          # Stage 2 electronic temperature (mK)
+
+stage1:
+  num_cutters: 21
+  gn_min: 0.01
+  gn_max: 0.85
+  num_mu_calib_points: 61
+  pairing_seed: 42                # Seed for random without-replacement pairing (asymmetric in general)
+  # Quadrature methods are used because they are significantly faster than dense bias-grid
+  # filtering and converge to the same result with enough nodes. Typically we use 16 nodes
+  # for "legendre" and 51 nodes for "double_exponential".
+  quadrature_method: "legendre"
+  quadrature_nodes: 16
+  th_2w_p: 0.50                   # Fraction of cutter pairs exceeding 2w noise floor
+  th_3w: 1.0e3                    # Curvature threshold (1000.0) for gap-closing detection
+  zbp_cutter_fraction_th: 0.70    # > 70% (>= 15/21 pairs) visible ZBPs required for Stage 1 ROI1
+
+stage2:
+  num_cutters: 5
+  target_gns: [0.35, 0.49, 0.62, 0.76, 0.90]  # Microsoft simulation targets (e^2/h)
+  compensate_per_mu: True                      # Calibrates (U_L(mu), U_R(mu)) at V_z=0 for each unique mu
+  
+  # Bias & Conductance Thresholds (tgp/two.py:extract_gap)
+  bias_window: 0.007                           # Bias window (meV) around zero for ZBP analysis
+  derivative_threshold: 100.0                  # Min magnitude of 2nd derivative of G_loc at zero bias
+  gap_threshold_factor: 0.05                   # G_th = 0.05 * max(G_NL) (for disordered wires n_2D >= 1e12)
+  noise_threshold: 1.0e-4                      # Conductance floor in e^2/h
+  upper_conductance_threshold: null            # null means infinity (no clamping of max|G_NL|)
+  average_over_cutter: False                   # Whether to average ZBP detection across cutters before thresholding (False in MSFT yield_analysis.py)
+
+  # Pixel-Level Gap Filtering (tgp/two.py:set_gap_threshold)
+  threshold_low: 0.005                         # Min extracted gap (5 ueV / 0.005 meV) to be marked gapped
+  threshold_high: 0.067                        # Max extracted gap (0.067 meV) to reject parent gap trivial states
+
+  # Cluster Scoring & Overlap (tgp/two.py:cluster_and_score & notebooks/yield_analysis.py)
+  min_cluster_size: 7                          # Min pixels for OPTICS cluster to be valid
+  cluster_gap_threshold: 0.005                 # Min median gap (5 ueV) across cluster
+  zbp_cutter_fraction_th: 0.60                 # (ZBP%)_th >= 60% (>= 3/5 cutter pairs)
+  gapless_boundary_th: 0.60                    # (GB%)_th >= 60% gapless boundary points
+  cutter_overlap_th: 0.50                      # (C_i%)_th >= 50% (>= 3/5 cutters) with overlapping SOI2

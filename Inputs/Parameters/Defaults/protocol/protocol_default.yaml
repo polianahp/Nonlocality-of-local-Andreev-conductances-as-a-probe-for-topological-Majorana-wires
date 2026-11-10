@@ -98,3 +98,8 @@ selected_cutter: 0         # Cutter pair index used for single-cutter visualizat
 selected_clusters: []      # List of selected cluster numbers for ROI inspection.
 B_FIXED: 1.18              # Fixed Zeeman field coordinate for crosshair slices (x-axis).
 V_FIXED: 2.85              # Fixed chemical potential coordinate for crosshair slices (y-axis).
+
+# --- TGP Subsections ---
+tgp:
+  default: protocol/tgp_default.yaml
+

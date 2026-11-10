@@ -15,8 +15,8 @@ from src.config import PathConfigs
 def get_default_test_configs():
     """Loads canonical default configurations for barrier calibration tests."""
     defaults_dir = PathConfigs.PARAMETERS / "Defaults"
-    calib_cfg = OmegaConf.load(defaults_dir / "barrier_calibration.yaml")
-    geom_cfg = OmegaConf.load(defaults_dir / "InAs-3micron.yaml")
+    calib_cfg = OmegaConf.load(defaults_dir / "barrier_calibration" / "barrier_calibration.yaml")
+    geom_cfg = OmegaConf.load(defaults_dir / "geometry" / "InAs-3micron.yaml")
     return calib_cfg, geom_cfg
 
 
@@ -113,7 +113,8 @@ def test_target_conductance_inversion():
             Vdisx=Vdisx,
             t=t,
             alpha=alpha,
-            mu_leads=mu_leads
+            mu_leads=mu_leads,
+            mu_points=mu_points,
         )
         u_l, u_r = pair[0], pair[1]
 
@@ -147,20 +148,23 @@ def test_calibrate_wire_cutters_table_structure():
     mu_leads = t
     Vdisx = np.zeros(geom_cfg.Ls)
 
+    mu_points = np.linspace(calib_cfg.mu_min, calib_cfg.mu_max, calib_cfg.n_mu_points)
     table = bc.calibrate_wire_cutters(
+        targets=calib_cfg.target_gns,
         calibration_cfg=calib_cfg,
         geometry_cfg=geom_cfg,
         Vdisx=Vdisx,
         t=t,
         alpha=alpha,
-        mu_leads=mu_leads
+        mu_leads=mu_leads,
+        mu_points=mu_points,
     )
 
-    assert len(table) == 2
-    assert table[0][0] == 0.35
-    assert len(table[0][1]) == 2
-    assert table[1][0] == 0.90
-    assert len(table[1][1]) == 2
+    assert len(table.G_n) == 2
+    assert np.isclose(table.G_n.values[0], 0.35)
+    assert np.isclose(table.G_n.values[1], 0.90)
+    assert "side" in table.dims
+    assert len(table.side) == 2
 
 
 def test_clean_wire_analytical_transfer_matrix():
@@ -222,10 +226,12 @@ def test_topological_quantization_zero_bias():
     V_z_topo = 0.6
     Vdisx_fast = np.zeros(geom_cfg_fast.Ls)
     
+    mu_points = [mu]
     u_c = bc.calibrate_single_barrier(
         target_gn=0.5, side='left',
         calibration_cfg=calib_cfg, geometry_cfg=geom_cfg_fast,
-        Vdisx=Vdisx_fast, t=t, alpha=alpha, mu_leads=mu_leads
+        Vdisx=Vdisx_fast, t=t, alpha=alpha, mu_leads=mu_leads,
+        mu_points=mu_points,
     )
     
     # Positive control: Topological state on Ls=300 (V_z = 0.6)
@@ -258,13 +264,16 @@ def test_error_handling():
     mu_leads = t
     Vdisx = np.zeros(geom_cfg.Ls)
     
+    mu_points = np.linspace(calib_cfg.mu_min, calib_cfg.mu_max, calib_cfg.n_mu_points)
+
     # 1. Unreachable / physical bounds
     for invalid_target in [-0.5, 2.5]:
         with pytest.raises(ValueError, match="out of physical bounds"):
             bc.calibrate_symmetric_pair(
                 target_gn=invalid_target,
                 calibration_cfg=calib_cfg, geometry_cfg=geom_cfg,
-                Vdisx=Vdisx, t=t, alpha=alpha, mu_leads=mu_leads
+                Vdisx=Vdisx, t=t, alpha=alpha, mu_leads=mu_leads,
+                mu_points=mu_points,
             )
 
     # 2. Inverted bracket
@@ -275,7 +284,8 @@ def test_error_handling():
         bc.calibrate_symmetric_pair(
             target_gn=0.5,
             calibration_cfg=calib_inverted, geometry_cfg=geom_cfg,
-            Vdisx=Vdisx, t=t, alpha=alpha, mu_leads=mu_leads
+            Vdisx=Vdisx, t=t, alpha=alpha, mu_leads=mu_leads,
+            mu_points=mu_points,
         )
 
     # 3. Invalid side
@@ -283,7 +293,8 @@ def test_error_handling():
         bc.calibrate_single_barrier(
             target_gn=0.5, side='center',
             calibration_cfg=calib_cfg, geometry_cfg=geom_cfg,
-            Vdisx=Vdisx, t=t, alpha=alpha, mu_leads=mu_leads
+            Vdisx=Vdisx, t=t, alpha=alpha, mu_leads=mu_leads,
+            mu_points=mu_points,
         )
 
     # 4. Vdisx length mismatch

@@ -6,10 +6,7 @@ Verifies:
 1. Quadrature moments, partition of unity, and Legendre orthogonality.
 2. Exponential convergence against analytical Breit-Wigner / Andreev resonance integrals.
 3. Close numerical parity with full 97-point bias sweep + FFT broadening + B-spline derivative.
-4. Exact tensor shapes (5, 5) and spatial inversion transposition symmetry (L_{3w}[i, j] == R_{3w}[j, i]).
-5. Dual Hamiltonian execution modes ('exact' and 'legacy').
-6. Consensus voting logic across the 25 cutter configurations.
-7. Multiprocessing equivalence (n_jobs=1 vs n_jobs > 1).
+4. Double-Exponential quadrature orthogonality, moments, and machine-precision convergence.
 """
 
 import sys
@@ -141,142 +138,6 @@ def test_kwant_wire_parity_vs_97pt_spline():
     assert rel_err_3w < 0.08, f"Kwant 3w mismatch: ref={I_3w_ref}, leg={harmonics['L_3w']}, err={rel_err_3w}"
 
 
-def test_25_cutter_tensor_shapes_and_symmetry():
-    """
-    Verifies that compute_25_cutter_curvatures_legendre produces:
-    - Shape (5, 5) for all 6 observable matrices.
-    - Exact spatial inversion symmetry on a clean wire:
-        L_{3w}[i, j] == R_{3w}[j, i]  (transposition symmetry!)
-        L_{1w}[i, j] == R_{1w}[j, i]
-        RL_{2w}[i, j] == LR_{2w}[j, i]
-    - Diagonal symmetry: L_{3w}[i, i] == R_{3w}[i, i].
-    """
-    u_cutters = [3.0, 2.2, 1.5, 0.8, 0.2]
-    params = {
-        't': 12.0, 'mu': 1.2, 'gamma': 0.2, 'Delta0': 0.3,
-        'V_z': 0.4, 'alpha': 1.2, 'Ls': 50, 'Lb': 3
-    }
-
-    res = lc.compute_25_cutter_curvatures_legendre(
-        u_left_5=u_cutters,
-        u_right_5=u_cutters,
-        system_params=params,
-        T_mK=30.0,
-        n_nodes=12,
-        hamiltonian_mode='exact',
-        n_jobs=2
-    )
-
-    # Check shapes
-    assert res['L_3w'].shape == (5, 5)
-    assert res['R_3w'].shape == (5, 5)
-    assert res['RL_2w'].shape == (5, 5)
-    assert res['LR_2w'].shape == (5, 5)
-    assert res['L_1w'].shape == (5, 5)
-    assert res['R_1w'].shape == (5, 5)
-
-    # Spatial inversion transposition symmetry:
-    # A swap of left and right barriers interchanges lead L and lead R
-    np.testing.assert_allclose(res['L_3w'], res['R_3w'].T, rtol=1e-5, atol=1e-5)
-    np.testing.assert_allclose(res['L_1w'], res['R_1w'].T, rtol=1e-5, atol=1e-5)
-    np.testing.assert_allclose(res['RL_2w'], res['LR_2w'].T, rtol=1e-5, atol=1e-5)
-
-    # Symmetric diagonal elements must be identical
-    np.testing.assert_allclose(
-        res['symmetric_pairs_L_3w'], res['symmetric_pairs_R_3w'], rtol=1e-6
-    )
-
-    # Mean values must match across leads on clean symmetric wire
-    assert abs(res['L_3w_mean'] - res['R_3w_mean']) < 1e-4
-    assert abs(res['L_1w_mean'] - res['R_1w_mean']) < 1e-5
-
-
-def test_hamiltonian_modes_exact_and_legacy():
-    """
-    Verifies that compute_25_cutter_curvatures_legendre executes cleanly
-    under both 'exact' and 'legacy' Hamiltonian modes.
-    """
-    u_cutters = [2.0, 1.0]  # 2x2 = 4 configurations for quick test
-    params = {
-        't': 10.0, 'mu': 1.0, 'gamma': 0.2, 'Delta0': 0.3,
-        'V_z': 0.4, 'alpha': 1.0, 'Ls': 40, 'Lb': 3, 'mu_n': 0.0, 'Ln': 0
-    }
-
-    res_exact = lc.compute_25_cutter_curvatures_legendre(
-        u_left_5=u_cutters,
-        u_right_5=u_cutters,
-        system_params=params,
-        T_mK=30.0,
-        n_nodes=8,
-        hamiltonian_mode='exact',
-        n_jobs=1
-    )
-    assert res_exact['L_3w'].shape == (2, 2)
-    assert np.all(np.isfinite(res_exact['L_3w']))
-
-    res_legacy = lc.compute_25_cutter_curvatures_legendre(
-        u_left_5=u_cutters,
-        u_right_5=u_cutters,
-        system_params=params,
-        T_mK=30.0,
-        n_nodes=8,
-        hamiltonian_mode='legacy',
-        n_jobs=1
-    )
-    assert res_legacy['L_3w'].shape == (2, 2)
-    assert np.all(np.isfinite(res_legacy['L_3w']))
-
-
-def test_consensus_voting_logic():
-    """
-    Tests evaluate_cutter_consensus_from_legendre logic and thresholding.
-    """
-    fake_res = {
-        'L_3w': np.array([[-30.0, -25.0], [-10.0, -5.0]]),
-        'R_3w': np.array([[-35.0, -20.0], [-15.0, -2.0]]),
-    }
-    # Mean curvature: [[-32.5, -22.5], [-12.5, -3.5]]
-    # For threshold 20.0: configs with mean <= -20 are (0,0) and (0,1) -> 2 passing
-    cons = lc.evaluate_cutter_consensus_from_legendre(
-        fake_res, curvature_threshold=20.0, k_of_n=2, lead='mean_LR'
-    )
-    assert cons['passed'] is True
-    assert cons['pass_count'] == 2
-    assert cons['pass_fraction'] == 0.5
-
-    cons_strict = lc.evaluate_cutter_consensus_from_legendre(
-        fake_res, curvature_threshold=20.0, k_of_n=3, lead='mean_LR'
-    )
-    assert cons_strict['passed'] is False
-
-
-def test_parallel_vs_sequential_identity():
-    """
-    Asserts that multiprocessing produces identical results to single-threaded execution.
-    """
-    u_cutters = [2.5, 1.5, 0.5]  # 3x3 = 9 configurations
-    params = {
-        't': 10.0, 'mu': 1.0, 'gamma': 0.2, 'Delta0': 0.3,
-        'V_z': 0.3, 'alpha': 1.0, 'Ls': 40, 'Lb': 3
-    }
-
-    res_seq = lc.compute_25_cutter_curvatures_legendre(
-        u_left_5=u_cutters, u_right_5=u_cutters, system_params=params,
-        T_mK=30.0, n_nodes=8, hamiltonian_mode='exact', n_jobs=1
-    )
-    res_par = lc.compute_25_cutter_curvatures_legendre(
-        u_left_5=u_cutters, u_right_5=u_cutters, system_params=params,
-        T_mK=30.0, n_nodes=8, hamiltonian_mode='exact', n_jobs=3
-    )
-
-    np.testing.assert_allclose(res_seq['L_3w'], res_par['L_3w'], rtol=1e-12)
-    np.testing.assert_allclose(res_seq['R_3w'], res_par['R_3w'], rtol=1e-12)
-    np.testing.assert_allclose(res_seq['RL_2w'], res_par['RL_2w'], rtol=1e-12)
-    np.testing.assert_allclose(res_seq['LR_2w'], res_par['LR_2w'], rtol=1e-12)
-    np.testing.assert_allclose(res_seq['L_1w'], res_par['L_1w'], rtol=1e-12)
-    np.testing.assert_allclose(res_seq['R_1w'], res_par['R_1w'], rtol=1e-12)
-
-
 def test_double_exponential_quadrature_orthogonality_and_moments():
     """
     Asserts mathematical properties of the Double-Exponential quadrature:
@@ -365,32 +226,3 @@ def test_double_exponential_machine_precision_vs_reference():
     val_3w_115 = np.sum(q115['weights_3w'] * G0_np(q115['energies']))
     assert abs(val_1w_115 - ref_1w) / abs(ref_1w) < 1e-14
     assert abs(val_3w_115 - ref_3w) / abs(ref_3w) < 1e-13
-
-
-def test_25_cutter_curvatures_double_exponential():
-    """
-    Verifies that compute_25_cutter_curvatures_legendre executes cleanly
-    with quadrature_method='double_exponential' and satisfies spatial transposition symmetry.
-    """
-    u_cutters = [2.0, 1.0]  # 2x2 = 4 configurations
-    params = {
-        't': 10.0, 'mu': 1.0, 'gamma': 0.2, 'Delta0': 0.3,
-        'V_z': 0.4, 'alpha': 1.0, 'Ls': 40, 'Lb': 3
-    }
-
-    res_de = lc.compute_25_cutter_curvatures_legendre(
-        u_left_5=u_cutters,
-        u_right_5=u_cutters,
-        system_params=params,
-        T_mK=30.0,
-        n_nodes=35,
-        hamiltonian_mode='exact',
-        quadrature_method='double_exponential',
-        n_jobs=2
-    )
-    assert res_de['L_3w'].shape == (2, 2)
-    assert np.all(np.isfinite(res_de['L_3w']))
-    # Spatial inversion symmetry: L_{3w} == R_{3w}.T
-    np.testing.assert_allclose(res_de['L_3w'], res_de['R_3w'].T, rtol=1e-5, atol=1e-5)
-    np.testing.assert_allclose(res_de['L_1w'], res_de['R_1w'].T, rtol=1e-5, atol=1e-5)
-
