@@ -40,5 +40,5 @@ mu_max: 2.0
 
 # Numerical bracket limits for cutter potential root finding in meV
 # [-20.0, 35.0] spans the disorder-shifted open-barrier peak regime to pinch-off
-u_min: -20.0
-u_max: 35.0
+u_min: -50
+u_max: 50.0

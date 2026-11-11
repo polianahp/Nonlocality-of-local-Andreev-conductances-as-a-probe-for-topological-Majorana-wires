@@ -11,11 +11,11 @@ asym_max: 5.0
 
 mu_max: 4.5
 mu_min: 0.0
-mu_dist: 0.2
+mu_dist: 0.4
 
 Vz_max: 1.4
 Vz_min: 0.0
-Vz_dist: 0.2
+Vz_dist: 0.4
 
 num_engs: 10
 num_eigenvalues: 12

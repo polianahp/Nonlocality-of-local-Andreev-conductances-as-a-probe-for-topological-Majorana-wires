@@ -31,7 +31,9 @@ from src.tgp_adapter import TGPAdapter
 @pytest.fixture(scope="module")
 def setup_micro_env():
     """Initializes a fast 1-point SimulationState for pipeline verification."""
-    cfg = ConfigManager.initialize("test_micro_iteration.yaml")
+    from src.parameter_handler import PathConfigs
+    cfg_name = "Archive/test_micro_iteration.yaml" if (PathConfigs.PARAMETERS / "Archive/test_micro_iteration.yaml").exists() else "test_micro_iteration.yaml"
+    cfg = ConfigManager.initialize(cfg_name)
     state = SimulationState(cfg)
     return cfg, state
 

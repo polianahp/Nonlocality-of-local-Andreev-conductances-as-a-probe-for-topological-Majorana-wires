@@ -36,3 +36,5 @@ calculation_includes:
 
 protocol:
   default: "protocol/protocol_default.yaml"
+  tgp:
+    default: "protocol/tgp_default.yaml"
