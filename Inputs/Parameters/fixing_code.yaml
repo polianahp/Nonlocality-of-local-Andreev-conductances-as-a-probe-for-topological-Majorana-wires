@@ -12,7 +12,7 @@ simulation:
     is_real_space: False #if not real space, data array at disorder_dirname is a set of fourier components
     disorder_fpath: Fourier_Component_Disorders/fourier_disorder_2.npy
     lambda_dis: 4.5
-    V0: 1.2
+    V0: 0.87
     
   geometry:
     default: "geometry/InAs-3micron.yaml"

@@ -207,7 +207,7 @@ class SimulationState:
         pool = mp.Pool(processes=int(calib_workers)) if need_calib_pool else None
 
         try:
-            # Barrier sweeps calibration (injected pool parallelizes over default_mu_pts inside calibrate_single_barrier)
+            # Barrier sweeps calibration (pool parallelizes over default_mu_pts inside calibrate_single_barrier)
             if calib.calibrate_cutters:
                 print(f"--- Running Simultaneous Cutter Barrier Calibration for targets: {self.target_GNs} ---")
                 self.calibrated_cutters = bc.calibrate_wire_cutters(
@@ -223,7 +223,9 @@ class SimulationState:
                 )
                 print(f"Calibrated Symmetric Cutter Pairs [G_N, [UL, UR]]:\n{self.calibrated_cutters}")
             else:
-                self.calibrated_cutters = None
+                raise ValueError("Cutters have to be calibrated!")
+
+            
             self.calibrated_barriers = self.calibrated_cutters
             self.target_gns = self.target_GNs
 

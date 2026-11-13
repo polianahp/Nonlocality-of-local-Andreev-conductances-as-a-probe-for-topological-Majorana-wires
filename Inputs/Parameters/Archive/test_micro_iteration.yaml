@@ -34,7 +34,7 @@ simulation:
 calculation_includes:
   spectra: True
   localization: True
-  barrier_sweep: False
+  barrier_sweep: True
   tgp_stage1: True
   tgp_stage2: True
   stage2_fullgrid: True

@@ -9,7 +9,7 @@
 
 
 #mainly for testing. determines if SimulationState will do calibration. 
-calibrate_cutters: False
+calibrate_cutters: True
 
 # barriers used for 3w measurement with symmetric barriers (Microsoft azure-quantum-tgp 5 cutters)
 # These will override G_ns in the calibration sweep array that are within +- 0.01 e^2/h

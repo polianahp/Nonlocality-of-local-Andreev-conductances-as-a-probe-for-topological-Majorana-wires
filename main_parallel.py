@@ -107,7 +107,6 @@ def compute_barrier_sweep_slice(
         target_temps=target_temps,
         G_n_values=state.target_GNs,
         baseline_Gn=state.baseline_GNs,
-        calibrated_cutters=state.calibrated_cutters,
     )
 
     t = state.t
