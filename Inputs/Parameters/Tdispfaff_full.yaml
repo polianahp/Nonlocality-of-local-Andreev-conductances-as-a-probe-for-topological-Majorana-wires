@@ -1,0 +1,44 @@
+# ==============================================================================
+# Inputs/Parameters/Tdispfaff_full.yaml
+# Full Production Simulation for Tdispfaff Nanowire (15,750 grid points)
+# Real-Space Tdis Disorder at V0 = 1.2 meV
+# ==============================================================================
+
+acceleration_type: "parallel"
+num_workers: -1
+hamiltonian_mode: "legacy"
+
+outputs:
+  dirname: "Tdispfaff_full"
+
+simulation:
+  disorder:
+    is_real_space: True
+    disorder_fpath: "New_Disorders/Tdis.npz"
+    lambda_dis: null
+    V0: 1.2
+
+  geometry:
+    default: "geometry/InAs-3micron.yaml"
+
+  barrier_calibration:
+    default: "barrier_calibration/barrier_calibration.yaml"
+    calibrate_cutters: True
+
+  resolution:
+    default: "resolution/resolution_default.yaml"
+
+calculation_includes:
+  spectra: True
+  localization: True
+  barrier_sweep: True
+  tgp_stage1: True
+  tgp_stage2: True
+  stage2_fullgrid: True
+  pfaffian: True
+  save_old_data_format: False
+
+protocol:
+  default: "protocol/protocol_default.yaml"
+  tgp:
+    default: "protocol/tgp_default.yaml"
