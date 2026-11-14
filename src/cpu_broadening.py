@@ -11,12 +11,11 @@ from typing import Dict, Tuple, Optional
 import numpy as np
 import scipy.signal
 from scipy.interpolate import splrep, splev
-from scipy.constants import physical_constants
 import xarray as xr
 import tgp.prepare
 
 
-_BROADEN_OP_CACHE: Dict[Tuple[int, float], np.ndarray] = {}
+_BROADEN_OP_CACHE: Dict[Tuple[int, float, float], np.ndarray] = {}
 _SPLINE_WEIGHTS_CACHE: Dict[int, Tuple[np.ndarray, np.ndarray]] = {}
 
 
@@ -41,20 +40,20 @@ def _get_interp1d_weights(x_src: np.ndarray, x_dest: np.ndarray) -> Tuple[np.nda
     return idx, frac
 
 
-def get_broaden_operator(bias: np.ndarray, T_mK: float) -> np.ndarray:
+def get_broaden_operator(bias: np.ndarray, T_mK: float, k_B: float) -> np.ndarray:
     """
     Constructs the exact (N_bias, N_bias) linear transformation matrix M_broaden such that:
         G_broadened = G_raw @ M_broaden
     matches tgp.prepare.broaden_with_temperature to machine precision (~1e-14).
-    Caches operator by (len(bias), round(T_mK, 4)).
+    Caches operator by (len(bias), round(T_mK, 4), float(k_B)).
     """
     n_b = len(bias)
-    cache_key = (n_b, round(float(T_mK), 4))
+    k_B_val = float(k_B)
+    cache_key = (n_b, round(float(T_mK), 4), k_B_val)
     if cache_key in _BROADEN_OP_CACHE:
         return _BROADEN_OP_CACHE[cache_key]
 
-    k_B = physical_constants["Boltzmann constant in eV/K"][0]
-    T_meV = k_B * (float(T_mK) * 1e-3) * 1e3
+    T_meV = k_B_val * float(T_mK)
 
     if T_meV <= 0.0:
         M = np.eye(n_b, dtype=np.float64)
@@ -128,6 +127,7 @@ def add_2w_3w_fast(ds: xr.Dataset, bias_name: str = "bias") -> None:
 def broaden_with_temperature_cpu(
     ds: xr.Dataset,
     T_mK: float,
+    k_B: float,
     bias_name: str = "bias",
     keys: tuple = ("g_ll", "g_lr", "g_rl", "g_rr"),
     chunk_size: int = 5000,
@@ -146,7 +146,7 @@ def broaden_with_temperature_cpu(
         return ds_out
 
     bias = ds[bias_name].values
-    M_broaden = get_broaden_operator(bias, T_mK)
+    M_broaden = get_broaden_operator(bias, T_mK, k_B=k_B)
 
     ds_out = ds.copy()
     data_vars = {}
@@ -184,6 +184,7 @@ def broaden_with_temperature_cpu(
 def prepare_sim_cpu(
     ds_raw: xr.Dataset,
     T_mK: float = 30.0,
+    k_B: float = None,
     chunk_size: int = 5000,
     fast_derivatives: bool = True
 ) -> xr.Dataset:
@@ -191,12 +192,14 @@ def prepare_sim_cpu(
     Wrapper for TGP prepare_sim using memory-efficient CPU chunked thermal broadening
     and ultra-fast vectorized linear spline derivatives.
     """
+    if k_B is None:
+        raise ValueError("k_B must be provided explicitly from physical_constants.yaml")
     try:
         ds = tgp.prepare.rename(ds_raw)
     except Exception:
         ds = ds_raw.copy()
 
-    ds = broaden_with_temperature_cpu(ds, T_mK, chunk_size=chunk_size)
+    ds = broaden_with_temperature_cpu(ds, T_mK, k_B=k_B, chunk_size=chunk_size)
     ds.attrs["T_mK"] = T_mK
 
     if fast_derivatives:

@@ -16,6 +16,7 @@ simulation:
   
   barrier_calibration:
     default: "barrier_calibration/barrier_calibration.yaml"
+    n_mu_points: 5
 
   resolution:
     mu_min: 1.0

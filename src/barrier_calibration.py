@@ -9,10 +9,14 @@ Each cutter gate is tuned individually to achieve target G_N.
 
 from typing import List, Tuple, Any, Optional, Union
 import numpy as np
-from scipy.optimize import brentq
+from scipy.optimize import brentq, minimize_scalar
 from omegaconf import DictConfig
 import xarray as xr
 import src.helpers as hp
+
+
+class UnhealthyWireError(RuntimeError):
+    """Raised when a nanowire fails to pinch off below pinch_off_tol at U = u_max."""
 
 
 def calculate_junction_conductances(
@@ -120,24 +124,43 @@ def _eval_median_conductance(
     return float(np.median(g_vals))
 
 
-def _build_coarse_u_grid(u_min: float, u_max: float) -> np.ndarray:
+def check_wire_health(
+    calibration_cfg: DictConfig,
+    geometry_cfg: DictConfig,
+    Vdisx: np.ndarray,
+    t: float,
+    alpha: float,
+    mu_leads: float,
+    mu_points: Union[List[float], np.ndarray],
+    pool: Optional[Any] = None,
+) -> Tuple[float, float]:
     """
-    Builds a coarse barrier potential grid spanning [u_min, u_max] to locate the
-    disorder-dependent maximum conductance peak U_peak and bracket the pinch-off branch.
+    Pre-health check at the pinch-off limit U = u_max.
+
+    Evaluates median junction conductances on both left and right junctions.
+    Raises UnhealthyWireError if either junction exceeds pinch_off_tol.
     """
-    base_candidates = np.array(
-        [-20.0, -16.0, -12.0, -9.0, -6.5, -4.5, -3.0, -1.5, 0.0, 1.5, 3.5, 6.0, 10.0, 18.0, 35.0],
-        dtype=float,
+    u_pinch = float(calibration_cfg.u_max)
+    pinch_tol = float(calibration_cfg.pinch_off_tol)
+
+    g_left = _eval_median_conductance(
+        u_pinch, "left", calibration_cfg, geometry_cfg,
+        Vdisx, t, alpha, mu_leads, mu_points, pool=pool,
     )
-    interior = base_candidates[(base_candidates > u_min) & (base_candidates < u_max)]
-    grid = np.unique(np.concatenate([[float(u_min)], interior, [float(u_max)]]))
-    if len(grid) < 5:
-        grid = np.linspace(float(u_min), float(u_max), 7)
-    return grid
+    g_right = _eval_median_conductance(
+        u_pinch, "right", calibration_cfg, geometry_cfg,
+        Vdisx, t, alpha, mu_leads, mu_points, pool=pool,
+    )
+
+    if g_left > pinch_tol or g_right > pinch_tol:
+        raise UnhealthyWireError(
+            f"Unhealthy wire at pinch-off U={u_pinch:.2f} meV: "
+            f"G_left={g_left:.3e}, G_right={g_right:.3e} > tol={pinch_tol:.3e}"
+        )
+    return g_left, g_right
 
 
-def calibrate_single_barrier(
-    target_gn: float,
+def _find_conductance_top(
     side: str,
     calibration_cfg: DictConfig,
     geometry_cfg: DictConfig,
@@ -147,113 +170,52 @@ def calibrate_single_barrier(
     mu_leads: float,
     mu_points: Union[List[float], np.ndarray],
     pool: Optional[Any] = None,
-    precomputed_sweep: Optional[Tuple[np.ndarray, np.ndarray]] = None,
-) -> float:
+) -> Tuple[float, float]:
     """
-    Calibrates a single junction gate ('left' or 'right') individually to achieve
-    target normal conductance G_N (median over chemical potentials mu_points).
+    Locates the open-barrier conductance peak (U_top, G_max) by stepping inward
+    from peak_search_start_u (repulsive side) via scipy.optimize.minimize_scalar(method='brent').
     """
     if side not in ("left", "right"):
-        raise ValueError(f"side must be 'left' or 'right', got '{side}'")
+        raise ValueError(f"side must be 'left' or 'right', got {side!r}")
 
-    if target_gn <= 0.0 or target_gn >= 2.0:
-        raise ValueError(f"Target G_N = {target_gn} out of physical bounds (0, 2) e^2/h")
+    start_u = float(calibration_cfg.peak_search_start_u)
+    step = float(calibration_cfg.peak_search_step)
+    u_lo_limit = float(calibration_cfg.u_min)
+    u_hi_limit = float(calibration_cfg.u_max)
 
-    u_min = float(calibration_cfg.u_min)
-    u_max = float(calibration_cfg.u_max)
-    tol = float(calibration_cfg.tol)
-    max_iter = int(calibration_cfg.max_iter)
-
-    if u_min >= u_max:
-        raise ValueError(f"u_min must be strictly less than u_max: u_min={u_min}, u_max={u_max}")
-
-    if precomputed_sweep is not None:
-        u_coarse, g_coarse = precomputed_sweep
-    else:
-        u_coarse = _build_coarse_u_grid(u_min, u_max)
-        g_coarse = np.array([
-            _eval_median_conductance(
-                u_val=u_c,
-                side=side,
-                calibration_cfg=calibration_cfg,
-                geometry_cfg=geometry_cfg,
-                Vdisx=Vdisx,
-                t=t,
-                alpha=alpha,
-                mu_leads=mu_leads,
-                mu_points=mu_points,
-                pool=pool,
-            )
-            for u_c in u_coarse
-        ])
-
-    # Locate the disorder-dependent global conductance peak across [u_min, u_max]
-    idx_peak = int(np.argmax(g_coarse))
-    u_peak = float(u_coarse[idx_peak])
-    g_max = float(g_coarse[idx_peak])
-    f_peak = g_max - target_gn
-
-    if f_peak <= 0.0:
-        raise ValueError(
-            f"Target G_N={target_gn} cannot be bracketed on {side} junction in [{u_min}, {u_max}]: "
-            f"maximum conductance across sweep is G_max={g_max:.4f} at U={u_peak:.2f} meV (f={f_peak:+.4f})."
+    def obj(u_val: float) -> float:
+        u_f = float(u_val)
+        if u_f < u_lo_limit:
+            return 1e6 + (u_lo_limit - u_f)
+        if u_f > u_hi_limit:
+            return 1e6 + (u_f - u_hi_limit)
+        return -_eval_median_conductance(
+            u_f, side, calibration_cfg, geometry_cfg,
+            Vdisx, t, alpha, mu_leads, mu_points, pool=pool,
         )
 
-    # Restrict to the monotonic repulsive pinch-off branch U >= U_peak
-    u_mon = u_coarse[idx_peak:]
-    g_mon = g_coarse[idx_peak:]
-    f_mon = g_mon - target_gn
+    res = minimize_scalar(
+        obj,
+        bracket=(start_u, start_u - step),
+        method="brent",
+        options={"xtol": float(calibration_cfg.tol)},
+    )
+    if not res.success:
+        raise RuntimeError(f"Peak search failed for side={side!r}: {res.message}")
 
-    if f_mon[-1] >= 0.0:
-        raise ValueError(
-            f"Target G_N={target_gn} cannot be bracketed on {side} junction in [{u_min}, {u_max}]: "
-            f"junction does not pinch off sufficiently at u_max={u_max} (f={f_mon[-1]:+.4f})."
-        )
-
-    # Select tightest adjacent bracket [u_left_bracket, u_right_bracket] on U >= U_peak
-    below_indices = np.where(f_mon < 0.0)[0]
-    first_below = int(below_indices[0])
-    last_above = max(0, first_below - 1)
-
-    u_left_bracket = float(u_mon[last_above])
-    u_right_bracket = float(u_mon[first_below])
-    f_left = float(f_mon[last_above])
-    f_right = float(f_mon[first_below])
-
-    if np.isclose(f_left, 0.0, atol=1e-12):
-        return u_left_bracket
-
-    eval_cache = {
-        u_left_bracket: f_left,
-        u_right_bracket: f_right,
-    }
-
-    def objective(u_val: float) -> float:
-        u_key = float(u_val)
-        if u_key in eval_cache:
-            return eval_cache[u_key]
-        g_med = _eval_median_conductance(
-            u_val=u_key,
-            side=side,
-            calibration_cfg=calibration_cfg,
-            geometry_cfg=geometry_cfg,
-            Vdisx=Vdisx,
-            t=t,
-            alpha=alpha,
-            mu_leads=mu_leads,
-            mu_points=mu_points,
-            pool=pool,
-        )
-        val = float(g_med - target_gn)
-        eval_cache[u_key] = val
-        return val
-
-    u_star = brentq(objective, u_left_bracket, u_right_bracket, xtol=tol, maxiter=max_iter)
-    return float(u_star)
+    u_top = float(np.clip(res.x, u_lo_limit, u_hi_limit))
+    g_max = _eval_median_conductance(
+        u_top, side, calibration_cfg, geometry_cfg,
+        Vdisx, t, alpha, mu_leads, mu_points, pool=pool,
+    )
+    return u_top, g_max
 
 
-def calibrate_symmetric_pair(
+def _solve_repulsive_barrier(
     target_gn: float,
+    side: str,
+    u_top: float,
+    g_max: float,
     calibration_cfg: DictConfig,
     geometry_cfg: DictConfig,
     Vdisx: np.ndarray,
@@ -262,46 +224,49 @@ def calibrate_symmetric_pair(
     mu_leads: float,
     mu_points: Union[List[float], np.ndarray],
     pool: Optional[Any] = None,
-    precomputed_left_sweep: Optional[Tuple[np.ndarray, np.ndarray]] = None,
-    precomputed_right_sweep: Optional[Tuple[np.ndarray, np.ndarray]] = None,
-) -> List[float]:
+) -> float:
     """
-    Calibrates the left and right cutter gates individually to each yield target G_N.
+    Solves G(U) = target_gn on the monotonic repulsive branch [u_top, u_max].
     """
-    if target_gn <= 0.0 or target_gn >= 2.0:
-        raise ValueError(f"Target G_N = {target_gn} out of physical bounds (0, 2) e^2/h")
+    u_max = float(calibration_cfg.u_max)
+    if u_top >= u_max:
+        raise ValueError(f"u_top ({u_top}) must be strictly less than u_max ({u_max})")
+    if target_gn <= 0.0 or target_gn > g_max + 1e-4:
+        raise ValueError(
+            f"Target G_N={target_gn:.4f} on side={side!r} is outside reachable "
+            f"repulsive range (0, {g_max:.4f}]"
+        )
 
-    u_l = calibrate_single_barrier(
-        target_gn=target_gn,
-        side="left",
-        calibration_cfg=calibration_cfg,
-        geometry_cfg=geometry_cfg,
-        Vdisx=Vdisx,
-        t=t,
-        alpha=alpha,
-        mu_leads=mu_leads,
-        mu_points=mu_points,
-        pool=pool,
-        precomputed_sweep=precomputed_left_sweep,
+    def objective(u_val: float) -> float:
+        return _eval_median_conductance(
+            u_val, side, calibration_cfg, geometry_cfg,
+            Vdisx, t, alpha, mu_leads, mu_points, pool=pool,
+        ) - target_gn
+
+    f_lo = objective(u_top)
+    if -1e-4 <= f_lo < 0.0:
+        return float(u_top)
+
+    f_hi = objective(u_max)
+    if f_lo * f_hi > 0.0:
+        raise ValueError(
+            f"Root not bracketed on [{u_top:.3f}, {u_max:.3f}] for side={side!r}, "
+            f"target={target_gn:.4f}: f(u_top)={f_lo:.4e}, f(u_max)={f_hi:.4e}"
+        )
+
+    return float(
+        brentq(
+            objective,
+            u_top,
+            u_max,
+            xtol=float(calibration_cfg.tol),
+            maxiter=int(calibration_cfg.max_iter),
+        )
     )
-    u_r = calibrate_single_barrier(
-        target_gn=target_gn,
-        side="right",
-        calibration_cfg=calibration_cfg,
-        geometry_cfg=geometry_cfg,
-        Vdisx=Vdisx,
-        t=t,
-        alpha=alpha,
-        mu_leads=mu_leads,
-        mu_points=mu_points,
-        pool=pool,
-        precomputed_sweep=precomputed_right_sweep,
-    )
-    return [u_l, u_r]
 
 
-def calibrate_wire_cutters(
-    targets: Union[List[float], np.ndarray],
+def calibrate_stage1_wire_cutters(
+    nominal_targets: Union[List[float], np.ndarray],
     calibration_cfg: DictConfig,
     geometry_cfg: DictConfig,
     Vdisx: np.ndarray,
@@ -312,78 +277,215 @@ def calibrate_wire_cutters(
     pool: Optional[Any] = None,
 ) -> xr.DataArray:
     """
-    Calibrates cutter barriers for all target conductances by tuning each gate individually
-    over the chemical potential set mu_points.
-    Returns xr.DataArray with dims ["G_n", "side"].
+    Calibrates Stage 1 (and barrier-sweep) cutter gate potentials over the
+    median of mu_points on the monotonic repulsive branch [u_top, u_max].
+
+    Targets above G_top = min(G_max_left, G_max_right) are truncated and
+    floor_2dec(G_top) is included (replacing the last kept target if within
+    sweep_gnres so the widest boundary is preserved). Returns an xr.DataArray
+    named 'stage1_cutters' with dims ('G_n', 'barrier_side').
     """
-    u_min = float(calibration_cfg.u_min)
-    u_max = float(calibration_cfg.u_max)
-    if u_min >= u_max:
-        raise ValueError(f"u_min must be strictly less than u_max: u_min={u_min}, u_max={u_max}")
+    u_top_l, g_max_l = _find_conductance_top(
+        "left", calibration_cfg, geometry_cfg, Vdisx, t, alpha, mu_leads, mu_points, pool=pool
+    )
+    u_top_r, g_max_r = _find_conductance_top(
+        "right", calibration_cfg, geometry_cfg, Vdisx, t, alpha, mu_leads, mu_points, pool=pool
+    )
 
-    g_n_coords = [float(tg) for tg in targets]
-    for tg in g_n_coords:
-        if tg <= 0.0 or tg >= 2.0:
-            raise ValueError(f"Target G_N = {tg} out of physical bounds (0, 2) e^2/h")
+    g_top_raw = min(g_max_l, g_max_r)
+    if g_top_raw <= 0.0:
+        raise ValueError(f"Non-positive G_top={g_top_raw:.4f} (g_max_l={g_max_l:.4f}, g_max_r={g_max_r:.4f})")
 
-    # Evaluate coarse open-barrier sweep once per side to locate disorder-dependent U_peak
-    u_coarse = _build_coarse_u_grid(u_min, u_max)
-    g_coarse_left = np.array([
-        _eval_median_conductance(
-            u_val=u_c,
-            side="left",
-            calibration_cfg=calibration_cfg,
-            geometry_cfg=geometry_cfg,
-            Vdisx=Vdisx,
-            t=t,
-            alpha=alpha,
-            mu_leads=mu_leads,
-            mu_points=mu_points,
-            pool=pool,
+    nominal_arr = np.asarray(nominal_targets, dtype=float)
+    kept = nominal_arr[nominal_arr <= g_top_raw]
+    truncated = len(kept) < len(nominal_arr)
+
+    g_top_rounded = float(np.floor(g_top_raw * 100.0) / 100.0)
+    gn_res = float(calibration_cfg.sweep_gnres)
+
+    if truncated and g_top_rounded > 0.0:
+        targets_list = sorted(set(np.round(kept, 2).tolist()))
+        if not targets_list:
+            targets_list = [g_top_rounded]
+        elif abs(g_top_rounded - targets_list[-1]) < gn_res:
+            targets_list[-1] = max(targets_list[-1], g_top_rounded)
+        else:
+            targets_list.append(g_top_rounded)
+        targets = np.sort(np.unique(np.asarray(targets_list, dtype=float)))
+    else:
+        targets = np.sort(np.unique(np.round(kept, 2)))
+
+    if len(targets) == 0:
+        raise ValueError(f"No reachable Stage 1 targets below G_top={g_top_raw:.4f}")
+
+    data = np.full((len(targets), 2), np.nan, dtype=float)
+    for idx, gn in enumerate(targets):
+        data[idx, 0] = _solve_repulsive_barrier(
+            float(gn), "left", u_top_l, g_max_l,
+            calibration_cfg, geometry_cfg, Vdisx, t, alpha, mu_leads, mu_points, pool=pool,
         )
-        for u_c in u_coarse
-    ])
-    g_coarse_right = np.array([
-        _eval_median_conductance(
-            u_val=u_c,
-            side="right",
-            calibration_cfg=calibration_cfg,
-            geometry_cfg=geometry_cfg,
-            Vdisx=Vdisx,
-            t=t,
-            alpha=alpha,
-            mu_leads=mu_leads,
-            mu_points=mu_points,
-            pool=pool,
+        data[idx, 1] = _solve_repulsive_barrier(
+            float(gn), "right", u_top_r, g_max_r,
+            calibration_cfg, geometry_cfg, Vdisx, t, alpha, mu_leads, mu_points, pool=pool,
         )
-        for u_c in u_coarse
-    ])
 
-    left_sweep = (u_coarse, g_coarse_left)
-    right_sweep = (u_coarse, g_coarse_right)
-
-    matrix_values = []
-    for tg in g_n_coords:
-        pair = calibrate_symmetric_pair(
-            target_gn=tg,
-            calibration_cfg=calibration_cfg,
-            geometry_cfg=geometry_cfg,
-            Vdisx=Vdisx,
-            t=t,
-            alpha=alpha,
-            mu_leads=mu_leads,
-            mu_points=mu_points,
-            pool=pool,
-            precomputed_left_sweep=left_sweep,
-            precomputed_right_sweep=right_sweep,
-        )
-        matrix_values.append(pair)
+    assert not np.isnan(data).any(), "Stage 1 cutter calibration produced NaN"
 
     return xr.DataArray(
-        data=matrix_values,
-        dims=["G_n", "side"],
+        data=data,
+        dims=("G_n", "barrier_side"),
         coords={
-            "G_n": g_n_coords,
-            "side": ["left", "right"],
+            "G_n": targets,
+            "barrier_side": ["left", "right"],
+        },
+        name="stage1_cutters",
+        attrs={
+            "u_top_left": u_top_l,
+            "u_top_right": u_top_r,
+            "g_max_left": g_max_l,
+            "g_max_right": g_max_r,
+            "g_top": g_top_rounded,
+        },
+    )
+
+
+def _stage2_mu_peak_worker(args: Tuple) -> Tuple[float, float, float, float]:
+    """Module-level worker for parallelizing Stage 2 peak finding over mu."""
+    mu_val, calib, geom, Vdisx, t, alpha, mu_leads = args
+    mu_list = [float(mu_val)]
+    u_top_l, g_max_l = _find_conductance_top(
+        "left", calib, geom, Vdisx, t, alpha, mu_leads, mu_list, pool=None
+    )
+    u_top_r, g_max_r = _find_conductance_top(
+        "right", calib, geom, Vdisx, t, alpha, mu_leads, mu_list, pool=None
+    )
+    return u_top_l, g_max_l, u_top_r, g_max_r
+
+
+def _stage2_mu_solve_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
+    """Module-level worker for parallelizing Stage 2 root finding over mu."""
+    mu_val, targets, u_top_l, g_max_l, u_top_r, g_max_r, calib, geom, Vdisx, t, alpha, mu_leads = args
+    mu_list = [float(mu_val)]
+    u_l_row = np.full(len(targets), np.nan, dtype=float)
+    u_r_row = np.full(len(targets), np.nan, dtype=float)
+    for idx, gn in enumerate(targets):
+        u_l_row[idx] = _solve_repulsive_barrier(
+            float(gn), "left", u_top_l, g_max_l,
+            calib, geom, Vdisx, t, alpha, mu_leads, mu_list, pool=None,
+        )
+        u_r_row[idx] = _solve_repulsive_barrier(
+            float(gn), "right", u_top_r, g_max_r,
+            calib, geom, Vdisx, t, alpha, mu_leads, mu_list, pool=None,
+        )
+    return u_l_row, u_r_row
+
+
+def calibrate_stage2_wire_cutters(
+    calibration_cfg: DictConfig,
+    geometry_cfg: DictConfig,
+    Vdisx: np.ndarray,
+    t: float,
+    alpha: float,
+    mu_leads: float,
+    mu_points: Union[List[float], np.ndarray],
+    pool: Optional[Any] = None,
+) -> xr.DataArray:
+    """
+    Calibrates Stage 2 cutter gate potentials at each chemical potential on the
+    monotonic repulsive branch [u_top(mu), u_max].
+
+    Uses nominal calibration_cfg.stage2_target_Gns whenever reachable across all
+    chemical potentials (G_top >= max(stage2_target_Gns)). Otherwise reconstructs
+    evenly spaced targets on [stage2_gn_min, G_top], decrementing n_c from
+    len(stage2_target_Gns) down to 2 until min(diff(G_n)) >= stage2_min_gn_spacing.
+    Returns an xr.DataArray named 'stage2_cutters' with dims
+    ('G_n', 'chemical_potential', 'barrier_side').
+    """
+    nominal_targets = np.sort(np.asarray(calibration_cfg.stage2_target_Gns, dtype=float))
+    if nominal_targets.ndim != 1 or len(nominal_targets) < 2:
+        raise ValueError(f"stage2_target_Gns must be a 1D list of >= 2 targets, got {nominal_targets}")
+
+    mu_arr = np.asarray(mu_points, dtype=float)
+    peak_tasks = [
+        (float(mu_val), calibration_cfg, geometry_cfg, Vdisx, t, alpha, mu_leads)
+        for mu_val in mu_arr
+    ]
+    if pool is not None:
+        peak_results = pool.map(_stage2_mu_peak_worker, peak_tasks)
+    else:
+        peak_results = [_stage2_mu_peak_worker(task) for task in peak_tasks]
+
+    u_tops_l = np.array([r[0] for r in peak_results], dtype=float)
+    g_maxs_l = np.array([r[1] for r in peak_results], dtype=float)
+    u_tops_r = np.array([r[2] for r in peak_results], dtype=float)
+    g_maxs_r = np.array([r[3] for r in peak_results], dtype=float)
+
+    raw_top = min(float(np.min(g_maxs_l)), float(np.min(g_maxs_r)))
+    g_top = float(np.floor(raw_top * 100.0) / 100.0)
+
+    if g_top >= float(np.max(nominal_targets)):
+        chosen_targets = nominal_targets
+    else:
+        gn_min = float(calibration_cfg.stage2_gn_min)
+        if raw_top <= gn_min:
+            raise ValueError(
+                f"Stage 2 G_top ({raw_top:.4f}) is not above stage2_gn_min ({gn_min})"
+            )
+        min_spacing = float(calibration_cfg.stage2_min_gn_spacing)
+        max_n_c = len(nominal_targets)
+
+        chosen_targets: Optional[np.ndarray] = None
+        for n_c in range(max_n_c, 1, -1):
+            candidate = np.round(np.linspace(gn_min, g_top, n_c), 2)
+            if len(np.unique(candidate)) == n_c and np.min(np.diff(candidate)) >= min_spacing - 1e-12:
+                chosen_targets = candidate
+                break
+
+        if chosen_targets is None:
+            raise ValueError(
+                f"Cannot satisfy stage2_min_gn_spacing={min_spacing} between "
+                f"stage2_gn_min={gn_min} and g_top={g_top}"
+            )
+
+    solve_tasks = [
+        (
+            float(mu_arr[i]),
+            chosen_targets,
+            float(u_tops_l[i]),
+            float(g_maxs_l[i]),
+            float(u_tops_r[i]),
+            float(g_maxs_r[i]),
+            calibration_cfg,
+            geometry_cfg,
+            Vdisx,
+            t,
+            alpha,
+            mu_leads,
+        )
+        for i in range(len(mu_arr))
+    ]
+    if pool is not None:
+        solve_results = pool.map(_stage2_mu_solve_worker, solve_tasks)
+    else:
+        solve_results = [_stage2_mu_solve_worker(task) for task in solve_tasks]
+
+    data = np.full((len(chosen_targets), len(mu_arr), 2), np.nan, dtype=float)
+    for mu_idx, (u_l_row, u_r_row) in enumerate(solve_results):
+        data[:, mu_idx, 0] = u_l_row
+        data[:, mu_idx, 1] = u_r_row
+
+    assert not np.isnan(data).any(), "Stage 2 cutter calibration produced NaN"
+
+    return xr.DataArray(
+        data=data,
+        dims=("G_n", "chemical_potential", "barrier_side"),
+        coords={
+            "G_n": chosen_targets,
+            "chemical_potential": np.round(mu_arr, 2),
+            "barrier_side": ["left", "right"],
+        },
+        name="stage2_cutters",
+        attrs={
+            "g_top": g_top,
         },
     )

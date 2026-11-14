@@ -11,10 +11,6 @@
 #mainly for testing. determines if SimulationState will do calibration. 
 calibrate_cutters: True
 
-# barriers used for 3w measurement with symmetric barriers (Microsoft azure-quantum-tgp 5 cutters)
-# These will override G_ns in the calibration sweep array that are within +- 0.01 e^2/h
-symmetric_target_gns: [0.35, 0.49, 0.62, 0.76, 0.90]
-
 
 #calibration range for barrier sweep
 sweep_gnmin: 0.01
@@ -32,13 +28,25 @@ tol: 1e-4
 # Maximum solver iterations allowed for root finding
 max_iter: 50
 
-# Subband chemical potential sampling window in meV for median-averaging
-# Evaluates equidistant chemical potentials spanning the lowest subband
-n_mu_points: 15
+# chemical potential sampling window in meV for median-averaging
+# Evaluates equidistant chemical potentials
+n_mu_points: 61
 mu_min: 0.0
 mu_max: 2.0
 
 # Numerical bracket limits for cutter potential root finding in meV
-# [-20.0, 35.0] spans the disorder-shifted open-barrier peak regime to pinch-off
-u_min: -50
-u_max: 50.0
+# [-20.0, 100.0] spans the open-barrier peak regime to full pinch-off
+u_min: -20.0
+u_max: 100.0
+
+# Pre-health check pinch-off tolerance in e^2/h at U = u_max
+pinch_off_tol: 1.0e-3
+
+# Peak conductance search parameters in meV (find U_top and G_max starting inward from large repulsive U)
+peak_search_start_u: 10.0
+peak_search_step: 0.1
+
+# Stage 2 conductance target parameters in e^2/h
+stage2_target_Gns: [0.35, 0.49, 0.62, 0.76, 0.90]
+stage2_gn_min: 0.01
+stage2_min_gn_spacing: 0.045

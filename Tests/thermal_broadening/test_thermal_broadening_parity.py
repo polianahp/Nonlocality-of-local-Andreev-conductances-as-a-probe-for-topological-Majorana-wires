@@ -21,7 +21,10 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.tgp_adapter import TGPAdapter
-from src.cpu_broadening import broaden_with_temperature_cpu, prepare_sim_cpu
+from src.cpu_broadening import broaden_with_temperature_cpu, prepare_sim_cpu, get_broaden_operator
+import src.helpers as hp
+import xarray as xr
+from omegaconf import OmegaConf
 import tgp.prepare
 import tgp.two
 
@@ -50,7 +53,8 @@ def test_broaden_with_temperature_parity(small_dataset):
     ds_small, T_mK = small_dataset
     ds_off = tgp.prepare.broaden_with_temperature(ds_small, T_mK=T_mK)
     # Use small chunk_size=5 to ensure chunk boundary stitching is tested
-    ds_chk = broaden_with_temperature_cpu(ds_small, T_mK=T_mK, chunk_size=5)
+    constants = OmegaConf.load(REPO_ROOT / "Inputs" / "Parameters" / "Defaults" / "physical_constants.yaml")
+    ds_chk = broaden_with_temperature_cpu(ds_small, T_mK=T_mK, k_B=float(constants.k_B), chunk_size=5)
 
     for key in ["g_ll", "g_lr", "g_rl", "g_rr"]:
         arr_off = ds_off[key].values
@@ -70,7 +74,8 @@ def test_downstream_stage2_pipeline_parity(small_dataset):
     """Verify complete prepare_sim and Stage 2 gap extraction produce identical outputs."""
     ds_small, T_mK = small_dataset
     ds_prep_off = tgp.prepare.prepare_sim(ds_small, T_mK=T_mK)
-    ds_prep_chk = prepare_sim_cpu(ds_small, T_mK=T_mK, chunk_size=5)
+    constants = OmegaConf.load(REPO_ROOT / "Inputs" / "Parameters" / "Defaults" / "physical_constants.yaml")
+    ds_prep_chk = prepare_sim_cpu(ds_small, T_mK=T_mK, k_B=float(constants.k_B), chunk_size=5)
 
     def run_stage2(tprep):
         tl = tprep.rename({"bias": "left_bias"})
@@ -92,3 +97,40 @@ def test_downstream_stage2_pipeline_parity(small_dataset):
     # Boolean flags must be exact array match
     np.testing.assert_array_equal(z_off["zbp"].values, z_chk["zbp"].values)
     np.testing.assert_array_equal(z_off["gapped_zbp"].values, z_chk["gapped_zbp"].values)
+
+
+def test_get_broaden_operator_synthetic_parity_with_physical_constants():
+    """Self-contained (non-skipping) parity test against tgp.prepare.broaden_with_temperature."""
+    constants = OmegaConf.load(REPO_ROOT / "Inputs" / "Parameters" / "Defaults" / "physical_constants.yaml")
+    k_B = float(constants.k_B)
+
+    Vbias_arr = hp.make_dynamic_grid()
+    n_c, n_b, n_v, n_bias = 2, 2, 3, len(Vbias_arr)
+    rng = np.random.default_rng(1234)
+
+    g_raw = np.exp(-((Vbias_arr[None, None, None, :] - 0.02) / 0.015) ** 2) + 0.05 * rng.normal(
+        size=(n_c, n_b, n_v, n_bias)
+    )
+    ds_raw = xr.Dataset(
+        data_vars={
+            "g_ll": (["cutter_pair_index", "B", "V", "bias"], g_raw),
+            "g_rr": (["cutter_pair_index", "B", "V", "bias"], 0.8 * g_raw),
+            "g_lr": (["cutter_pair_index", "B", "V", "bias"], 0.1 * g_raw),
+            "g_rl": (["cutter_pair_index", "B", "V", "bias"], -0.1 * g_raw),
+        },
+        coords={
+            "cutter_pair_index": np.arange(n_c),
+            "B": np.linspace(0.0, 0.5, n_b),
+            "V": np.linspace(0.0, 0.2, n_v),
+            "bias": Vbias_arr,
+        },
+    )
+
+    for T_mK in (30.0, 40.0):
+        ds_off = tgp.prepare.broaden_with_temperature(ds_raw, T_mK=T_mK)
+        M_broaden = get_broaden_operator(Vbias_arr, T_mK=T_mK, k_B=k_B)
+        for key in ("g_ll", "g_rr", "g_lr", "g_rl"):
+            broadened_op = ds_raw[key].values @ M_broaden
+            assert np.allclose(broadened_op, ds_off[key].values, atol=1e-9, rtol=1e-9), (
+                f"Parity mismatch at T={T_mK} mK for {key}"
+            )

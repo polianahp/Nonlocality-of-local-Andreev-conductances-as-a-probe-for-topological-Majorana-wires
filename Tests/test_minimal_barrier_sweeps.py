@@ -85,6 +85,7 @@ def test_worker_numerical_parity_against_main_parallel():
     resolved_path = PathConfigs.RUN_FILES / f"Fourier_Component_Disorders/fourier_disorder_{config.realization_index}.npy"
     Vdisx = hp.initialize_vdis_from_data(
         resolved_path,
+        V0=float(config.V0),
         lambda_dis=config.lambda_dis,
         Ls=config.Ls,
         is_real_space=False
@@ -95,7 +96,7 @@ def test_worker_numerical_parity_against_main_parallel():
     q_nodes = {}
     for T_val in target_temps:
         if T_val > 0.0:
-            qe, qw = hp.get_thermal_quadrature_nodes(T_mK=T_val, n_nodes=8, bias_meV=0.0)
+            qe, qw = hp.get_thermal_quadrature_nodes(T_mK=T_val, n_nodes=8, bias_meV=0.0, k_B=state.k_B)
             q_nodes[T_val] = (qe, qw)
         else:
             q_nodes[T_val] = (None, None)

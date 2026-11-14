@@ -107,9 +107,10 @@ def calc_conductance_matrix(syst, eng):
 
 
 def get_thermal_quadrature_nodes(
-    T_mK: float, 
-    n_nodes: int = 10, 
-    bias_meV: float = 0.0
+    T_mK: float,
+    n_nodes: int = 10,
+    bias_meV: float = 0.0,
+    k_B: float = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Computes Gauss-Legendre quadrature nodes and weights incorporating the
@@ -138,10 +139,10 @@ def get_thermal_quadrature_nodes(
     """
     if T_mK <= 0.0:
         return np.array([bias_meV]), np.array([1.0])
-    
-    k_B = 8.617333262145e-5  # eV/K
-    T_eV = (T_mK * 1e-3) * k_B
-    T_meV = T_eV * 1e3
+    if k_B is None:
+        raise ValueError("k_B must be provided explicitly from physical_constants.yaml")
+
+    T_meV = float(k_B) * float(T_mK)
     W_meV = 10.0 * T_meV  # Upper integration limit at 10 k_B T
     
     # We use n_pos = max(1, n_nodes // 2) positive nodes mapped from [0, W_meV]
@@ -1592,18 +1593,21 @@ generate_disorder_from_raw = generate_disorder_from_fourier
 
 
 def initialize_vdis_from_data(
-    path: Union[str, Path], 
-    lambda_dis: Optional[float] = None, 
-    Ls: Optional[int] = None, 
-    is_real_space: bool = False
+    path: Union[str, Path],
+    V0: float,
+    lambda_dis: Optional[float] = None,
+    Ls: Optional[int] = None,
+    is_real_space: bool = False,
 ) -> np.ndarray:
     """
-    Loads or synthesizes the 1D spatial disorder array V_dis(x).
+    Loads or synthesizes the 1D spatial disorder array V_dis(x) in meV (scaled by V0).
 
     Parameters:
     -----------
     path : str or Path
         Path to the disorder file (.npy or .npz).
+    V0 : float
+        Disorder amplitude in meV (required, multiplied into the spatial profile).
     lambda_dis : Optional[float]
         Spatial correlation length (required when is_real_space is False).
     Ls : Optional[int]
@@ -1629,7 +1633,7 @@ def initialize_vdis_from_data(
             raise ValueError(
                 f"Disorder length mismatch: loaded array has length {len(vdis)}, but expected Ls={Ls}."
             )
-        return vdis
+        return vdis * float(V0)
 
     # Fourier Component Mode Synthesis (is_real_space is False)
     if lambda_dis is None:
@@ -1642,7 +1646,7 @@ def initialize_vdis_from_data(
         )
 
     fourier_vec = loaded['Vdisx'] if isinstance(loaded, np.lib.npyio.NpzFile) else loaded
-    return generate_disorder_from_fourier(fourier_vec, lambda_dis=lambda_dis, Ls=Ls)
+    return generate_disorder_from_fourier(fourier_vec, lambda_dis=lambda_dis, Ls=Ls) * float(V0)
 
 
 
@@ -2597,7 +2601,7 @@ def extract_nonlocal_gap(
         mask = np.abs(trace) > thresh
         binary_mask[idx] = mask
         
-        # 5. Extract gap from positive bias side (from izero to end)
+        # Extract gap from positive bias side (from izero to end)
         pos_bias = bias[izero:]
         pos_mask = mask[izero:]
         
@@ -2866,7 +2870,9 @@ def export_legacy_npy_files(output_dir: Path) -> None:
     vdis_path = output_dir / "vdisx.nc"
     if vdis_path.exists():
         ds_vdis = xr.open_dataset(vdis_path, engine="h5netcdf")
-        if "Vdisx_normalized" in ds_vdis:
+        if "Vdisx" in ds_vdis:
+            np.save(output_dir / "Vdisx.npy", ds_vdis["Vdisx"].values)
+        elif "Vdisx_normalized" in ds_vdis:
             np.save(output_dir / "Vdisx.npy", ds_vdis["Vdisx_normalized"].values)
         ds_vdis.close()
 

@@ -24,6 +24,7 @@ def broaden_with_temperature_gpu(
     bias_name: str = "bias",
     keys: tuple = ("g_ll", "g_lr", "g_rl", "g_rr"),
     chunk_size: int = 10000,
+    k_B: float = None,
 ) -> xr.Dataset:
     warnings.warn(
         "broaden_with_temperature_gpu is deprecated; use src.cpu_broadening.broaden_with_temperature_cpu instead.",
@@ -33,16 +34,17 @@ def broaden_with_temperature_gpu(
     return broaden_with_temperature_cpu(
         ds=ds,
         T_mK=T_mK,
+        k_B=k_B,
         bias_name=bias_name,
         keys=keys,
         chunk_size=chunk_size,
     )
 
 
-def prepare_sim_gpu(ds_raw: xr.Dataset, T_mK: float) -> xr.Dataset:
+def prepare_sim_gpu(ds_raw: xr.Dataset, T_mK: float, k_B: float = None) -> xr.Dataset:
     warnings.warn(
         "prepare_sim_gpu is deprecated; use src.cpu_broadening.prepare_sim_cpu instead.",
         DeprecationWarning,
         stacklevel=2,
     )
-    return prepare_sim_cpu(ds_raw=ds_raw, T_mK=T_mK)
+    return prepare_sim_cpu(ds_raw=ds_raw, T_mK=T_mK, k_B=k_B)

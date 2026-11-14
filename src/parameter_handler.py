@@ -10,36 +10,7 @@ import src.helpers as hp
 import xarray as xr
 
 
-def _merge_arrs(A, B, tol):
-    # merges A and B where any elements within tol are replaced with the element of B
-    C = []
-    A = list(A)
-    B = list(B)
-    for a in A:
-        any_close = np.where(np.isclose(a, B, atol=tol))[0]
-        if len(any_close != 0):
-            C.append(B[any_close[0]])
-        else:
-            C.append(a)
-    D = np.append(C, B)
-    return np.sort(np.asarray(list(set(D))))
 
-
-def _calibrate_stage2_mu_row(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
-    """Calls calibrate_wire_cutters for a single chemical potential [mu_pt] with pool=None."""
-    mu_pt, stage2_gns, calib, geom, Vdisx_meV, t, alpha, mu_leads = args
-    c_pt = bc.calibrate_wire_cutters(
-        targets=stage2_gns,
-        calibration_cfg=calib,
-        geometry_cfg=geom,
-        Vdisx=Vdisx_meV,
-        t=t,
-        alpha=alpha,
-        mu_leads=mu_leads,
-        mu_points=[float(mu_pt)],
-        pool=None,
-    )
-    return c_pt.sel(side="left").values, c_pt.sel(side="right").values
 
 
 def _load_and_merge_defaults(node: Any, defaults_dir: Path) -> Any:
@@ -152,6 +123,7 @@ class SimulationState:
         self.Delta0 = float(geom.Delta_0)
         self.gamma = float(geom.gamma)
         self.mu_leads = self.t
+        self.k_B = float(constants.k_B)
 
         # Sweep coordinate arrays
         mu_max = res.mu_max
@@ -172,87 +144,87 @@ class SimulationState:
             for i, p in enumerate(itr.product(self.mu_var, self.Vz_var))
         ])
 
-        # Disorder realization
+        # Disorder realization (Vdisx is stored in meV, already scaled by V0)
         disorder_path = PathConfigs.RUN_FILES / disorder.disorder_fpath
         lambda_dis = disorder.lambda_dis
         is_real_space = disorder.is_real_space
 
+        self.V0 = float(disorder.V0)
         self.Vdisx = hp.initialize_vdis_from_data(
             disorder_path,
+            V0=self.V0,
             lambda_dis=lambda_dis,
             Ls=Ls,
             is_real_space=is_real_space,
         )
-        self.V0 = float(disorder.V0)
-        self.Vdisx_meV = self.Vdisx * self.V0
 
         self.energies = np.linspace(-0.5, 0.5, res.num_engs)
 
         sweep_gnmin = calib.sweep_gnmin
         sweep_gnmax = calib.sweep_gnmax
         sweep_gnres = calib.sweep_gnres
-        num = int(np.round((sweep_gnmax - sweep_gnmin) / sweep_gnres))
+        num = int(np.round((sweep_gnmax - sweep_gnmin) / sweep_gnres)) + 1
 
-        Gn_sweep_points = np.round(np.linspace(sweep_gnmin, sweep_gnmax, num), decimals=2)
-        self.target_GNs = _merge_arrs(Gn_sweep_points, calib.symmetric_target_gns, tol=0.01)
-        self.baseline_GNs = np.asarray(calib.symmetric_target_gns, dtype=float)
+        nominal_stage1_gns = np.round(np.linspace(sweep_gnmin, sweep_gnmax, num), decimals=2)
 
         calib_workers = hp.get_workers(config.num_workers) if config.acceleration_type == "parallel" else 1
         default_mu_pts = np.linspace(float(calib.mu_min), float(calib.mu_max), int(calib.n_mu_points))
 
-        need_calib_pool = (
-            calib_workers > 1
-            and (calib.calibrate_cutters or calc.tgp_stage1 or calc.tgp_stage2)
-        )
+        need_calib = bool(calib.calibrate_cutters or calc.tgp_stage1 or calc.tgp_stage2)
+        need_calib_pool = calib_workers > 1 and need_calib
         pool = mp.Pool(processes=int(calib_workers)) if need_calib_pool else None
 
+        self.stage1_cutters = None
+        self.target_GNs = nominal_stage1_gns
+        self.baseline_GNs = np.array(
+            [nominal_stage1_gns[0], nominal_stage1_gns[len(nominal_stage1_gns) // 2], nominal_stage1_gns[-1]],
+            dtype=float,
+        )
+        self.tgp_stage1_pairs = None
+        self.stage2_cutters = None
+
         try:
-            # Barrier sweeps calibration (pool parallelizes over default_mu_pts inside calibrate_single_barrier)
-            if calib.calibrate_cutters:
-                print(f"--- Running Simultaneous Cutter Barrier Calibration for targets: {self.target_GNs} ---")
-                self.calibrated_cutters = bc.calibrate_wire_cutters(
-                    targets=self.target_GNs,
+            if need_calib:
+                print("--- Running Pre-Health Check at Pinch-Off Limit ---")
+                g_pinch_l, g_pinch_r = bc.check_wire_health(
                     calibration_cfg=calib,
                     geometry_cfg=geom,
-                    Vdisx=self.Vdisx_meV,
+                    Vdisx=self.Vdisx,
                     t=self.t,
                     alpha=self.alpha,
                     mu_leads=self.mu_leads,
                     mu_points=default_mu_pts,
                     pool=pool,
                 )
-                print(f"Calibrated Symmetric Cutter Pairs [G_N, [UL, UR]]:\n{self.calibrated_cutters}")
-            else:
-                raise ValueError("Cutters have to be calibrated!")
+                print(f"Pre-health check passed: G_left={g_pinch_l:.3e}, G_right={g_pinch_r:.3e}")
 
-            
-            self.calibrated_barriers = self.calibrated_cutters
-            self.target_gns = self.target_GNs
-
-            # TGP Stage 1 cutters (injected pool parallelizes over 61-pt mu_calib grid inside calibrate_single_barrier)
-            self.tgp_stage1_pairs = None
-            if calc.tgp_stage1:
-                tgp1 = config.protocol.tgp.stage1
-                n_c1 = int(tgp1.num_cutters)
-                gn_min = float(tgp1.gn_min)
-                gn_max = float(tgp1.gn_max)
-                n_mu = int(tgp1.num_mu_calib_points)
-                seed = int(tgp1.pairing_seed)
-
-                mu_calib = np.linspace(float(calib.mu_min), float(calib.mu_max), n_mu)
-                stage1_gns = np.linspace(gn_min, gn_max, n_c1)
-                print(f"--- Calibrating TGP Stage 1 Cutters ({n_c1} points over {n_mu}-pt mu grid, workers={calib_workers}) ---")
-                s1_calib = bc.calibrate_wire_cutters(
-                    targets=stage1_gns,
+            # Stage 1 / Barrier Sweep calibration (shared 61-pt mu median)
+            if calib.calibrate_cutters or calc.tgp_stage1:
+                print(f"--- Running Stage 1 Cutter Calibration (nominal={len(nominal_stage1_gns)} pts) ---")
+                self.stage1_cutters = bc.calibrate_stage1_wire_cutters(
+                    nominal_targets=nominal_stage1_gns,
                     calibration_cfg=calib,
                     geometry_cfg=geom,
-                    Vdisx=self.Vdisx_meV,
+                    Vdisx=self.Vdisx,
                     t=self.t,
                     alpha=self.alpha,
                     mu_leads=self.mu_leads,
-                    mu_points=mu_calib,
+                    mu_points=default_mu_pts,
                     pool=pool,
                 )
+                self.target_GNs = self.stage1_cutters.coords["G_n"].values
+                mid_idx = len(self.target_GNs) // 2
+                self.baseline_GNs = np.array(
+                    [self.target_GNs[0], self.target_GNs[mid_idx], self.target_GNs[-1]],
+                    dtype=float,
+                )
+                print(f"Calibrated Stage 1 Cutters [G_n, barrier_side]:\n{self.stage1_cutters}")
+
+            if calc.tgp_stage1:
+                tgp1 = config.protocol.tgp.stage1
+                seed = int(tgp1.pairing_seed)
+                actual_gns = self.stage1_cutters.coords["G_n"].values
+                n_c1 = len(actual_gns)
                 rng = np.random.default_rng(seed)
                 left_idx = np.arange(n_c1)
                 right_idx = rng.permutation(n_c1)
@@ -260,56 +232,26 @@ class SimulationState:
                 self.tgp_stage1_pairs = xr.Dataset(
                     coords={
                         "cutter_pair_index": np.arange(n_c1, dtype=int),
-                        "G_n_left": ("cutter_pair_index", stage1_gns[left_idx]),
-                        "G_n_right": ("cutter_pair_index", stage1_gns[right_idx]),
-                        "V_leftcutter": ("cutter_pair_index", s1_calib.sel(side="left").values[left_idx]),
-                        "V_rightcutter": ("cutter_pair_index", s1_calib.sel(side="right").values[right_idx]),
+                        "G_n_left": ("cutter_pair_index", actual_gns[left_idx]),
+                        "G_n_right": ("cutter_pair_index", actual_gns[right_idx]),
+                        "V_leftcutter": ("cutter_pair_index", self.stage1_cutters.sel(barrier_side="left").values[left_idx]),
+                        "V_rightcutter": ("cutter_pair_index", self.stage1_cutters.sel(barrier_side="right").values[right_idx]),
                     }
                 )
 
-            # TGP Stage 2 cutters (outer pool.map parallelizes across N_mu single-element [mu_pt] calls with pool=None)
-            self.tgp_stage2_cutters = None
             if calc.tgp_stage2:
-                tgp2 = config.protocol.tgp.stage2
-                stage2_gns = np.asarray(tgp2.target_gns, dtype=float)
-                if tgp2.compensate_per_mu:
-                    unique_mus = np.unique(self.mu_var)
-                    print(f"--- Pre-calibrating TGP Stage 2 Cutters ({len(stage2_gns)} targets across {len(unique_mus)} mu rows, workers={calib_workers}) ---")
-                    row_tasks = [
-                        (float(mu_pt), stage2_gns, calib, geom, self.Vdisx_meV, self.t, self.alpha, self.mu_leads)
-                        for mu_pt in unique_mus
-                    ]
-                    if pool is not None and len(row_tasks) > 1:
-                        row_results = pool.map(_calibrate_stage2_mu_row, row_tasks)
-                    else:
-                        row_results = [_calibrate_stage2_mu_row(task) for task in row_tasks]
-
-                    u_l_comp = np.vstack([r[0] for r in row_results])
-                    u_r_comp = np.vstack([r[1] for r in row_results])
-
-                    self.tgp_stage2_cutters = xr.Dataset(
-                        data_vars={
-                            "U_left_compensated": (["chemical_potential", "cutter_pair_index"], u_l_comp),
-                            "U_right_compensated": (["chemical_potential", "cutter_pair_index"], u_r_comp),
-                        },
-                        coords={
-                            "chemical_potential": unique_mus,
-                            "cutter_pair_index": np.arange(len(stage2_gns), dtype=int),
-                            "target_gn": ("cutter_pair_index", stage2_gns),
-                        },
-                    )
-                else:
-                    self.tgp_stage2_cutters = bc.calibrate_wire_cutters(
-                        targets=stage2_gns,
-                        calibration_cfg=calib,
-                        geometry_cfg=geom,
-                        Vdisx=self.Vdisx_meV,
-                        t=self.t,
-                        alpha=self.alpha,
-                        mu_leads=self.mu_leads,
-                        mu_points=default_mu_pts,
-                        pool=pool,
-                    )
+                unique_mus = np.unique(self.mu_var)
+                print(f"--- Calibrating TGP Stage 2 Cutters across {len(unique_mus)} mu rows (workers={calib_workers}) ---")
+                self.stage2_cutters = bc.calibrate_stage2_wire_cutters(
+                    calibration_cfg=calib,
+                    geometry_cfg=geom,
+                    Vdisx=self.Vdisx,
+                    t=self.t,
+                    alpha=self.alpha,
+                    mu_leads=self.mu_leads,
+                    mu_points=unique_mus,
+                    pool=pool,
+                )
         finally:
             if pool is not None:
                 pool.close()

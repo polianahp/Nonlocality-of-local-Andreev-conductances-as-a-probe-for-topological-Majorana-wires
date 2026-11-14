@@ -70,9 +70,11 @@ def test_tgp_stage1_slice_structure(setup_micro_env):
     assert isinstance(ds, xr.Dataset)
     assert "cutter_pair_index" in ds.coords
     assert "temperature" in ds.coords
+    expected_n_cutters = len(state.tgp_stage1_pairs.cutter_pair_index)
+    assert expected_n_cutters > 0
     for var in ["L_1w", "R_1w", "L_2w_nl", "R_2w_nl", "L_3w", "R_3w"]:
         assert var in ds.data_vars
-        assert ds[var].shape == (3, 1, 1, 1)
+        assert ds[var].shape == (expected_n_cutters, 1, 1, 1)
         assert np.all(np.isfinite(ds[var].values))
 
 
@@ -81,14 +83,14 @@ def test_tgp_stage2_slice_structure(setup_micro_env):
     mu = float(state.mu_var[0])
     vz = float(state.Vz_var[0])
     
-    dynamic_energies = hp.make_dynamic_grid()
-    ds = compute_tgp_stage2_slice(mu=mu, vz=vz, config=cfg, state=state, dynamic_energies=dynamic_energies)
+    Vbias_arr = hp.make_dynamic_grid()
+    ds = compute_tgp_stage2_slice(mu=mu, vz=vz, config=cfg, state=state, Vbias_arr=Vbias_arr)
     
     assert isinstance(ds, xr.Dataset)
     assert "cutter_pair_index" in ds.coords
     assert "bias" in ds.coords
-    assert ds.sizes["bias"] == len(dynamic_energies)
-    for var in ["g_ll", "g_rr", "g_lr", "g_rl", "L_SI", "R_SI"]:
+    assert ds.sizes["bias"] == len(Vbias_arr)
+    for var in ["g_ll", "g_rr", "g_lr", "g_rl"]:
         assert var in ds.data_vars
         assert np.all(np.isfinite(ds[var].values))
 
@@ -99,15 +101,16 @@ def test_worker_simulation_step_end_to_end(setup_micro_env):
     
     import src.legendre_curvature as lc
     worker_context = {
-        "q_nodes": {},
+        "q_nodes": {40.0: hp.get_thermal_quadrature_nodes(T_mK=40.0, n_nodes=8, bias_meV=0.0, k_B=state.k_B)},
         "quad_dict": {40.0: lc.get_tanh_legendre_quadrature(T_mK=40.0, n_nodes=16)},
-        "dynamic_energies": hp.make_dynamic_grid(),
+        "Vbias_arr": hp.make_dynamic_grid(),
     }
     
     res = worker_simulation_step(iter_data, cfg, state, worker_context)
     
     assert res["i"] == 0
     assert "spectral" in res
+    assert "conductance" in res
     assert "tgp_stage1" in res
     assert "tgp_stage2" in res
 

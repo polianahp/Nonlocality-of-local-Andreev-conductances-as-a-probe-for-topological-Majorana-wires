@@ -815,5 +815,39 @@ def test_singular_pivot_near_eigenvalue_resilience():
         assert c_minus <= c <= c_plus
 
 
+def test_in_gap_renormalized_vs_exact_equivalence():
+    """
+    Verifies that at zero bias (E = 0.0, deep in-gap where E / sqrt(Delta0^2 - E^2) = 0),
+    the exact self-energy system (build_system_exact) and the low-energy renormalized
+    system (build_system) yield identical conductance matrices even with disorder and Zeeman field.
+    """
+    t = 16.529
+    gamma = 0.2
+    Delta0 = 0.3
+    alpha = 1.4
+    Ls = 50
+    mu = 0.4
+    V_z = 0.35
+    rng = np.random.default_rng(123)
+    vdis = rng.uniform(-0.3, 0.3, size=Ls)
+
+    syst_exact = hp.build_system_exact(
+        t=t, mu=mu, gamma=gamma, Delta0=Delta0, V_z=V_z, alpha=alpha,
+        Ln=0, Lb=3, Ls=Ls, mu_leads=t, Vdisx=vdis, barrier_l=5.0, barrier_r=5.0, closed=False
+    )
+    syst_low = hp.build_system(
+        t=t, mu=mu, gamma=gamma, Delta0=Delta0, V_z=V_z, alpha=alpha,
+        Ln=0, Lb=3, Ls=Ls, mu_leads=t, Vdisx=vdis, barrier_l=5.0, barrier_r=5.0
+    )
+
+    g_exact = hp.calc_conductance_matrix_exact(syst_exact, E=0.0)
+    g_low = hp.calc_conductance_matrix(syst_low, eng=0.0)
+
+    np.testing.assert_allclose(
+        g_low, g_exact, atol=1e-5,
+        err_msg="In-gap E=0.0 renormalized and exact conductance matrices diverge"
+    )
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

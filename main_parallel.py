@@ -1,7 +1,7 @@
 import os
 import time
 
-# 1. THREAD CONTROL: Must be set BEFORE importing numpy/scipy/kwant
+# THREAD CONTROL: Must be set BEFORE importing numpy/scipy/kwant
 # Prevents oversubscription where each process tries to use all cores.
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
@@ -9,6 +9,7 @@ os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
+import math
 import numpy as np
 from scipy import linalg as LA
 import kwant
@@ -17,6 +18,7 @@ import multiprocessing as mp
 from tqdm import tqdm
 import src.helpers as hp
 import src.legendre_curvature as lc
+from src.cpu_broadening import get_broaden_operator
 from pathlib import Path
 from src.config import PathConfigs
 import itertools as itr
@@ -50,7 +52,7 @@ def compute_spectral_slice(mu: float, vz: float, config: Any, state: SimulationS
         V_z=vz,
         alpha=state.alpha,
         Ls=state.Ls,
-        Vdisx=state.Vdisx_meV
+        Vdisx=state.Vdisx
     )
     evals, evecs = hp.solve_ham(syst_closed, k=res.num_eigenvalues)
     spectrum = hp.sort_spectrum(evals, evecs)
@@ -118,15 +120,15 @@ def compute_barrier_sweep_slice(
     Lb = state.Lb
     Ls = state.Ls
     mu_leads = state.mu_leads
-    Vdisx = state.Vdisx_meV
+    Vdisx = state.Vdisx
 
     for u_base in state.baseline_GNs:
-        ul_base = float(state.calibrated_cutters.sel(side="left", G_n=u_base).values.item())
-        ur_base = float(state.calibrated_cutters.sel(side="right", G_n=u_base).values.item())
+        ul_base = float(state.stage1_cutters.sel(barrier_side="left", G_n=u_base).values.item())
+        ur_base = float(state.stage1_cutters.sel(barrier_side="right", G_n=u_base).values.item())
 
-        # 1. Sweep Right Barrier (UL = ul_base, UR varies)
+        # Sweep Right Barrier (UL = ul_base, UR varies)
         for gn in state.target_GNs:
-            ur_var = float(state.calibrated_cutters.sel(side="right", G_n=gn).values.item())
+            ur_var = float(state.stage1_cutters.sel(barrier_side="right", G_n=gn).values.item())
             syst_UR = hp.build_system(
                 t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz,
                 alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
@@ -147,9 +149,9 @@ def compute_barrier_sweep_slice(
                     G_n=gn
                 )] = g_mat
 
-        # 2. Sweep Left Barrier (UL varies, UR = ur_base)
+        # Sweep Left Barrier (UL varies, UR = ur_base)
         for gn in state.target_GNs:
-            ul_var = float(state.calibrated_cutters.sel(side="left", G_n=gn).values.item())
+            ul_var = float(state.stage1_cutters.sel(barrier_side="left", G_n=gn).values.item())
             syst_UL = hp.build_system(
                 t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz,
                 alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
@@ -204,7 +206,7 @@ def compute_tgp_stage1_slice(
     Lb = state.Lb
     Ls = state.Ls
     mu_leads = state.mu_leads
-    Vdisx = state.Vdisx_meV
+    Vdisx = state.Vdisx
     h_mode = config.hamiltonian_mode
 
     for k in range(num_pairs):
@@ -263,23 +265,26 @@ def compute_tgp_stage2_slice(
     vz: float,
     config: Any,
     state: SimulationState,
-    dynamic_energies: np.ndarray
+    Vbias_arr: np.ndarray
 ) -> xr.Dataset:
     """
-    Evaluates 5 symmetric mu-compensated cutter pairs across dynamic bias grid
+    Evaluates symmetric mu-compensated cutter pairs across the bias grid Vbias_arr
     for a single (mu, vz) point slice.
     """
     res = config.simulation.resolution
     target_temps = [float(T) for T in res.temperatures]
-    num_cutters = len(state.tgp_stage2_cutters.cutter_pair_index) if hasattr(state.tgp_stage2_cutters, 'cutter_pair_index') else len(state.tgp_stage2_cutters)
-    n_bias = len(dynamic_energies)
+    stage2_da = state.stage2_cutters
+    if stage2_da is None:
+        raise ValueError("state.stage2_cutters must be calibrated before compute_tgp_stage2_slice")
 
-    g_ll = np.zeros((num_cutters, 1, 1, len(target_temps), n_bias), dtype=float)
-    g_rr = np.zeros((num_cutters, 1, 1, len(target_temps), n_bias), dtype=float)
-    g_lr = np.zeros((num_cutters, 1, 1, len(target_temps), n_bias), dtype=float)
-    g_rl = np.zeros((num_cutters, 1, 1, len(target_temps), n_bias), dtype=float)
-    l_si = np.ones((num_cutters, 1, 1), dtype=np.int64)
-    r_si = np.ones((num_cutters, 1, 1), dtype=np.int64)
+    target_gns = stage2_da.coords["G_n"].values
+    num_cutters = len(target_gns)
+    n_bias = len(Vbias_arr)
+
+    g_ll = np.full((num_cutters, 1, 1, len(target_temps), n_bias), np.nan, dtype=float)
+    g_rr = np.full((num_cutters, 1, 1, len(target_temps), n_bias), np.nan, dtype=float)
+    g_lr = np.full((num_cutters, 1, 1, len(target_temps), n_bias), np.nan, dtype=float)
+    g_rl = np.full((num_cutters, 1, 1, len(target_temps), n_bias), np.nan, dtype=float)
 
     t = state.t
     alpha = state.alpha
@@ -290,22 +295,20 @@ def compute_tgp_stage2_slice(
     Lb = state.Lb
     Ls = state.Ls
     mu_leads = state.mu_leads
-    Vdisx = state.Vdisx_meV
+    Vdisx = state.Vdisx
+    k_B = state.k_B
+    mu_coord = float(np.round(float(mu), 2))
 
-    for c_idx in range(num_cutters):
-        if hasattr(state.tgp_stage2_cutters, 'U_left_compensated'):
-            b_l = float(state.tgp_stage2_cutters.U_left_compensated.sel(chemical_potential=float(mu), cutter_pair_index=c_idx).item())
-            b_r = float(state.tgp_stage2_cutters.U_right_compensated.sel(chemical_potential=float(mu), cutter_pair_index=c_idx).item())
-        else:
-            b_l = float(state.tgp_stage2_cutters.sel(side="left").values[c_idx])
-            b_r = float(state.tgp_stage2_cutters.sel(side="right").values[c_idx])
+    for c_idx, gn in enumerate(target_gns):
+        b_l = float(stage2_da.sel(G_n=float(gn), chemical_potential=mu_coord, barrier_side="left").item())
+        b_r = float(stage2_da.sel(G_n=float(gn), chemical_potential=mu_coord, barrier_side="right").item())
 
         syst_tgp2 = hp.build_system(
             t=t, mu=mu, mu_n=mu_n, Delta0=Delta0, gamma=gamma, V_z=vz,
             alpha=alpha, Ln=Ln, Lb=Lb, Ls=Ls, mu_leads=mu_leads,
             barrier_l=b_l, barrier_r=b_r, Vdisx=Vdisx
         )
-        dL, dR, dLR, dRL, _ = hp.calc_dIdV(syst_tgp2, dynamic_energies, show_progress=False)
+        dL, dR, dLR, dRL, _ = hp.calc_dIdV(syst_tgp2, Vbias_arr, show_progress=False)
 
         for t_idx, T_val in enumerate(target_temps):
             if T_val == 0.0:
@@ -314,22 +317,16 @@ def compute_tgp_stage2_slice(
                 g_lr[c_idx, 0, 0, t_idx, :] = dLR
                 g_rl[c_idx, 0, 0, t_idx, :] = dRL
             else:
-                k_B_meV = 8.617333262e-2 * 1e-3
-                kBT = k_B_meV * T_val
-                de = np.gradient(dynamic_energies)
-                for e_idx, V_b in enumerate(dynamic_energies):
-                    arg = (dynamic_energies - V_b) / (2.0 * kBT)
-                    arg = np.clip(arg, -50.0, 50.0)
-                    fd_kernel = (1.0 / (4.0 * kBT)) / (np.cosh(arg)**2)
-                    norm = np.sum(fd_kernel * de)
-                    if norm > 0:
-                        fd_kernel /= norm
-                    g_ll[c_idx, 0, 0, t_idx, e_idx] = np.sum(dL * fd_kernel * de)
-                    g_rr[c_idx, 0, 0, t_idx, e_idx] = np.sum(dR * fd_kernel * de)
-                    g_lr[c_idx, 0, 0, t_idx, e_idx] = np.sum(dLR * fd_kernel * de)
-                    g_rl[c_idx, 0, 0, t_idx, e_idx] = np.sum(dRL * fd_kernel * de)
+                M_broaden = get_broaden_operator(Vbias_arr, T_val, k_B=k_B)
+                g_ll[c_idx, 0, 0, t_idx, :] = dL @ M_broaden
+                g_rr[c_idx, 0, 0, t_idx, :] = dR @ M_broaden
+                g_lr[c_idx, 0, 0, t_idx, :] = dLR @ M_broaden
+                g_rl[c_idx, 0, 0, t_idx, :] = dRL @ M_broaden
 
-    target_gns = state.tgp_stage2_cutters.target_gn.values if hasattr(state.tgp_stage2_cutters, 'target_gn') else np.arange(num_cutters)
+    assert not (
+        np.isnan(g_ll).any() or np.isnan(g_rr).any()
+        or np.isnan(g_lr).any() or np.isnan(g_rl).any()
+    ), "TGP Stage 2 slice produced NaN conductances"
 
     return xr.Dataset(
         data_vars={
@@ -337,15 +334,13 @@ def compute_tgp_stage2_slice(
             "g_rr": (["cutter_pair_index", "zeeman_field", "chemical_potential", "temperature", "bias"], g_rr),
             "g_lr": (["cutter_pair_index", "zeeman_field", "chemical_potential", "temperature", "bias"], g_lr),
             "g_rl": (["cutter_pair_index", "zeeman_field", "chemical_potential", "temperature", "bias"], g_rl),
-            "L_SI": (["cutter_pair_index", "zeeman_field", "chemical_potential"], l_si),
-            "R_SI": (["cutter_pair_index", "zeeman_field", "chemical_potential"], r_si),
         },
         coords={
             "cutter_pair_index": np.arange(num_cutters, dtype=int),
             "zeeman_field": [float(vz)],
             "chemical_potential": [float(mu)],
             "temperature": target_temps,
-            "bias": dynamic_energies,
+            "bias": Vbias_arr,
             "target_gn": ("cutter_pair_index", target_gns),
         }
     )
@@ -358,7 +353,7 @@ def compute_tgp_stage2_slice(
 def worker_simulation_step(iter_data: Tuple, config: Any, state: SimulationState, worker_context: Dict) -> Dict[str, Any]:
     """
     Worker function for the main transport and spectral parameter loop (Loop 1).
-    Delegates to modular subroutines and returns clean point-slice datasets.
+    Delegates to modular subroutines and returns point-slice datasets.
 
     Parameters
     ----------
@@ -388,9 +383,9 @@ def worker_simulation_step(iter_data: Tuple, config: Any, state: SimulationState
 
     # Calibrated Barrier Sweeps (Conductance Matrix DataArray)
     if incl.barrier_sweep:
-        if state.calibrated_cutters is None:
+        if state.stage1_cutters is None:
             raise ValueError(
-                "Calculation includes barrier_sweep, but state.calibrated_cutters is None. "
+                "Calculation includes barrier_sweep, but state.stage1_cutters is None. "
                 "Ensure barrier calibration is enabled and successful before running the simulation step."
             )
         q_nodes = worker_context["q_nodes"]
@@ -406,15 +401,15 @@ def worker_simulation_step(iter_data: Tuple, config: Any, state: SimulationState
         quad_dict = worker_context["quad_dict"]
         res_dict["tgp_stage1"] = compute_tgp_stage1_slice(mu, vz, config, state, quad_dict)
 
-    # TGP Stage 2: 5 mu-compensated symmetric cutters & bias spectroscopy
+    # TGP Stage 2: mu-compensated symmetric cutters & bias spectroscopy
     if incl.tgp_stage2 and incl.stage2_fullgrid:
-        if state.tgp_stage2_cutters is None:
+        if state.stage2_cutters is None:
             raise ValueError(
-                "Calculation includes tgp_stage2 with stage2_fullgrid, but state.tgp_stage2_cutters is None. "
+                "Calculation includes tgp_stage2 with stage2_fullgrid, but state.stage2_cutters is None. "
                 "Ensure Stage 2 cutter calibration is configured and executed before running the simulation step."
             )
-        dynamic_energies = worker_context["dynamic_energies"]
-        res_dict["tgp_stage2"] = compute_tgp_stage2_slice(mu, vz, config, state, dynamic_energies)
+        Vbias_arr = worker_context["Vbias_arr"]
+        res_dict["tgp_stage2"] = compute_tgp_stage2_slice(mu, vz, config, state, Vbias_arr)
 
     return res_dict
 
@@ -427,6 +422,7 @@ def worker_pfaffian_step(iter_data: Tuple, config: Any, state: SimulationState) 
     mu = float(iter_data[1])
     vz = float(iter_data[2])
 
+    # state.Vdisx is already in meV (scaled by V0), so pass V0=1.0 to avoid double-scaling.
     pfaff_val = hp.cal_pfaffian_invariant(
         ts=state.t,
         alphas=state.alpha,
@@ -434,12 +430,29 @@ def worker_pfaffian_step(iter_data: Tuple, config: Any, state: SimulationState) 
         delta0=state.Delta0,
         Nx=state.Ls,
         Vdisx=state.Vdisx,
-        V0=state.V0,
+        V0=1.0,
         gm=vz,
         mu=mu,
         delta_N=0
     )
     return {"i": i, "mu": mu, "vz": vz, "pfaffian_invariant": int(pfaff_val)}
+
+
+def _resolve_gap_threshold_factor(v0: float, cfg_val: Any) -> float:
+    """Resolve Stage 2 gap_threshold_factor strictly from disorder amplitude V0."""
+    if isinstance(cfg_val, (int, float)):
+        return float(cfg_val)
+    if isinstance(cfg_val, (dict, DictConfig)):
+        for key, factor in cfg_val.items():
+            if math.isclose(float(key), float(v0), abs_tol=1e-6):
+                return float(factor)
+        raise ValueError(
+            f"No gap_threshold_factor configured for disorder V0={v0}. "
+            f"Configured keys: {list(cfg_val.keys())}"
+        )
+    raise TypeError(
+        f"Expected float or mapping for gap_threshold_factor, got {type(cfg_val).__name__}"
+    )
 
 
 # =============================================================================
@@ -479,8 +492,7 @@ if __name__ == "__main__":
     # Save Static Real-Space Disorder Profile (vdisx.nc) Once Before Loop
     vdis_ds = xr.Dataset(
         data_vars={
-            "Vdisx_normalized": (["site"], state.Vdisx),
-            "Vdisx_meV": (["site"], state.Vdisx_meV),
+            "Vdisx": (["site"], state.Vdisx, {"units": "meV"}),
         },
         coords={"site": np.arange(state.Ls, dtype=int)},
         attrs={
@@ -506,7 +518,9 @@ if __name__ == "__main__":
         n_bnodes = rs.barrier_quadrature_nodes
         for T_val in target_temps:
             if T_val > 0.0:
-                qe, qw = hp.get_thermal_quadrature_nodes(T_mK=T_val, n_nodes=n_bnodes, bias_meV=0.0)
+                qe, qw = hp.get_thermal_quadrature_nodes(
+                    T_mK=T_val, n_nodes=n_bnodes, bias_meV=0.0, k_B=state.k_B
+                )
                 q_nodes[T_val] = (qe, qw)
             else:
                 q_nodes[0.0] = (None, None)
@@ -531,18 +545,18 @@ if __name__ == "__main__":
             else:
                 quad_dict[0.0] = None
 
-    dynamic_energies = hp.make_dynamic_grid()
+    Vbias_arr = hp.make_dynamic_grid()
 
     worker_context = {
         "q_nodes": q_nodes,
         "quad_dict": quad_dict,
-        "dynamic_energies": dynamic_energies,
+        "Vbias_arr": Vbias_arr,
     }
 
     params_list = state.params_list
     print(f"Total Parameter Points: {len(params_list)} (mu in [{state.mu_var[0]}, {state.mu_var[-1]}], Vz in [{state.Vz_var[0]}, {state.Vz_var[-1]}])")
 
-    # 3. Main Simulation Loop (Loop 1: Transport & Spectra)
+    # Main Simulation Loop (Loop 1: Transport & Spectra)
     if config.acceleration_type == "parallel":
         num_workers = hp.get_workers(config.num_workers)
         print(f"Launching Multiprocessing Pool with {num_workers} workers...")
@@ -553,35 +567,77 @@ if __name__ == "__main__":
         print("Using Serial Execution (CPU)...")
         results = [worker_simulation_step(pms, config, state, worker_context) for pms in tqdm(params_list, desc="Transport/Spectral Loop")]
 
-    # 4. Assemble Point Slices into Decoupled NetCDF Datasets
+    # Assemble Point Slices into Decoupled NetCDF Datasets
     print("\n--- Aggregating Point Slices into NetCDF Datasets ---")
 
-    # A. Spectra & Topology
+    # Spectra & Topology
     spectral_slices = [r["spectral"] for r in results if "spectral" in r]
     ds_spectral = xr.combine_by_coords(spectral_slices) if spectral_slices else None
 
-    # B. Conductance Sweeps
+    # Conductance Sweeps
     cond_slices = [r["conductance"] for r in results if "conductance" in r]
     if cond_slices:
         ds_cond = xr.combine_by_coords(cond_slices)
         ds_cond.to_netcdf(out_dir / "conductance_sweeps.nc", engine="h5netcdf")
         print(f"Saved Conductance Sweeps to: {out_dir / 'conductance_sweeps.nc'}")
 
-    # C. TGP Stage 1
+    # TGP Stage 1
     s1_slices = [r["tgp_stage1"] for r in results if "tgp_stage1" in r]
     if s1_slices:
         ds_s1 = xr.combine_by_coords(s1_slices)
         ds_s1.to_netcdf(out_dir / "tgp_stage1.nc", engine="h5netcdf")
         print(f"Saved TGP Stage 1 Harmonics to: {out_dir / 'tgp_stage1.nc'}")
 
-    # D. TGP Stage 2
+    # TGP Stage 2 (held in memory until Loop 2 assigns Pfaffian topological invariant to L_SI/R_SI)
     s2_slices = [r["tgp_stage2"] for r in results if "tgp_stage2" in r]
+    ds_s2: Optional[xr.Dataset] = None
     if s2_slices:
+        if not incl.pfaffian:
+            raise ValueError(
+                "Calculation includes tgp_stage2, which requires incl.pfaffian=True "
+                "to populate L_SI/R_SI with the closed-wire topological Pfaffian invariant."
+            )
         ds_s2 = xr.combine_by_coords(s2_slices)
-        ds_s2.to_netcdf(out_dir / "tgp_stage2.nc", engine="h5netcdf")
-        print(f"Saved TGP Stage 2 Spectroscopy to: {out_dir / 'tgp_stage2.nc'}")
+        tgp2_cfg = config.protocol.tgp.stage2
+        bias_vals = ds_s2.coords["bias"].values
+        leading_dims = ("cutter_pair_index", "zeeman_field", "chemical_potential", "temperature")
+        leading_shape = tuple(ds_s2.sizes[d] for d in leading_dims)
+        g_rl_2d = ds_s2["g_rl"].transpose(*leading_dims, "bias").values.reshape(-1, len(bias_vals))
+        g_lr_2d = ds_s2["g_lr"].transpose(*leading_dims, "bias").values.reshape(-1, len(bias_vals))
+        upper_th = (
+            float("inf")
+            if tgp2_cfg.upper_conductance_threshold is None
+            else float(tgp2_cfg.upper_conductance_threshold)
+        )
+        gap_factor = _resolve_gap_threshold_factor(state.V0, tgp2_cfg.gap_threshold_factor)
+        noise_th = float(tgp2_cfg.noise_threshold)
+        gap_rl_flat, _, _ = hp.extract_nonlocal_gap(
+            bias=bias_vals,
+            g_nonlocal=g_rl_2d,
+            gap_threshold_factor=gap_factor,
+            upper_conductance_threshold=upper_th,
+            noise_threshold=noise_th,
+        )
+        gap_lr_flat, _, _ = hp.extract_nonlocal_gap(
+            bias=bias_vals,
+            g_nonlocal=g_lr_2d,
+            gap_threshold_factor=gap_factor,
+            upper_conductance_threshold=upper_th,
+            noise_threshold=noise_th,
+        )
+        gap_rl_arr = gap_rl_flat.reshape(leading_shape)
+        gap_lr_arr = gap_lr_flat.reshape(leading_shape)
+        gap_attrs = {
+            "gap_threshold_factor": gap_factor,
+            "noise_threshold": noise_th,
+            "V0_meV": float(state.V0),
+        }
+        ds_s2["gap_rl"] = (leading_dims, gap_rl_arr, gap_attrs)
+        ds_s2["gap_lr"] = (leading_dims, gap_lr_arr, gap_attrs)
+        ds_s2["transport_gap"] = (leading_dims, np.minimum(gap_rl_arr, gap_lr_arr), gap_attrs)
 
     # Pfaffian Invariant Calculation (Loop 2)
+    pfaff_grid: Optional[np.ndarray] = None
     if incl.pfaffian:
         print("\nStarting Pfaffian Topological Invariant Loop (Loop 2)...")
         if config.acceleration_type == "parallel":
@@ -608,6 +664,35 @@ if __name__ == "__main__":
                 coords={"chemical_potential": unique_mus, "zeeman_field": unique_vzs}
             )
 
+    if ds_s2 is not None:
+        assert pfaff_grid is not None
+        # Convert closed-wire Pfaffian (1=topological, 0=trivial) to TGP SI convention (-1=topological, +1=trivial)
+        si_2d = np.where(pfaff_grid > 0, -1, 1).astype(np.int64)
+        si_da = xr.DataArray(
+            si_2d,
+            coords={"chemical_potential": np.unique(state.mu_var), "zeeman_field": np.unique(state.Vz_var)},
+            dims=("chemical_potential", "zeeman_field"),
+        )
+        si_aligned = si_da.reindex(
+            chemical_potential=ds_s2.coords["chemical_potential"].values,
+            zeeman_field=ds_s2.coords["zeeman_field"].values,
+        )
+        si_3d = np.broadcast_to(
+            si_aligned.transpose("zeeman_field", "chemical_potential").values[None, :, :],
+            (ds_s2.sizes["cutter_pair_index"], ds_s2.sizes["zeeman_field"], ds_s2.sizes["chemical_potential"]),
+        ).copy()
+        si_attrs = {
+            "description": (
+                "Closed-wire topological Pfaffian invariant (-1 = topological, +1 = trivial), "
+                "stored under azure-quantum-tgp L_SI/R_SI variable names for schema compatibility "
+                "(not computed via reflection-matrix scattering invariant)."
+            )
+        }
+        ds_s2["L_SI"] = (["cutter_pair_index", "zeeman_field", "chemical_potential"], si_3d, si_attrs)
+        ds_s2["R_SI"] = (["cutter_pair_index", "zeeman_field", "chemical_potential"], si_3d.copy(), si_attrs)
+        ds_s2.to_netcdf(out_dir / "tgp_stage2.nc", engine="h5netcdf")
+        print(f"Saved TGP Stage 2 Spectroscopy to: {out_dir / 'tgp_stage2.nc'}")
+
     if ds_spectral is not None:
         ds_spectral.to_netcdf(out_dir / "spectra_and_topology.nc", engine="h5netcdf")
         print(f"Saved Spectra and Topology to: {out_dir / 'spectra_and_topology.nc'}")
@@ -617,7 +702,7 @@ if __name__ == "__main__":
         print("\nExporting legacy .npy files from NetCDF datasets...")
         hp.export_legacy_npy_files(out_dir)
 
-    # 7. Runtime Accounting & Metadata Logging
+    # Runtime Accounting & Metadata Logging
     t_end = time.perf_counter()
     total_runtime_sec = t_end - t_start
     total_runtime_min = total_runtime_sec / 60.0

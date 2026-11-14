@@ -5,14 +5,25 @@
 # ==============================================================================
 
 calibrate_cutters: False
-symmetric_target_gns: [0.25, 0.35, 0.45, 0.55, 0.65]
 sweep_gnmin: 0.01
 sweep_gnmax: 0.85
 sweep_gnres: 0.042
 
 # Root search bracket boundaries for cutter gate potentials in meV
 u_min: -20.0
-u_max: 35.0
+u_max: 100.0
+
+# Pre-health check pinch-off tolerance in e^2/h at U = u_max
+pinch_off_tol: 1.0e-3
+
+# Peak conductance search parameters in meV (find U_top and G_max starting inward from large repulsive U)
+peak_search_start_u: 10.0
+peak_search_step: 0.1
+
+# Stage 2 conductance target parameters in e^2/h
+stage2_target_Gns: [0.25, 0.35, 0.45, 0.55, 0.65]
+stage2_gn_min: 0.01
+stage2_min_gn_spacing: 0.045
 
 # Above-gap bias energy in meV (E > Delta_0 = 1.3 meV) where Andreev reflection is suppressed
 energy: 2.0
@@ -24,6 +35,6 @@ tol: 1e-4
 max_iter: 50
 
 # Subband chemical potential sampling window in meV for median-averaging
-n_mu_points: 15
+n_mu_points: 61
 mu_min: 0.0
 mu_max: 2.0

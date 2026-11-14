@@ -1,5 +1,6 @@
 import pytest
 import numpy as np
+import xarray as xr
 import kwant
 import sys
 import os
@@ -91,8 +92,7 @@ def test_monotonicity_and_bracket():
 
 def test_target_conductance_inversion():
     """
-    Test calibration for the standard targets:
-    G_N in {0.35, 0.62, 0.90} e^2/h.
+    Test Stage 1 calibration for targets G_N in {0.35, 0.62, 0.90} e^2/h.
     Assert |G_N(U_c) - G_target| < 0.005 e^2/h for both cutters,
     and verify left/right spatial symmetry on a clean wire.
     """
@@ -101,22 +101,24 @@ def test_target_conductance_inversion():
     alpha = 1.4
     mu_leads = t
     Vdisx = np.zeros(geom_cfg.Ls)
-    
+
     targets = [0.35, 0.62, 0.90]
-    mu_points = np.linspace(calib_cfg.mu_min, calib_cfg.mu_max, calib_cfg.n_mu_points)
-    
+    mu_points = np.linspace(calib_cfg.mu_min, calib_cfg.mu_max, 5)
+
+    da = bc.calibrate_stage1_wire_cutters(
+        nominal_targets=targets,
+        calibration_cfg=calib_cfg,
+        geometry_cfg=geom_cfg,
+        Vdisx=Vdisx,
+        t=t,
+        alpha=alpha,
+        mu_leads=mu_leads,
+        mu_points=mu_points,
+    )
+
     for target in targets:
-        pair = bc.calibrate_symmetric_pair(
-            target_gn=target,
-            calibration_cfg=calib_cfg,
-            geometry_cfg=geom_cfg,
-            Vdisx=Vdisx,
-            t=t,
-            alpha=alpha,
-            mu_leads=mu_leads,
-            mu_points=mu_points,
-        )
-        u_l, u_r = pair[0], pair[1]
+        u_l = float(da.sel(G_n=target, barrier_side="left").item())
+        u_r = float(da.sel(G_n=target, barrier_side="right").item())
 
         # Spatial inversion symmetry on clean wire: UL* == UR*
         assert abs(u_l - u_r) < 1e-4, f"Asymmetry on clean wire: left={u_l}, right={u_r}"
@@ -139,18 +141,17 @@ def test_target_conductance_inversion():
 
 def test_calibrate_wire_cutters_table_structure():
     """
-    Test calibrate_wire_cutters returns the expected [G_N, [UL, UR]] structure.
+    Test calibrate_stage1_wire_cutters returns the expected ('G_n', 'barrier_side') DataArray.
     """
     calib_cfg, geom_cfg = get_default_test_configs()
-    calib_cfg.target_gns = [0.35, 0.90]  # small subset for quick test
     t = 16.565
     alpha = 1.4
     mu_leads = t
     Vdisx = np.zeros(geom_cfg.Ls)
 
-    mu_points = np.linspace(calib_cfg.mu_min, calib_cfg.mu_max, calib_cfg.n_mu_points)
-    table = bc.calibrate_wire_cutters(
-        targets=calib_cfg.target_gns,
+    mu_points = np.linspace(calib_cfg.mu_min, calib_cfg.mu_max, 5)
+    table = bc.calibrate_stage1_wire_cutters(
+        nominal_targets=[0.35, 0.90],
         calibration_cfg=calib_cfg,
         geometry_cfg=geom_cfg,
         Vdisx=Vdisx,
@@ -163,8 +164,8 @@ def test_calibrate_wire_cutters_table_structure():
     assert len(table.G_n) == 2
     assert np.isclose(table.G_n.values[0], 0.35)
     assert np.isclose(table.G_n.values[1], 0.90)
-    assert "side" in table.dims
-    assert len(table.side) == 2
+    assert table.dims == ("G_n", "barrier_side")
+    assert len(table.barrier_side) == 2
 
 
 def test_clean_wire_analytical_transfer_matrix():
@@ -227,8 +228,11 @@ def test_topological_quantization_zero_bias():
     Vdisx_fast = np.zeros(geom_cfg_fast.Ls)
     
     mu_points = [mu]
-    u_c = bc.calibrate_single_barrier(
-        target_gn=0.5, side='left',
+    u_top_l, g_max_l = bc._find_conductance_top(
+        "left", calib_cfg, geom_cfg_fast, Vdisx_fast, t, alpha, mu_leads, mu_points
+    )
+    u_c = bc._solve_repulsive_barrier(
+        target_gn=0.5, side="left", u_top=u_top_l, g_max=g_max_l,
         calibration_cfg=calib_cfg, geometry_cfg=geom_cfg_fast,
         Vdisx=Vdisx_fast, t=t, alpha=alpha, mu_leads=mu_leads,
         mu_points=mu_points,
@@ -264,25 +268,24 @@ def test_error_handling():
     mu_leads = t
     Vdisx = np.zeros(geom_cfg.Ls)
     
-    mu_points = np.linspace(calib_cfg.mu_min, calib_cfg.mu_max, calib_cfg.n_mu_points)
+    mu_points = np.linspace(calib_cfg.mu_min, calib_cfg.mu_max, 5)
 
     # 1. Unreachable / physical bounds
     for invalid_target in [-0.5, 2.5]:
-        with pytest.raises(ValueError, match="out of physical bounds"):
-            bc.calibrate_symmetric_pair(
-                target_gn=invalid_target,
+        with pytest.raises(ValueError, match="outside reachable"):
+            bc._solve_repulsive_barrier(
+                target_gn=invalid_target, side="left", u_top=0.0, g_max=1.0,
                 calibration_cfg=calib_cfg, geometry_cfg=geom_cfg,
                 Vdisx=Vdisx, t=t, alpha=alpha, mu_leads=mu_leads,
                 mu_points=mu_points,
             )
 
-    # 2. Inverted bracket
+    # 2. Inverted bracket (u_top >= u_max)
     calib_inverted = OmegaConf.create(dict(calib_cfg))
-    calib_inverted.u_min = 6.0
-    calib_inverted.u_max = -3.0
-    with pytest.raises(ValueError, match="u_min must be strictly less than u_max"):
-        bc.calibrate_symmetric_pair(
-            target_gn=0.5,
+    calib_inverted.u_max = -5.0
+    with pytest.raises(ValueError, match="must be strictly less than u_max"):
+        bc._solve_repulsive_barrier(
+            target_gn=0.5, side="left", u_top=0.0, g_max=1.0,
             calibration_cfg=calib_inverted, geometry_cfg=geom_cfg,
             Vdisx=Vdisx, t=t, alpha=alpha, mu_leads=mu_leads,
             mu_points=mu_points,
@@ -290,8 +293,8 @@ def test_error_handling():
 
     # 3. Invalid side
     with pytest.raises(ValueError, match="side must be 'left' or 'right'"):
-        bc.calibrate_single_barrier(
-            target_gn=0.5, side='center',
+        bc._find_conductance_top(
+            side="center",
             calibration_cfg=calib_cfg, geometry_cfg=geom_cfg,
             Vdisx=Vdisx, t=t, alpha=alpha, mu_leads=mu_leads,
             mu_points=mu_points,
@@ -328,13 +331,21 @@ def test_exact_vs_renormalized_conductance_agreement_disordered():
     np.random.seed(42)
     vdis = np.random.uniform(-0.5, 0.5, size=geom_cfg_fast.Ls)
 
-    # 1. Calibrate on single mu point
-    ul = bc.calibrate_single_barrier(
-        target_gn=0.5, side="left", calibration_cfg=calib_cfg, geometry_cfg=geom_cfg_fast,
+    # 1. Calibrate on single mu point via _find_conductance_top + _solve_repulsive_barrier
+    u_top_l, g_max_l = bc._find_conductance_top(
+        "left", calib_cfg, geom_cfg_fast, vdis, t, alpha, mu_leads, [mu]
+    )
+    u_top_r, g_max_r = bc._find_conductance_top(
+        "right", calib_cfg, geom_cfg_fast, vdis, t, alpha, mu_leads, [mu]
+    )
+    ul = bc._solve_repulsive_barrier(
+        target_gn=0.5, side="left", u_top=u_top_l, g_max=g_max_l,
+        calibration_cfg=calib_cfg, geometry_cfg=geom_cfg_fast,
         Vdisx=vdis, t=t, alpha=alpha, mu_leads=mu_leads, mu_points=[mu]
     )
-    ur = bc.calibrate_single_barrier(
-        target_gn=0.5, side="right", calibration_cfg=calib_cfg, geometry_cfg=geom_cfg_fast,
+    ur = bc._solve_repulsive_barrier(
+        target_gn=0.5, side="right", u_top=u_top_r, g_max=g_max_r,
+        calibration_cfg=calib_cfg, geometry_cfg=geom_cfg_fast,
         Vdisx=vdis, t=t, alpha=alpha, mu_leads=mu_leads, mu_points=[mu]
     )
 
@@ -362,6 +373,162 @@ def test_exact_vs_renormalized_conductance_agreement_disordered():
         G_low_0, G_exact_0, atol=1e-5,
         err_msg="Low-energy renormalized and exact zero-bias conductances diverge!"
     )
+
+
+def test_check_wire_health():
+    """
+    Test pre-health check at U = u_max (100 meV):
+    1. Healthy wire pinches off below pinch_off_tol and passes.
+    2. Unhealthy wire (conductance > pinch_off_tol) raises UnhealthyWireError.
+    """
+    calib_cfg, geom_cfg = get_default_test_configs()
+    geom_cfg_fast = OmegaConf.create(dict(geom_cfg))
+    geom_cfg_fast.Ls = 50
+    t = 16.565
+    alpha = 1.4
+    mu_leads = t
+    Vdisx = np.zeros(geom_cfg_fast.Ls)
+    mu_points = np.array([0.0, 1.0, 2.0])
+
+    g_left, g_right = bc.check_wire_health(
+        calibration_cfg=calib_cfg,
+        geometry_cfg=geom_cfg_fast,
+        Vdisx=Vdisx,
+        t=t,
+        alpha=alpha,
+        mu_leads=mu_leads,
+        mu_points=mu_points,
+    )
+    assert g_left <= calib_cfg.pinch_off_tol
+    assert g_right <= calib_cfg.pinch_off_tol
+
+    # Force failure with impossibly tight tolerance or open U_max
+    calib_bad = OmegaConf.create(dict(calib_cfg))
+    calib_bad.u_max = 0.0
+    with pytest.raises(bc.UnhealthyWireError):
+        bc.check_wire_health(
+            calibration_cfg=calib_bad,
+            geometry_cfg=geom_cfg_fast,
+            Vdisx=Vdisx,
+            t=t,
+            alpha=alpha,
+            mu_leads=mu_leads,
+            mu_points=mu_points,
+        )
+
+
+def test_calibrate_stage1_wire_cutters_truncation_and_schema():
+    """
+    Test calibrate_stage1_wire_cutters:
+    1. Returns xr.DataArray named 'stage1_cutters' with dims ('G_n', 'barrier_side').
+    2. Truncates nominal targets above G_top and appends round(G_top, 2).
+    3. All G_n coordinates are rounded to 2 decimal places.
+    """
+    calib_cfg, geom_cfg = get_default_test_configs()
+    geom_cfg_fast = OmegaConf.create(dict(geom_cfg))
+    geom_cfg_fast.Ls = 50
+    t = 16.565
+    alpha = 1.4
+    mu_leads = t
+    Vdisx = np.zeros(geom_cfg_fast.Ls)
+    mu_points = np.array([0.0, 1.0, 2.0])
+
+    # Include an unreachable target (2.05 > 2.0 e^2/h) to exercise truncation + G_top append
+    nominal_targets = np.array([0.10, 0.50, 2.05])
+    da = bc.calibrate_stage1_wire_cutters(
+        nominal_targets=nominal_targets,
+        calibration_cfg=calib_cfg,
+        geometry_cfg=geom_cfg_fast,
+        Vdisx=Vdisx,
+        t=t,
+        alpha=alpha,
+        mu_leads=mu_leads,
+        mu_points=mu_points,
+    )
+
+    assert isinstance(da, xr.DataArray)
+    assert da.name == "stage1_cutters"
+    assert da.dims == ("G_n", "barrier_side")
+    assert list(da.coords["barrier_side"].values) == ["left", "right"]
+    assert not np.isnan(da.values).any()
+
+    gns = da.coords["G_n"].values
+    np.testing.assert_allclose(gns, np.round(gns, 2), atol=1e-12)
+    assert 2.05 not in np.round(gns, 2)
+    assert np.isclose(gns[0], 0.10)
+    assert np.isclose(gns[1], 0.50)
+    assert len(gns) >= 3  # [0.10, 0.50, floor_2dec(G_top)]
+
+    # Verify Option B: when g_top is within sweep_gnres (0.042) of last kept target, keep larger g_top
+    g_top = float(da.attrs["g_top"])
+    near_top = round(g_top - 0.02, 2)
+    da_opt_b = bc.calibrate_stage1_wire_cutters(
+        nominal_targets=np.array([0.10, near_top, 2.05]),
+        calibration_cfg=calib_cfg,
+        geometry_cfg=geom_cfg_fast,
+        Vdisx=Vdisx,
+        t=t,
+        alpha=alpha,
+        mu_leads=mu_leads,
+        mu_points=mu_points,
+    )
+    np.testing.assert_allclose(da_opt_b.coords["G_n"].values, [0.10, g_top], atol=1e-12)
+
+
+def test_calibrate_stage2_wire_cutters_spacing_and_schema():
+    """
+    Test calibrate_stage2_wire_cutters:
+    1. Returns xr.DataArray named 'stage2_cutters' with dims ('G_n', 'chemical_potential', 'barrier_side').
+    2. Uses exact nominal stage2_target_Gns when reachable across all mu.
+    3. When max(stage2_target_Gns) > G_top, reconstructs evenly spaced targets on [stage2_gn_min, G_top]
+       and decrements n_c until min(diff(G_n)) >= stage2_min_gn_spacing.
+    """
+    calib_cfg, geom_cfg = get_default_test_configs()
+    geom_cfg_fast = OmegaConf.create(dict(geom_cfg))
+    geom_cfg_fast.Ls = 50
+    t = 16.565
+    alpha = 1.4
+    mu_leads = t
+    Vdisx = np.zeros(geom_cfg_fast.Ls)
+    mu_points = np.array([0.004, 0.504])
+
+    # Case 1: Reachable nominal stage2_target_Gns -> used verbatim
+    da_healthy = bc.calibrate_stage2_wire_cutters(
+        calibration_cfg=calib_cfg,
+        geometry_cfg=geom_cfg_fast,
+        Vdisx=Vdisx,
+        t=t,
+        alpha=alpha,
+        mu_leads=mu_leads,
+        mu_points=mu_points,
+    )
+    assert isinstance(da_healthy, xr.DataArray)
+    assert da_healthy.name == "stage2_cutters"
+    assert da_healthy.dims == ("G_n", "chemical_potential", "barrier_side")
+    assert list(da_healthy.coords["barrier_side"].values) == ["left", "right"]
+    assert not np.isnan(da_healthy.values).any()
+    np.testing.assert_allclose(da_healthy.coords["G_n"].values, calib_cfg.stage2_target_Gns, atol=1e-12)
+    np.testing.assert_allclose(da_healthy.coords["chemical_potential"].values, np.round(mu_points, 2), atol=1e-12)
+
+    # Case 2: Conductance-limited wire (max nominal target unreachable -> [0.01, g_top] rescaling)
+    calib_limited = OmegaConf.create(dict(calib_cfg))
+    calib_limited.stage2_target_Gns = [0.35, 0.49, 0.62, 0.76, 2.05]
+    calib_limited.stage2_gn_min = 0.01
+    calib_limited.stage2_min_gn_spacing = 0.045
+
+    da_limited = bc.calibrate_stage2_wire_cutters(
+        calibration_cfg=calib_limited,
+        geometry_cfg=geom_cfg_fast,
+        Vdisx=Vdisx,
+        t=t,
+        alpha=alpha,
+        mu_leads=mu_leads,
+        mu_points=mu_points,
+    )
+    gns_limited = da_limited.coords["G_n"].values
+    assert np.isclose(gns_limited[0], 0.01)
+    assert np.isclose(gns_limited[-1], da_limited.attrs["g_top"])
+    assert np.min(np.diff(gns_limited)) >= calib_limited.stage2_min_gn_spacing - 1e-12
 
 
 if __name__ == "__main__":
