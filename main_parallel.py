@@ -467,13 +467,15 @@ if __name__ == "__main__":
     parser.add_argument("--workers", dest="workers", type=int, default=None, help="Number of workers.")
     cli_args, remaining = parser.parse_known_args()
 
-    config_path = PathConfigs.PARAMETERS / cli_args.config_file 
+    config_path = PathConfigs.PARAMETERS / cli_args.config_file
     if not config_path.exists():
         candidate = Path(cli_args.config_file)
         if candidate.exists():
             config_path = candidate
         else:
-            config_path = PathConfigs.PARAMETERS / "fixing_code.yaml"
+            raise FileNotFoundError(
+                f"Configuration file not found at '{config_path}' or '{candidate}'"
+            )
 
     config = ConfigManager.initialize(str(config_path), cli_args=cli_args)
     config.config_path = config_path 
@@ -490,6 +492,7 @@ if __name__ == "__main__":
     ConfigManager.log_artifact(config, state, out_dir)
 
     # Save Static Real-Space Disorder Profile (vdisx.nc) Once Before Loop
+    lambda_dis_val = config.simulation.disorder.lambda_dis
     vdis_ds = xr.Dataset(
         data_vars={
             "Vdisx": (["site"], state.Vdisx, {"units": "meV"}),
@@ -497,7 +500,7 @@ if __name__ == "__main__":
         coords={"site": np.arange(state.Ls, dtype=int)},
         attrs={
             "V0_meV": float(state.V0),
-            "lambda_dis": float(config.simulation.disorder.lambda_dis),
+            "lambda_dis": float(lambda_dis_val) if lambda_dis_val is not None else np.nan,
             "Ls": int(state.Ls),
             "is_real_space": int(bool(config.simulation.disorder.is_real_space)),
         }
