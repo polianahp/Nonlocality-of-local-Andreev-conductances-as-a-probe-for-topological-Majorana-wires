@@ -1,6 +1,6 @@
 # =============================================================================
 # Canonical Azure Quantum TGP Parameters (Simulation & Post-Processing)
-# Replicating exact values from azure-quantum-tgp on GitHub:
+# Replicating values from azure-quantum-tgp on GitHub:
 # - tgp/one.py, tgp/two.py, and notebooks/yield_analysis.py
 # Note: Physical simulation temperatures are configured in resolution.temperatures
 # so that both Stage 1 and Stage 2 are evaluated at consistent temperatures.
@@ -57,17 +57,17 @@ stage2:
   upper_conductance_threshold: null  # null means infinity (no clamping of max|G_NL|)
   
   # Zero-Bias Peak Detection (tgp.two.zbp_dataset_derivative)
-  bias_window: 0.007           # Bias window (meV) around zero for ZBP analysis
+  bias_window: 0.010           # Bias window (10 ueV, meV) around zero for ZBP analysis
   derivative_threshold: 100.0  # Min magnitude of 2nd derivative of G_loc at zero bias
   average_over_cutter: False   # Whether to average ZBP detection across cutters
   zbp_cutter_fraction_th: 0.60 # Fraction of cutter pairs (>= 3/5) detecting ZBP
   
   # Pixel-Level Gap Filtering (tgp.two.set_gap_threshold)
-  threshold_low: 0.005         # Min extracted gap (5 ueV) to be marked gapped
+  threshold_low: 0.010         # Min extracted gap (10 ueV) to be marked gapped
   threshold_high: 0.067        # Max extracted gap (0.067 meV) to reject parent gap
   
   # Cluster Scoring & Topological Validation (tgp.two.cluster_and_score)
   min_cluster_size: 7          # Min pixels for OPTICS cluster to be valid
-  cluster_gap_threshold: 0.005 # Min median gap (5 ueV) across cluster
+  cluster_gap_threshold: 0.010 # Min median gap (10 ueV) across cluster
   gapless_boundary_th: 0.60    # Min fraction (60%) of cluster boundary touching 3w gapless points
   cutter_overlap_th: 0.50      # Min fraction (>= 3/5) of cutters with overlapping SOI2

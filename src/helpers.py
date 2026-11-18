@@ -2152,14 +2152,15 @@ def cal_pfaffian_invariant(ts, alphas, gamma, delta0, Nx, Vdisx, V0, gm, mu,
 
 
 def calc_one_MZM_separation(rho_M1, rho_M2, sep_thresh = 0.8):
-    #checks if mzm wave functions are separated. Condition is that some percentage of the total weight
-    #for each mzm should be on a separate side of "idx" when integrated. This is a precondition before calculating
-    #how well the mzms
+    #checks if mzm wave function weight for each majorana can be separated such that there exists an index where a threshold amound of 
+    # each wave function can found to the left and right of this index.
+
+    #TODO: Double check that this is correct. and double check that rho_M1 and rho_M2 are guaranteed to be the left and right side of the wire. This bug should already be fixed though.
     
     m1_pct = 0
     m2_pct = 0
     
-    idx = 3
+    idx = 3 # starting loop just a little inside of the wire. 
     while (m1_pct < sep_thresh or m2_pct < sep_thresh):
         
         if idx >= len(rho_M1):

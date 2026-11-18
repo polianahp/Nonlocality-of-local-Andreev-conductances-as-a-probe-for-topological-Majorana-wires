@@ -1,0 +1,46 @@
+# ==============================================================================
+# Inputs/Parameters/Calibrated_Realizations/40mK/V0_1_2/disorder_realization_0.yaml
+# Test 40 mK Production Run: Realization 0, V0 = 1.2 meV
+# Temperature: [40.0] mK | Single Highest Baseline
+# ==============================================================================
+
+acceleration_type: "parallel"
+num_workers: -1
+hamiltonian_mode: "legacy"
+
+outputs:
+  dirname: "Calibrated_Realizations/40mK/V0_1_2/disorder_realization_0"
+
+simulation:
+  disorder:
+    is_real_space: False
+    disorder_fpath: "Fourier_Component_Disorders/fourier_disorder_0.npy"
+    lambda_dis: 4.5
+    V0: 1.2
+
+  geometry:
+    default: "geometry/InAs-3micron.yaml"
+
+  barrier_calibration:
+    default: "barrier_calibration/barrier_calibration.yaml"
+    calibrate_cutters: True
+    sweep_baseline_mode: "highest"
+
+  resolution:
+    default: "resolution/resolution_default.yaml"
+    temperatures: [40.0]
+
+calculation_includes:
+  spectra: True
+  localization: True
+  barrier_sweep: True
+  tgp_stage1: True
+  tgp_stage2: True
+  stage2_fullgrid: True
+  pfaffian: True
+  save_old_data_format: False
+
+protocol:
+  default: "protocol/protocol_default.yaml"
+  tgp:
+    default: "protocol/tgp_default.yaml"

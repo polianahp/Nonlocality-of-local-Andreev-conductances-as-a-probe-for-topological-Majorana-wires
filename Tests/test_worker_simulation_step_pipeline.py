@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from src.parameter_handler import ConfigManager, SimulationState
+from src.parameter_handler import ConfigManager, SimulationState, _resolve_baseline_gns
 import src.helpers as hp
 from main_parallel import (
     compute_spectral_slice,
@@ -111,8 +111,33 @@ def test_worker_simulation_step_end_to_end(setup_micro_env):
     assert res["i"] == 0
     assert "spectral" in res
     assert "conductance" in res
+    assert res["conductance"].sizes["baseline_Gn"] == 1
+    assert np.isclose(res["conductance"].coords["baseline_Gn"].values[0], state.target_GNs[-1])
     assert "tgp_stage1" in res
     assert "tgp_stage2" in res
+
+
+def test_resolve_baseline_gns_modes():
+    targets = np.array([0.01, 0.22, 0.43, 0.64, 0.78])
+    assert np.allclose(_resolve_baseline_gns(targets, {"sweep_baseline_mode": "highest"}), [0.78])
+    assert np.allclose(
+        _resolve_baseline_gns(targets, {"sweep_baseline_mode": "three_point"}),
+        [0.01, 0.43, 0.78],
+    )
+    with pytest.raises(ValueError, match="Unsupported sweep_baseline_mode"):
+        _resolve_baseline_gns(targets, {"sweep_baseline_mode": "invalid"})
+
+
+def test_calibrated_realizations_test_configs():
+    cfg_mt = ConfigManager.initialize("Calibrated_Realizations/Multi_Temp/V0_1_2/disorder_realization_0.yaml")
+    assert list(cfg_mt.simulation.resolution.temperatures) == [0.0, 10.0, 20.0, 30.0, 40.0]
+    assert cfg_mt.simulation.barrier_calibration.sweep_baseline_mode == "highest"
+    assert cfg_mt.outputs.dirname == "Calibrated_Realizations/Multi_Temp/V0_1_2/disorder_realization_0"
+
+    cfg_40 = ConfigManager.initialize("Calibrated_Realizations/40mK/V0_1_2/disorder_realization_0.yaml")
+    assert list(cfg_40.simulation.resolution.temperatures) == [40.0]
+    assert cfg_40.simulation.barrier_calibration.sweep_baseline_mode == "highest"
+    assert cfg_40.outputs.dirname == "Calibrated_Realizations/40mK/V0_1_2/disorder_realization_0"
 
 
 def test_tgp_adapter_netcdf_compatibility(setup_micro_env):

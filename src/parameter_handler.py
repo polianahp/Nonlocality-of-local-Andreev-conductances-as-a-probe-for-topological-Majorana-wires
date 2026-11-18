@@ -38,6 +38,24 @@ def _load_and_merge_defaults(node: Any, defaults_dir: Path) -> Any:
     return node
 
 
+def _resolve_baseline_gns(target_gns: np.ndarray, calib_cfg: Any) -> np.ndarray:
+    """Resolve stationary baseline conductances for barrier sweeps from calibrated targets."""
+    if len(target_gns) == 0:
+        raise ValueError("Cannot resolve sweep baselines from empty target_gns.")
+    mode = str(calib_cfg["sweep_baseline_mode"])
+    if mode == "highest":
+        return np.array([float(target_gns[-1])], dtype=float)
+    if mode == "three_point":
+        mid_idx = len(target_gns) // 2
+        return np.array(
+            [float(target_gns[0]), float(target_gns[mid_idx]), float(target_gns[-1])],
+            dtype=float,
+        )
+    raise ValueError(
+        f"Unsupported sweep_baseline_mode={mode!r}; expected 'highest' or 'three_point'."
+    )
+
+
 class ConfigManager:
     """
     Recursively loads yaml file and its defaults.
@@ -176,10 +194,7 @@ class SimulationState:
 
         self.stage1_cutters = None
         self.target_GNs = nominal_stage1_gns
-        self.baseline_GNs = np.array(
-            [nominal_stage1_gns[0], nominal_stage1_gns[len(nominal_stage1_gns) // 2], nominal_stage1_gns[-1]],
-            dtype=float,
-        )
+        self.baseline_GNs = _resolve_baseline_gns(self.target_GNs, calib)
         self.tgp_stage1_pairs = None
         self.stage2_cutters = None
 
@@ -213,11 +228,7 @@ class SimulationState:
                     pool=pool,
                 )
                 self.target_GNs = self.stage1_cutters.coords["G_n"].values
-                mid_idx = len(self.target_GNs) // 2
-                self.baseline_GNs = np.array(
-                    [self.target_GNs[0], self.target_GNs[mid_idx], self.target_GNs[-1]],
-                    dtype=float,
-                )
+                self.baseline_GNs = _resolve_baseline_gns(self.target_GNs, calib)
                 print(f"Calibrated Stage 1 Cutters [G_n, barrier_side]:\n{self.stage1_cutters}")
 
             if calc.tgp_stage1:

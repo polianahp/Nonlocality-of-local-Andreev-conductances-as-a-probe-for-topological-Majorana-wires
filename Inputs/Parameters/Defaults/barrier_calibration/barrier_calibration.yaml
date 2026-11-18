@@ -50,3 +50,8 @@ peak_search_step: 0.1
 stage2_target_Gns: [0.35, 0.49, 0.62, 0.76, 0.90]
 stage2_gn_min: 0.01
 stage2_min_gn_spacing: 0.045
+
+# Stationary baseline selection for barrier sweeps:
+# - "highest": largest calibrated target conductance available (target_GNs[-1])
+# - "three_point": [lowest, middle, highest] calibrated target conductances
+sweep_baseline_mode: "highest"
