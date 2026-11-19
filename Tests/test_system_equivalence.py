@@ -152,7 +152,7 @@ def test_spectra_pfaff_vs_pdi(Nx=50, mu_test=1.0, gm_test=0.87):
     print(f"  epsilon0(Pfaff) = {sim.epsilon0:.6f}")
     print(f"  Test point: mu={mu_test}, gm={gm_test}")
 
-    # Build PDICalculator Hamiltonian
+    # Build PDICalculator Hamiltonian (exact 1:1 band-bottom parity with PfaffianSimulator)
     Vdisx_clean = np.zeros(Nx)
     pdi = PDICalculator(ts, alphas, gamma0, Nx, Vdisx_clean, 0.0)
     H_pdi = pdi.get_full_Hamiltonian(gm_test, mu_test)
@@ -170,13 +170,12 @@ def test_spectra_pfaff_vs_pdi(Nx=50, mu_test=1.0, gm_test=0.87):
     print(f"  Pfaff eigenvalues range: [{evals_pfaff[0]:.8f}, {evals_pfaff[-1]:.8f}]")
     print(f"  Max eigenvalue difference: {max_diff:.2e}")
 
-    # Note: PDICalculator uses 2*ts for epsilon0, while PfaffianSimulator
-    # uses 2*(tx + ty*cos(pi/(Ny+1))) = 2*tx for Ny=1. These should match.
-    eps_pdi = 2 * ts
+    eps_kwant = 2.0 * ts * np.cos(np.pi / (Nx + 1.0))
     eps_pfaff = sim.epsilon0
-    print(f"  epsilon0 check: PDI={eps_pdi:.8f}, Pfaff={eps_pfaff:.8f}, "
-          f"diff={abs(eps_pdi - eps_pfaff):.2e}")
+    print(f"  epsilon0 check: Kwant={eps_kwant:.8f}, Pfaff={eps_pfaff:.8f}, "
+          f"diff={abs(eps_kwant - eps_pfaff):.2e}")
 
+    assert abs(eps_kwant - eps_pfaff) < 1e-12
     assert max_diff < 1e-10, f"Eigenvalue mismatch of {max_diff:.2e}"
 
 
@@ -225,33 +224,19 @@ def test_spectra_pfaff_vs_kwant(Nx=50, mu_test=1.0, gm_test=0.87):
     ham_kwant = syst_closed.hamiltonian_submatrix(sparse=False)
     evals_kwant = np.sort(np.linalg.eigvalsh(ham_kwant))
 
-    # The predicted offset from the epsilon0 difference.
-    # In Kwant, the on-site diagonal has Z*(epsilon0_kwant - mu).
-    # In Pfaff (scaled by Z), the diagonal has Z*(epsilon0_pfaff - mu).
-    # The difference is Z*(epsilon0_pfaff - epsilon0_kwant)
-    #   = Z * 2*ts * (1 - cos(pi/(Nx+1)))
-    # This shifts the particle sector eigenvalues by +offset and
-    # hole sector by -offset (due to particle-hole structure), so
-    # the net effect on sorted eigenvalues is not a uniform shift.
-    # Instead, we verify that the residual after removing this
-    # correction is small.
-    epsilon0_pfaff = 2.0 * ts
+    # PfaffianSimulator now matches build_system_closed's finite-size band bottom exactly
+    epsilon0_pfaff = sim.epsilon0
     epsilon0_kwant = 2.0 * ts * np.cos(np.pi / (Nx + 1.0))
-    predicted_offset = Z * (epsilon0_pfaff - epsilon0_kwant)
 
     # Scale PfaffianSimulator eigenvalues by Z
     evals_pfaff_scaled = Z * evals_pfaff
     raw_max_diff = np.max(np.abs(evals_kwant - evals_pfaff_scaled))
 
     print(f"  epsilon0: Kwant={epsilon0_kwant:.8f}, Pfaff={epsilon0_pfaff:.8f}")
-    print(f"  Predicted offset Z*(eps_pfaff - eps_kwant) = {predicted_offset:.6e}")
     print(f"  Raw max difference (Kwant vs Z*Pfaff): {raw_max_diff:.2e}")
 
-    # The offset is small and consistent — verify it's within
-    # the predicted range (offset affects each eigenvalue differently
-    # depending on particle-hole content, but should be bounded by
-    # the predicted value).
-    assert raw_max_diff <= 2.0 * predicted_offset, f"Eigenvalue mismatch of {raw_max_diff:.2e} exceeds predicted offset"
+    assert abs(epsilon0_pfaff - epsilon0_kwant) < 1e-12
+    assert raw_max_diff < 1e-10, f"Eigenvalue mismatch of {raw_max_diff:.2e}"
 
 
 def test_spectra_with_disorder(Nx=50, mu_test=1.5, gm_test=0.9):
@@ -566,5 +551,60 @@ def test_parameter_mapping():
     ]
 
     assert all(checks), "Parameter mapping introduced errors!"
+
+
+def test_pfaffian_closing_bond_consistent_ring():
+    """
+    Regression test for the outer closing-bond Rashba sign fix (T1_outer).
+    Verifies decimation matches the exact 4*Nx x 4*Nx closed-ring Pfaffian
+    on both clean (Nx=10) and disordered (Nx=12) chains with identical bond orientation.
+    """
+    from src.pfaffian_invariant import pfaffian_ltl
+
+    for Nx, vdis in [(10, np.zeros(10)), (12, np.linspace(-0.3, 0.4, 12))]:
+        sim = PfaffianSimulator(Nx=Nx, Ny=1, delta_N=0)
+        sim.load_disorder(vdis)
+        gm, mu, V0 = 0.50, 0.05, 1.0
+        q_dec = sim.vPf2Dx(gm, mu, V0, sim.gamma0, 0.0)[0]
+
+        H_obc = build_pfaff_full_hamiltonian(sim, gm, mu, V0, sim.gamma0)
+        # Consistent ring bond: H[0, Nx-1] = T0^dagger, H[Nx-1, 0] = T0 (matching interior i -> i+1)
+        t0_blk = np.array([
+            [-sim.tx, -0.5 * sim.alphax, 0.0, 0.0],
+            [0.5 * sim.alphax, -sim.tx, 0.0, 0.0],
+            [0.0, 0.0, sim.tx, 0.5 * sim.alphax],
+            [0.0, 0.0, -0.5 * sim.alphax, sim.tx],
+        ], dtype=complex)
+        S4 = np.array([[0, 0, 1, 0], [0, 0, 0, 1], [1, 0, 0, 0], [0, 1, 0, 0]], dtype=complex)
+        S_full = np.kron(np.eye(Nx), S4)
+
+        H_pbc = H_obc.copy()
+        H_pbc[0:4, 4 * (Nx - 1) : 4 * Nx] = t0_blk
+        H_pbc[4 * (Nx - 1) : 4 * Nx, 0:4] = t0_blk.conj().T
+
+        H_apbc = H_obc.copy()
+        H_apbc[0:4, 4 * (Nx - 1) : 4 * Nx] = -t0_blk
+        H_apbc[4 * (Nx - 1) : 4 * Nx, 0:4] = -t0_blk.conj().T
+
+        pf_p = np.real(pfaffian_ltl(0.5 * (H_pbc @ S_full - (H_pbc @ S_full).T)))
+        pf_m = np.real(pfaffian_ltl(0.5 * (H_apbc @ S_full - (H_apbc @ S_full).T)))
+        q_full = int(round((1.0 - np.sign(pf_p) * np.sign(pf_m)) / 2.0))
+        assert q_dec == q_full, f"Nx={Nx}: decimation Q={q_dec} != full consistent-ring Q={q_full}"
+
+
+def test_pfaffian_fail_loudly_guards():
+    """Verify invalid Nx, delta_N, disorder lengths, and alphas=0 fail loudly."""
+    import pytest
+
+    with pytest.raises(ValueError, match="even Nx"):
+        PfaffianSimulator(Nx=11, Ny=1, delta_N=0)
+    with pytest.raises(ValueError, match="delta_N"):
+        PfaffianSimulator(Nx=10, Ny=1, delta_N=4)
+    sim = PfaffianSimulator(Nx=10, Ny=1, delta_N=0)
+    with pytest.raises(ValueError, match="Disorder array length"):
+        sim.load_disorder(np.zeros(12))
+    with pytest.raises(ValueError, match="alphas != 0.0"):
+        cal_pfaffian_invariant(16.0, 0.0, 0.2, 0.3, 10, np.zeros(10), 0.0, 0.5, 0.0)
+
 
 

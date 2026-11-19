@@ -1,0 +1,50 @@
+# ==============================================================================
+# Inputs/Parameters/Tdispfaff_roi_fixed.yaml
+# Exact apples-to-apples rerun of Tdispfaff_roi (2,500 grid points) on the fixed
+# codebase (T1_outer closing bond + universal 2*t*cos(pi/(Ls+1)) band bottom).
+# Writes to Outputs/Data/Tdispfaff_roi_fixed/ so original Tdispfaff_roi is preserved.
+# ==============================================================================
+
+acceleration_type: "parallel"
+num_workers: -1
+hamiltonian_mode: "legacy"
+
+outputs:
+  dirname: "Tdispfaff_roi_fixed"
+
+simulation:
+  disorder:
+    is_real_space: True
+    disorder_fpath: "New_Disorders/Tdis.npz"
+    lambda_dis: null # Tdis.npz is a real space array, so the disorder length scale is not needed.
+    V0: 1.2
+
+  geometry:
+    default: "geometry/InAs-3micron.yaml"
+
+  barrier_calibration:
+    default: "barrier_calibration/barrier_calibration.yaml"
+    calibrate_cutters: True
+
+  resolution:
+    default: "resolution/resolution_default.yaml"
+    mu_min: 1.5
+    mu_max: 3.5
+    Vz_min: 0.4
+    Vz_max: 0.9
+
+calculation_includes:
+  spectra: True
+  localization: True
+  barrier_sweep: True
+  tgp_stage1: True
+  tgp_stage2: True
+  stage2_fullgrid: True
+  pfaffian: True
+  save_old_data_format: False
+
+protocol:
+  correlation_threshold: 0.8
+
+  tgp:
+    default: "protocol/tgp_default.yaml"

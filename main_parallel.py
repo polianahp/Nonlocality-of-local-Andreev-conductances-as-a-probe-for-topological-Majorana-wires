@@ -435,7 +435,7 @@ def worker_pfaffian_step(iter_data: Tuple, config: Any, state: SimulationState) 
         mu=mu,
         delta_N=0
     )
-    return {"i": i, "mu": mu, "vz": vz, "pfaffian_invariant": int(pfaff_val)}
+    return {"i": i, "mu": mu, "vz": vz, "pfaffian_invariant": int(round(pfaff_val))}
 
 
 def _resolve_gap_threshold_factor(v0: float, cfg_val: Any) -> float:

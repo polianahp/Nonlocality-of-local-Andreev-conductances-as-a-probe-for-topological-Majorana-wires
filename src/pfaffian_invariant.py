@@ -187,6 +187,10 @@ meVpK = 8.6173325 * 1e-2  # Kelvin into meV
 
 class PfaffianSimulator:
     def __init__(self, Nx=400, Ny=1, delta_N=20, ax=100.0, ay=100.0, ms=0.03, gamma0=0.35, delta0=0.3, method="h"):
+        if Nx < 4 or Nx % 2 != 0:
+            raise ValueError(f"PfaffianSimulator folded-chain decimation requires even Nx >= 4, got Nx={Nx}")
+        if not (0 <= delta_N < Nx // 2 - 1):
+            raise ValueError(f"PfaffianSimulator requires 0 <= delta_N < Nx // 2 - 1, got delta_N={delta_N} for Nx={Nx}")
         self.Nx = Nx
         self.Ny = Ny
         self.delta_N = delta_N
@@ -215,6 +219,7 @@ class PfaffianSimulator:
         self.delta_2D = self.build_delta_2D()
         self.T2D = self.build_T2D()
         self.T1 = self.build_T1()
+        self.T1_outer = self.build_T1_outer()
         self.S2D = self.build_S2D()
         
         # Initialize disorder profiles
@@ -222,9 +227,13 @@ class PfaffianSimulator:
         self.SCdiss2D = np.ones((self.Nx // 2, 8 * self.Ny))
         
     def compute_epsilon0_corrected(self):
-        epsilon0 = 2.0 * (self.tx + self.ty * np.cos(np.pi / (self.Ny + 1.0)))
+        # Match build_system_closed's finite-size wire band bottom 2*tx*cos(pi/(Nx+1))
+        epsilon0 = 2.0 * (
+            self.tx * np.cos(np.pi / (self.Nx + 1.0))
+            + self.ty * np.cos(np.pi / (self.Ny + 1.0))
+        )
         if self.Ny == 1:
-            return epsilon0  # For Ny=1, epsilon02D evaluates to 0, so corrected is just epsilon0
+            return epsilon0
             
         htp = np.zeros((2 * self.Ny, 2 * self.Ny), dtype=complex)
         for ii in range(1, self.Ny + 1):
@@ -372,6 +381,17 @@ class PfaffianSimulator:
             ttp[idx_c1:idx_c1+4, idx_c2:idx_c2+4] = block_21
         return ttp
 
+    def build_T1_outer(self):
+        """
+        Outer-seam (site Nx-1 <-> site 0) ring-closing block swapping Copy 1 and Copy 2 of T1
+        so <Nx-1|H|0> and <0|H|Nx-1> preserve the interior Rashba spin-orbit hopping sign.
+        """
+        half = 4 * self.Ny
+        return np.block([
+            [self.T1[half:, half:], self.T1[half:, :half]],
+            [self.T1[:half, half:], self.T1[:half, :half]],
+        ])
+
     def build_S2D(self):
         vtp = np.zeros((8 * self.Ny, 8 * self.Ny), dtype=complex)
         block = np.array([
@@ -412,7 +432,10 @@ class PfaffianSimulator:
 
     def load_disorder(self, dis_array):
         """Loads and expands the disorder array."""
-        self.Vdiss = self.ExpandVdiss(dis_array)
+        dis_arr = np.asarray(dis_array)
+        if dis_arr.shape[0] != self.Nx:
+            raise ValueError(f"Disorder array length {dis_arr.shape[0]} must match Nx={self.Nx}")
+        self.Vdiss = self.ExpandVdiss(dis_arr)
         self.SCdiss2D = np.ones((self.Nx // 2, 8 * self.Ny))
 
     def HHN2Dx(self, Gamma, mu, V0, gamma0, theta):
@@ -453,12 +476,12 @@ class PfaffianSimulator:
             
             Hi = self.Symm(h0 + v_diss_factor + sc_diss_factor - self.T2D.conj().T @ Hi1 @ self.T2D)
             
-            # PfP = Pfaffian[ Asymm[ Symm[ Hi + T1.conj().T ] . S2D ] ]
-            matrix_P = self.Asymm(self.Symm(Hi + self.T1.conj().T) @ self.S2D)
+            # PfP = Pfaffian[ Asymm[ Symm[ Hi + T1_outer ] . S2D ] ]
+            matrix_P = self.Asymm(self.Symm(Hi + self.T1_outer) @ self.S2D)
             PfP = pfaffian(matrix_P, method=self.method)
             
-            # PfM = Pfaffian[ Asymm[ Symm[ Hi - T1.conj().T ] . S2D ] ]
-            matrix_M = self.Asymm(self.Symm(Hi - self.T1.conj().T) @ self.S2D)
+            # PfM = Pfaffian[ Asymm[ Symm[ Hi - T1_outer ] . S2D ] ]
+            matrix_M = self.Asymm(self.Symm(Hi - self.T1_outer) @ self.S2D)
             PfM = pfaffian(matrix_M, method=self.method)
             
             pff_1.append(np.real(PfP))

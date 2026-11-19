@@ -247,9 +247,9 @@ def test_single_mode_analytic_oracle():
         )
 
         # Analytical 1D mode roots:
-        # eps_ref = 2t
+        eps_ref = 2.0 * t * np.cos(np.pi / (Ls + 1.0))
         n_vals = np.arange(1, Ls + 1)
-        xi_n = (2.0 * t - mu) - 2.0 * t * np.cos(n_vals * np.pi / (Ls + 1.0))
+        xi_n = (eps_ref - mu) - 2.0 * t * np.cos(n_vals * np.pi / (Ls + 1.0))
 
         # Root finder for single mode (xi, s):
         # det[ E - H_mode(E) ] = 0
@@ -448,10 +448,9 @@ def test_valid_regime_eigenvalue_agreement_with_legacy():
         res_exact = hp.solve_exact_spectrum(syst_exact, n_states=10, gamma=gamma_large, Delta0=Delta0_large)
         exact_eigs = res_exact['energies']
 
-        # Legacy system: pass mu_closed = mu - (2t - eps0)
-        mu_closed = mu - (2.0 * t - eps0)
+        # Exact parity: both build_system_exact and build_system_closed use eps0 = 2*t*cos(pi/(Ls+1))
         syst_legacy = hp.build_system_closed(
-            t=t, mu=mu_closed, gamma=gamma_large, Delta0=Delta0_large, V_z=V_z, alpha=alpha,
+            t=t, mu=mu, gamma=gamma_large, Delta0=Delta0_large, V_z=V_z, alpha=alpha,
             Ls=Ls, Vdisx=Vdisx if Vdisx is not None else np.zeros(Ls)
         )
         H_legacy = syst_legacy.hamiltonian_submatrix(sparse=False)
@@ -479,9 +478,8 @@ def test_valid_regime_eigenvalue_agreement_with_legacy():
         res_exact = hp.solve_exact_spectrum(syst_exact, n_states=6, gamma=gamma_phys, Delta0=Delta0_phys)
         exact_eigs = res_exact['energies']
 
-        mu_closed = mu_phys - (2.0 * t - eps0)
         syst_legacy = hp.build_system_closed(
-            t=t, mu=mu_closed, gamma=gamma_phys, Delta0=Delta0_phys, V_z=V_z_phys, alpha=alpha,
+            t=t, mu=mu_phys, gamma=gamma_phys, Delta0=Delta0_phys, V_z=V_z_phys, alpha=alpha,
             Ls=Ls, Vdisx=Vdisx if Vdisx is not None else np.zeros(Ls)
         )
         H_legacy = syst_legacy.hamiltonian_submatrix(sparse=False)
@@ -696,12 +694,16 @@ def test_gamma_zero_matches_transfer_matrix():
     Ls = 300
     E = 0.5
 
-    # Analytical 1D transmission for a single channel
+    # Analytical 1D transmission for a single channel (assumes wire onsite 2t - mu_leads)
     T_analytic = compute_1d_analytic_transmission(t=t, mu_leads=mu_leads, Ub=Ub, Lb=Lb, E=E)
+
+    # Shift mu so build_system_exact's finite-size band bottom eps_ref produces wire onsite 2t - mu_leads
+    eps_ref = 2.0 * t * np.cos(np.pi / (Ls + 1.0))
+    mu_wire = eps_ref - 2.0 * t + mu_leads
 
     # Kwant system with gamma=0, alpha=0, V_z=0
     syst = hp.build_system_exact(
-        t=t, mu=mu_leads, gamma=0.0, Delta0=0.3, V_z=0.0, alpha=0.0,
+        t=t, mu=mu_wire, gamma=0.0, Delta0=0.3, V_z=0.0, alpha=0.0,
         Ls=Ls, Lb=Lb, mu_leads=mu_leads, barrier_l=Ub, barrier_r=-mu_leads,
         closed=False
     )

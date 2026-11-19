@@ -23,10 +23,8 @@ def check_eigenvalues(t, mu, gamma, Delta0, V_z, alpha, Ls, Vdisx):
     # Z renormalization factor is used to scale parameters matching the Kwant physics
     Z = Delta0 / (Delta0 + gamma)
 
-    epsilon0 = 2 * t * np.cos(np.pi / (Ls + 1.0))
-    
-    # Shift chemical potential for PDI calculator to match the finite-size corrected band bottom
-    mu_pdi = Z * (2 * t - epsilon0 + mu)
+    # Both build_system_closed and PDICalculator use epsilon0 = 2*t*cos(pi/(Ls+1))
+    mu_pdi = Z * mu
     
     # Scale other parameters by renormalization factor Z
     ts = Z * t

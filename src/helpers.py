@@ -837,9 +837,10 @@ def build_system(t, mu, gamma, Delta0, V_z, alpha, Ln, Lb, Ls, mu_leads, barrier
         if i > 0:
             syst[lat(i, 0), lat(i-1, 0)] = -t * np.kron(sigma_z, sigma_0) + 0.5*1j*alpha * np.kron(sigma_z, sigma_y) 
             
-    # 3. Superconductor (Renormalized)
+    # 3. Superconductor (Renormalized) with finite-size band bottom parity
+    epsilon0 = 2.0 * t * np.cos(np.pi / (Ls + 1.0))
     for i in range(Lb+Ln, Lb+Ln+Ls):
-        syst[lat(i, 0)] = Z * (2 * t - mu_s[i-Lb-Ln]) * np.kron(sigma_z, sigma_0) \
+        syst[lat(i, 0)] = Z * (epsilon0 - mu_s[i-Lb-Ln]) * np.kron(sigma_z, sigma_0) \
                           + Z * V_z * np.kron(sigma_0, sigma_x) \
                           + Z * gamma * np.kron(sigma_x, sigma_0) 
         if i > 0: 
@@ -972,7 +973,7 @@ def build_system_exact(
     Bare semiconductor (Z = 1, bare hopping everywhere):
         h_j = (eps_ref - mu_j) * tau_z (x) sigma_0 + V_z * tau_0 (x) sigma_x + Sigma_Al(omega)
         T = -t * tau_z (x) sigma_0 + 0.5j * alpha * tau_z (x) sigma_y
-    with eps_ref = 2t for both open and closed systems.
+    with eps_ref = 2t*cos(pi/(Ls+1)) for both open and closed systems.
 
     Onsite superconductor terms are Kwant value functions accepting parameter 'omega'.
     """
@@ -993,7 +994,7 @@ def build_system_exact(
     for i in range(Ls):
         mu_s[i] = mu - Vdisx[i]
 
-    eps_ref = 2.0 * t
+    eps_ref = 2.0 * t * np.cos(np.pi / (Ls + 1.0))
 
     if closed:
         offset = 0
@@ -1852,6 +1853,7 @@ class PDICalculator:
         self.Nx = Nx
         self.Vdisx = Vdisx
         self.V0 = V0
+        self.epsilon0 = 2.0 * self.ts * np.cos(np.pi / (self.Nx + 1.0))
 
         self.s0 = np.eye(2)
         self.sx = np.array([[0, 1], [1, 0]])
@@ -1881,10 +1883,10 @@ class PDICalculator:
 
     def h0(self, gm, mu):
         return np.array([
-            [ 2*self.ts - mu,  gm,              0,               self.gamma ],
-            [ gm,              2*self.ts - mu, -self.gamma,      0     ],
-            [ 0,              -self.gamma,     -2*self.ts + mu, -gm    ],
-            [ self.gamma,      0,              -gm,             -2*self.ts + mu]
+            [ self.epsilon0 - mu,  gm,                  0,                    self.gamma ],
+            [ gm,                  self.epsilon0 - mu, -self.gamma,           0          ],
+            [ 0,                  -self.gamma,         -self.epsilon0 + mu,  -gm         ],
+            [ self.gamma,          0,                  -gm,                  -self.epsilon0 + mu]
         ], dtype=complex)
 
     def H1(self, gm, mu, ii):
@@ -2131,6 +2133,9 @@ def cal_pfaffian_invariant(ts, alphas, gamma, delta0, Nx, Vdisx, V0, gm, mu,
     #   ax = 200 / alphas
     #   ms = 1000 * eta_m / (2 * ax^2 * ts)
     from src.pfaffian_invariant import eta_m
+
+    if alphas == 0.0:
+        raise ValueError("cal_pfaffian_invariant requires non-zero Rashba spin-orbit coupling (alphas != 0.0)")
 
     ax = 200.0 / alphas
     ms = 1000.0 * eta_m / (2.0 * ax**2 * ts)
